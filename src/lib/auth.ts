@@ -1,5 +1,6 @@
 import { cache } from 'react'
-import { createClient } from '@/lib/supabase/server'
+import { unstable_cache } from 'next/cache'
+import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
 import type { PermMap } from '@/lib/permissoes'
 import type { ModuloKey } from '@/types'
@@ -19,46 +20,54 @@ export async function requireAuthenticatedUserId(): Promise<string> {
   return user.id
 }
 
+const getPermissoesEfetivasCached = unstable_cache(
+  async (userId: string): Promise<PermMap> => {
+    const supabase = await createClient()
+
+    // Permissões customizadas têm prioridade
+    const { data: customPerms } = await supabase
+      .from('usuario_permissoes')
+      .select('*')
+      .eq('usuario_id', userId)
+
+    if (customPerms && customPerms.length > 0) {
+      return permissoesFromArray(customPerms as Parameters<typeof permissoesFromArray>[0])
+    }
+
+    // Cargo do usuário
+    const { data: perfil } = await supabase
+      .from('usuarios_perfis')
+      .select('cargo_id, cargo:cargos(permissoes:cargo_permissoes(*))')
+      .eq('id', userId)
+      .single()
+
+    // Sem perfil = bootstrap (primeiro admin) → acesso total
+    if (!perfil) {
+      return acesso_total()
+    }
+
+    if (!perfil.cargo_id || !perfil.cargo) {
+      return permissoesVazias()
+    }
+
+    const cargoRaw = Array.isArray(perfil.cargo) ? perfil.cargo[0] : perfil.cargo
+    const cargo = cargoRaw as { permissoes: Parameters<typeof permissoesFromArray>[0] }
+    return permissoesFromArray(cargo.permissoes)
+  },
+  ['user-permissions'],
+  { revalidate: 30, tags: ['user-permissions'] }
+)
+
 /**
  * Resolve as permissões efetivas do usuário logado.
  * Prioridade: permissões customizadas > cargo > nenhuma.
- * Cacheado por request (React cache) — só bate no banco uma vez por request.
+ * Cacheado com unstable_cache (30s) + React cache (intra-request).
  * Se o usuário não tem perfil ainda (primeiro admin), retorna acesso total.
  */
 export const getPermissoesEfetivas = cache(async (): Promise<PermMap> => {
-  const supabase = await createClient()
   const user = await getAuthenticatedUser()
   if (!user) return permissoesVazias()
-
-  // Permissões customizadas têm prioridade
-  const { data: customPerms } = await supabase
-    .from('usuario_permissoes')
-    .select('*')
-    .eq('usuario_id', user.id)
-
-  if (customPerms && customPerms.length > 0) {
-    return permissoesFromArray(customPerms as Parameters<typeof permissoesFromArray>[0])
-  }
-
-  // Cargo do usuário
-  const { data: perfil } = await supabase
-    .from('usuarios_perfis')
-    .select('cargo_id, cargo:cargos(permissoes:cargo_permissoes(*))')
-    .eq('id', user.id)
-    .single()
-
-  // Sem perfil = bootstrap (primeiro admin) → acesso total
-  if (!perfil) {
-    return acesso_total()
-  }
-
-  if (!perfil.cargo_id || !perfil.cargo) {
-    return permissoesVazias()
-  }
-
-  const cargoRaw = Array.isArray(perfil.cargo) ? perfil.cargo[0] : perfil.cargo
-  const cargo = cargoRaw as { permissoes: Parameters<typeof permissoesFromArray>[0] }
-  return permissoesFromArray(cargo.permissoes)
+  return withSupabaseCookieContext(() => getPermissoesEfetivasCached(user.id))
 })
 
 /** Lança erro se o usuário não tiver a permissão solicitada */

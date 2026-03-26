@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { updateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
@@ -55,6 +56,7 @@ export async function criarCargo(input: CargoInput) {
   const { error: permError } = await supabase.from('cargo_permissoes').insert(permissoes)
   if (permError) throw new Error(permError.message)
 
+  updateTag('user-permissions')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
 }
@@ -82,6 +84,7 @@ export async function atualizarCargo(id: string, input: CargoInput) {
 
   if (permError) throw new Error(permError.message)
 
+  updateTag('user-permissions')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
 }

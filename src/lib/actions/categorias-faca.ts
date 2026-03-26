@@ -1,18 +1,27 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
-import { assertPermissao } from '@/lib/auth'
+import { revalidatePath, unstable_cache } from 'next/cache'
+import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { CategoriaFacaDB } from '@/types'
 
+const getCategoriasFacaCached = unstable_cache(
+  async (_userId: string): Promise<CategoriaFacaDB[]> => {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+      .from('categorias_faca')
+      .select('*')
+      .order('ordem')
+    if (error) throw new Error(error.message)
+    return data as CategoriaFacaDB[]
+  },
+  ['categorias-faca-list'],
+  { revalidate: 60 }
+)
+
 export async function getCategoriasFaca(): Promise<CategoriaFacaDB[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('categorias_faca')
-    .select('*')
-    .order('ordem')
-  if (error) throw new Error(error.message)
-  return data as CategoriaFacaDB[]
+  const userId = await requireAuthenticatedUserId()
+  return withSupabaseCookieContext(() => getCategoriasFacaCached(userId))
 }
 
 type CategoriaInput = {

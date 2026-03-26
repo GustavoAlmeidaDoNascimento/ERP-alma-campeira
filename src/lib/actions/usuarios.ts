@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { updateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
@@ -135,6 +136,7 @@ export async function atualizarPerfil(
     if (permError) throw new Error(permError.message)
   }
 
+  updateTag('user-permissions')
   revalidatePath('/usuarios')
 }
 

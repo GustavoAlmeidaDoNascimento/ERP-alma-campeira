@@ -78,61 +78,88 @@ function normalizePathOnly(href: string) {
 export async function getErpTabData(href: string): Promise<ErpTabData> {
   const path = normalizePathOnly(href)
 
-  const perms = await getPermissoesEfetivas()
-
   if (path === '/materias-primas') {
+    const [perms, materiasPrimas, fornecedores] = await Promise.all([
+      getPermissoesEfetivas(),
+      getMatériasPrimas(120),
+      getFornecedores(80),
+    ])
     const perm = perms.materias_primas as Perm
     assertAllowed(perm, 'materias_primas')
-    const [materiasPrimas, fornecedores] = await Promise.all([getMatériasPrimas(120), getFornecedores(80)])
     return { kind: 'materias-primas', materiasPrimas, fornecedores, perm }
   }
 
   if (path === '/facas') {
+    const [perms, facas, categorias] = await Promise.all([
+      getPermissoesEfetivas(),
+      getFacas(120),
+      getCategoriasFaca(),
+    ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
-    const [facas, categorias] = await Promise.all([getFacas(120), getCategoriasFaca()])
     return { kind: 'facas', facas, categorias, perm }
   }
 
   if (path === '/fornecedores') {
+    const [perms, fornecedores] = await Promise.all([
+      getPermissoesEfetivas(),
+      getFornecedores(120),
+    ])
     const perm = perms.fornecedores as Perm
     assertAllowed(perm, 'fornecedores')
-    const fornecedores = await getFornecedores(120)
     return { kind: 'fornecedores', fornecedores, perm }
   }
 
   if (path === '/ordens-compra') {
+    const [perms, fila] = await Promise.all([
+      getPermissoesEfetivas(),
+      getFilaReposicao(),
+    ])
     const perm = perms.ordens_compra as Perm
     assertAllowed(perm, 'ordens_compra')
-    const fila = await getFilaReposicao()
     return { kind: 'ordens-compra', fila, perm }
   }
 
   if (path === '/vendas') {
+    const [perms, pedidos, clientes, facas] = await Promise.all([
+      getPermissoesEfetivas(),
+      getVendas(80),
+      getClientes(80),
+      getFacas(120),
+    ])
     const perm = perms.vendas as Perm
     assertAllowed(perm, 'vendas')
-    const [pedidos, clientes, facas] = await Promise.all([getVendas(80), getClientes(80), getFacas(120)])
     return { kind: 'vendas', pedidos, clientes, facas, perm }
   }
 
   if (path === '/clientes') {
+    const [perms, clientes] = await Promise.all([
+      getPermissoesEfetivas(),
+      getClientes(120),
+    ])
     const perm = perms.clientes as Perm
     assertAllowed(perm, 'clientes')
-    const clientes = await getClientes(120)
     return { kind: 'clientes', clientes, perm }
   }
 
   if (path === '/usuarios') {
+    const [perms, usuarios, cargos] = await Promise.all([
+      getPermissoesEfetivas(),
+      getUsuarios(120),
+      getCargos(80),
+    ])
     const perm = perms.usuarios as Perm
     assertAllowed(perm, 'usuarios')
-    const [usuarios, cargos] = await Promise.all([getUsuarios(120), getCargos(80)])
     return { kind: 'usuarios', usuarios, cargos, perm }
   }
 
   if (path === '/cargos') {
+    const [perms, cargos] = await Promise.all([
+      getPermissoesEfetivas(),
+      getCargos(120),
+    ])
     const perm = perms.cargos as Perm
     assertAllowed(perm, 'cargos')
-    const cargos = await getCargos(120)
     return { kind: 'cargos', cargos, perm }
   }
 

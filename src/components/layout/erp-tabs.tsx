@@ -189,13 +189,23 @@ function TabSkeleton({ href }: { href: string }) {
   )
 }
 
-function TabPane({ href }: { href: string }) {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [data, setData] = useState<ErpTabData | null>(null)
+function TabPane({
+  href,
+  cachedData,
+  onData,
+}: {
+  href: string
+  cachedData?: ErpTabData | undefined
+  onData?: (href: string, data: ErpTabData) => void
+}) {
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
+    cachedData ? 'ready' : 'loading'
+  )
+  const [data, setData] = useState<ErpTabData | null>(cachedData ?? null)
   const [errMsg, setErrMsg] = useState<string>('')
 
   useEffect(() => {
-    if (LOG) console.log('[TABS] TabPane mounted', { href })
+    if (LOG) console.log('[TABS] TabPane mounted', { href, hasCachedData: !!cachedData })
     return () => {
       if (LOG) console.log('[TABS] TabPane unmounted', { href })
     }
@@ -207,20 +217,27 @@ function TabPane({ href }: { href: string }) {
     async function run() {
       try {
         if (LOG) console.log('[TABS] fetch start', { href })
-        setStatus('loading')
-        setData(null)
-        setErrMsg('')
+        // Only show loading skeleton if we have no cached data
+        if (!cachedData) {
+          setStatus('loading')
+          setData(null)
+          setErrMsg('')
+        }
 
         const d = await getErpTabData(href)
         if (cancelled) return
         setData(d)
         setStatus('ready')
+        onData?.(href, d)
         if (LOG) console.log('[TABS] fetch success', { href, kind: d.kind })
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Erro ao carregar.'
         if (cancelled) return
-        setErrMsg(msg)
-        setStatus('error')
+        // Only show error if we have no cached data to display
+        if (!data) {
+          setErrMsg(msg)
+          setStatus('error')
+        }
         if (LOG) console.log('[TABS] fetch error', { href, msg })
       }
     }
@@ -230,6 +247,7 @@ function TabPane({ href }: { href: string }) {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [href])
 
   if (status === 'loading') return <TabSkeleton href={href} />
@@ -283,6 +301,36 @@ type DragState = {
 function ErpTabsContent() {
   const { openTabs, activeHref, selectTab, closeTab, reorderTabs } = useErpTabs()
 
+  // Client-side data cache — stale-while-revalidate pattern.
+  // Returning to a visited tab shows cached data instantly while refreshing in background.
+  const dataCacheRef = useRef(new Map<string, ErpTabData>())
+
+  const handleTabData = useCallback((href: string, data: ErpTabData) => {
+    dataCacheRef.current.set(href, data)
+
+    // Prefetch adjacent open tabs that aren't cached yet
+    const idx = openTabs.findIndex((t) => t.href === href)
+    if (idx === -1) return
+    const adjacent = [openTabs[idx - 1], openTabs[idx + 1]].filter(Boolean)
+    for (const tab of adjacent) {
+      if (!dataCacheRef.current.has(tab.href)) {
+        setTimeout(() => {
+          if (dataCacheRef.current.has(tab.href)) return
+          if (LOG) console.log('[TABS] prefetch start', { href: tab.href })
+          getErpTabData(tab.href)
+            .then((d) => {
+              dataCacheRef.current.set(tab.href, d)
+              if (LOG) console.log('[TABS] prefetch done', { href: tab.href })
+            })
+            .catch(() => {
+              if (LOG) console.log('[TABS] prefetch failed', { href: tab.href })
+            })
+        }, 200)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTabs])
+
   // Track which tabs have been visited at least once — only those get mounted.
   // On refresh, only the active tab is in this set, so only it fetches data.
   const [visited, setVisited] = useState<Set<string>>(() => new Set([activeHref]))
@@ -296,7 +344,7 @@ function ErpTabsContent() {
     })
   }, [activeHref])
 
-  // Clean up visited set when tabs are closed
+  // Clean up visited set and data cache when tabs are closed
   useEffect(() => {
     const openHrefs = new Set(openTabs.map((t) => t.href))
     setVisited((prev) => {
@@ -308,6 +356,7 @@ function ErpTabsContent() {
       const next = new Set<string>()
       for (const h of prev) {
         if (openHrefs.has(h)) next.add(h)
+        else dataCacheRef.current.delete(h)
       }
       return next
     })
@@ -531,7 +580,11 @@ function ErpTabsContent() {
           }
           return (
             <div key={tab.href} style={{ display: isActive ? 'block' : 'none' }}>
-              <TabPane href={tab.href} />
+              <TabPane
+                href={tab.href}
+                cachedData={dataCacheRef.current.get(tab.href)}
+                onData={handleTabData}
+              />
             </div>
           )
         })}
