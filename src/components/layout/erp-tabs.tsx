@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 
@@ -286,6 +287,76 @@ function TabPane({
   }
 }
 
+function Wallpaper() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const hora = now.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const data = now.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  return (
+    <div
+      className="flex h-[calc(100vh-56px)] w-full flex-col items-center justify-center gap-8 select-none"
+      style={{ background: 'var(--ac-bg)' }}
+    >
+      {/* Logo — mais visível e funciona em ambos os temas */}
+      <div
+        className="pointer-events-none"
+        style={{
+          filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.12))',
+        }}
+      >
+        <Image
+          src="/images/letreiro.png"
+          alt="Alma Campeira"
+          width={340}
+          height={155}
+          style={{ objectFit: 'contain', maxWidth: '55vw' }}
+          priority
+        />
+      </div>
+
+      {/* Relógio + data */}
+      <div className="flex flex-col items-center gap-2">
+        <span
+          className="tabular-nums font-light"
+          style={{
+            fontSize: 'clamp(2rem, 5vw, 3.75rem)',
+            color: 'var(--ac-text)',
+            lineHeight: 1,
+            letterSpacing: '0.06em',
+          }}
+        >
+          {hora}
+        </span>
+        <span
+          style={{
+            fontSize: 'clamp(0.7rem, 1.4vw, 0.85rem)',
+            color: 'var(--ac-muted)',
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {data}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 const HOLD_MS = 180
 
 type DragState = {
@@ -483,6 +554,10 @@ function ErpTabsContent() {
     [drag]
   )
 
+  if (openTabs.length === 0) {
+    return <Wallpaper />
+  }
+
   return (
     <div>
       {openTabs.length > 0 && (
@@ -613,20 +688,22 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
   const initialLabel = useMemo(() => getRouteLabel(initialHref), [initialHref])
 
   const [openTabs, setOpenTabs] = useState<OpenTab[]>(() => {
-    const base = [{ href: initialHref, label: initialLabel }]
-    if (typeof window === 'undefined') return base
+    if (typeof window === 'undefined') return [{ href: initialHref, label: initialLabel }]
 
-    const storedTabs = parseStoredTabs(localStorage.getItem(STORAGE_KEY))
-    return storedTabs.length ? storedTabs : base
+    const raw = localStorage.getItem(STORAGE_KEY)
+    // Se nunca persistiu nada, abre a rota atual. Se persistiu vazio ([]), respeita.
+    if (raw === null) return [{ href: initialHref, label: initialLabel }]
+    const storedTabs = parseStoredTabs(raw)
+    return storedTabs
   })
 
   const [activeHref, setActiveHref] = useState<string>(() => {
     if (typeof window === 'undefined') return initialHref
 
-    const storedTabs = parseStoredTabs(localStorage.getItem(STORAGE_KEY))
+    const storedTabs = parseStoredTabs(localStorage.getItem(STORAGE_KEY) ?? '')
     const storedActive = localStorage.getItem(ACTIVE_KEY)
     const normalizedActive = storedActive ? normalizeHref(storedActive) : storedTabs[0]?.href
-    return normalizedActive || initialHref
+    return normalizedActive || ''
   })
 
   const persist = useCallback((tabs: OpenTab[], active: string) => {
@@ -670,14 +747,13 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     (href: string) => {
       const normalizedHref = normalizeHref(href)
       setOpenTabs((prev) => {
-        const next = prev.filter((t) => t.href !== normalizedHref)
-        const remaining = next
+        const remaining = prev.filter((t) => t.href !== normalizedHref)
         const nextActive = remaining[remaining.length - 1]?.href ?? ''
         if (LOG) console.log('[TABS] closeTab', { href: normalizedHref, remaining: remaining.length })
         if (nextActive) setActiveHref(nextActive)
-        persist(remaining.length ? remaining : prev, nextActive || prev[0]?.href || normalizedHref)
-        // Se ficar sem abas, mantemos ao menos uma (o comportamento mais seguro).
-        return remaining.length ? remaining : prev
+        else setActiveHref('')
+        persist(remaining, nextActive)
+        return remaining
       })
     },
     [persist]
