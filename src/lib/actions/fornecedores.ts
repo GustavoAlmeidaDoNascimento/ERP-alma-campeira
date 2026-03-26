@@ -42,7 +42,7 @@ export async function criarFornecedor(input: FornecedorInput) {
   })
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
-  revalidateTag('fornecedores-list', 'default')
+  revalidateTag('fornecedores-list', 'max')
 }
 
 export async function atualizarFornecedor(id: string, input: FornecedorInput) {
@@ -58,7 +58,7 @@ export async function atualizarFornecedor(id: string, input: FornecedorInput) {
     .eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
-  revalidateTag('fornecedores-list', 'default')
+  revalidateTag('fornecedores-list', 'max')
 }
 
 export async function deletarFornecedor(id: string) {
@@ -78,5 +78,5 @@ export async function deletarFornecedor(id: string) {
   const { error } = await supabase.from('fornecedores').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
-  revalidateTag('fornecedores-list', 'default')
+  revalidateTag('fornecedores-list', 'max')
 }

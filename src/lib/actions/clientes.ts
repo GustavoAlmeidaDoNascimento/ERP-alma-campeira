@@ -48,7 +48,7 @@ export async function criarCliente(input: ClienteInput) {
   })
   if (error) throw new Error(error.message)
   revalidatePath('/clientes')
-  revalidateTag('clientes-list', 'default')
+  revalidateTag('clientes-list', 'max')
 }
 
 export async function atualizarCliente(id: string, input: ClienteInput) {
@@ -68,8 +68,8 @@ export async function atualizarCliente(id: string, input: ClienteInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/clientes')
   revalidatePath('/vendas')
-  revalidateTag('clientes-list', 'default')
-  revalidateTag('vendas-list', 'default')
+  revalidateTag('clientes-list', 'max')
+  revalidateTag('vendas-list', 'max')
 }
 
 export async function deletarCliente(id: string) {
@@ -89,6 +89,6 @@ export async function deletarCliente(id: string) {
   const { error } = await supabase.from('clientes').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/clientes')
-  revalidateTag('clientes-list', 'default')
-  revalidateTag('vendas-list', 'default')
+  revalidateTag('clientes-list', 'max')
+  revalidateTag('vendas-list', 'max')
 }

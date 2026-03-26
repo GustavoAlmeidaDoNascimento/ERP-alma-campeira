@@ -59,7 +59,7 @@ export async function criarCargo(input: CargoInput) {
   updateTag('user-permissions')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
-  revalidateTag('cargos-list', 'default')
+  revalidateTag('cargos-list', 'max')
 }
 
 export async function atualizarCargo(id: string, input: CargoInput) {
@@ -88,7 +88,7 @@ export async function atualizarCargo(id: string, input: CargoInput) {
   updateTag('user-permissions')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
-  revalidateTag('cargos-list', 'default')
+  revalidateTag('cargos-list', 'max')
 }
 
 export async function deletarCargo(id: string) {
@@ -109,5 +109,5 @@ export async function deletarCargo(id: string) {
   if (error) throw new Error(error.message)
 
   revalidatePath('/cargos')
-  revalidateTag('cargos-list', 'default')
+  revalidateTag('cargos-list', 'max')
 }

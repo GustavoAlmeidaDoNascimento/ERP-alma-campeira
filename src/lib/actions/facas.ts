@@ -228,48 +228,54 @@ export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar
       if (bomsErr) throw new Error(bomsErr.message)
 
       const mpIds = [...new Set((boms ?? []).map((b) => b.materia_prima_id))] as string[]
-      const { data: mps, error: mpsErr } = await supabase
-        .from('materias_primas')
-        .select('id, estoque_atual')
-        .in('id', mpIds)
-
-      if (mpsErr) throw new Error(mpsErr.message)
-
-      const mpMap = new Map<string, { estoque_atual: number }>()
-      for (const mp of mps ?? []) {
-        mpMap.set(mp.id, { estoque_atual: Number(mp.estoque_atual) || 0 })
-      }
-
-      const userId = await requireAuthenticatedUserId()
-
-      for (const bom of (boms ?? [])) {
-        const mp = mpMap.get(bom.materia_prima_id)
-        if (!mp) continue
-
-        const quantidadePorFaca = Number(bom.quantidade) || 0
-        const delta = round3(estoqueFaca * quantidadePorFaca)
-        if (!delta) continue
-
-        const novoEstoque = round3(mp.estoque_atual + delta)
-        mp.estoque_atual = novoEstoque
-
-        const { error: updErr } = await supabase
+      if (mpIds.length > 0) {
+        const { data: mps, error: mpsErr } = await supabase
           .from('materias_primas')
-          .update({ estoque_atual: novoEstoque })
-          .eq('id', bom.materia_prima_id)
-        if (updErr) throw new Error(updErr.message)
+          .select('id, estoque_atual')
+          .in('id', mpIds)
 
-        const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-          tipo: 'ajuste',
-          materia_prima_id: bom.materia_prima_id,
-          faca_id: id,
-          quantidade: delta,
-          observacao: `Desmontar faca ${faca.codigo}`,
-          usuario_id: userId,
-        })
-        if (movErr) throw new Error(movErr.message)
+        if (mpsErr) throw new Error(mpsErr.message)
+
+        const mpMap = new Map<string, { estoque_atual: number }>()
+        for (const mp of mps ?? []) {
+          mpMap.set(mp.id, { estoque_atual: Number(mp.estoque_atual) || 0 })
+        }
+
+        const userId = await requireAuthenticatedUserId()
+
+        for (const bom of (boms ?? [])) {
+          const mp = mpMap.get(bom.materia_prima_id)
+          if (!mp) continue
+
+          const quantidadePorFaca = Number(bom.quantidade) || 0
+          const delta = round3(estoqueFaca * quantidadePorFaca)
+          if (!delta) continue
+
+          const novoEstoque = round3(mp.estoque_atual + delta)
+          mp.estoque_atual = novoEstoque
+
+          const { error: updErr } = await supabase
+            .from('materias_primas')
+            .update({ estoque_atual: novoEstoque })
+            .eq('id', bom.materia_prima_id)
+          if (updErr) throw new Error(updErr.message)
+
+          // `movimentacoes_estoque.faca_id` restringe exclusões; mantemos `faca_id` como NULL.
+          const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+            tipo: 'ajuste',
+            materia_prima_id: bom.materia_prima_id,
+            quantidade: delta,
+            observacao: `Desmontar faca ${faca.codigo}`,
+            usuario_id: userId,
+          })
+          if (movErr) throw new Error(movErr.message)
+        }
       }
     }
+
+    // Atualiza telas de matérias-primas após devolver o estoque.
+    revalidatePath('/materias-primas')
+    revalidateTag('materias-primas-list', 'default')
   }
 
   if (modo === 'apagar_materias_primas') {
