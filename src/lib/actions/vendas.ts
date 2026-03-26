@@ -121,7 +121,7 @@ export async function criarVenda(input: VendaInput) {
   if (itemsError) throw new Error(itemsError.message)
 
   revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'default')
+  revalidateTag('vendas-list', 'max')
 }
 
 export async function atualizarVenda(id: string, input: VendaInput) {
@@ -166,7 +166,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   if (itemsError) throw new Error(itemsError.message)
 
   revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'default')
+  revalidateTag('vendas-list', 'max')
 }
 
 export async function avancarStatus(id: string, novoStatus: 'em_producao') {
@@ -180,7 +180,7 @@ export async function avancarStatus(id: string, novoStatus: 'em_producao') {
 
   if (error) throw new Error(error.message)
   revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'default')
+  revalidateTag('vendas-list', 'max')
 }
 
 export async function marcarEntregue(id: string) {
@@ -269,10 +269,10 @@ export async function marcarEntregue(id: string) {
   revalidatePath('/vendas')
   revalidatePath('/facas')
   revalidatePath('/ordens-compra')
-  revalidateTag('vendas-list', 'default')
-  revalidateTag('facas-list', 'default')
-  revalidateTag('ordens-compra-historico', 'default')
-  revalidateTag('ordens-compra-fila', 'default')
+  revalidateTag('vendas-list', 'max')
+  revalidateTag('facas-list', 'max')
+  revalidateTag('ordens-compra-historico', 'max')
+  revalidateTag('ordens-compra-fila', 'max')
 }
 
 export async function deletarVenda(id: string) {
@@ -292,5 +292,5 @@ export async function deletarVenda(id: string) {
   const { error } = await supabase.from('pedidos').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'default')
+  revalidateTag('vendas-list', 'max')
 }
