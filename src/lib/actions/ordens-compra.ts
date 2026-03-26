@@ -211,6 +211,8 @@ export async function gerarOC(fornecedor_id: string | null): Promise<string> {
   const itens = Array.from(agrupado.entries()).map(([mp_id, { quantidade, preco_custo }]) => ({
     ordem_compra_id: oc.id,
     materia_prima_id: mp_id,
+    quantidade_vendida: quantidade,
+    quantidade_adicional: 0,
     quantidade,
     preco_unitario: preco_custo,
   }))
@@ -256,30 +258,29 @@ export async function gerarTodasOCs(): Promise<number> {
 
 // ─── Consultas de OC ──────────────────────────────────────────────────────────
 
-const getOrdensCompraCached = unstable_cache(
-  async (): Promise<OrdemCompra[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('ordens_compra')
-      .select(`
-        *,
-        fornecedor:fornecedores(id, nome),
-        itens:ordem_compra_itens(
-          id, ordem_compra_id, materia_prima_id, quantidade, preco_unitario,
-          materia_prima:materias_primas(id, codigo, nome)
-        )
-      `)
-      .order('created_at', { ascending: false })
-    if (error) throw new Error(error.message)
-    return data as OrdemCompra[]
-  },
-  ['ordens-compra-historico'],
-  { revalidate: 30, tags: ['ordens-compra-historico'] }
-)
+async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('ordens_compra')
+    .select(`
+      *,
+      fornecedor:fornecedores(id, nome),
+      itens:ordem_compra_itens(
+        id, ordem_compra_id, materia_prima_id,
+        quantidade, quantidade_vendida, quantidade_adicional,
+        preco_unitario,
+        materia_prima:materias_primas(id, codigo, nome)
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data as OrdemCompra[]
+}
 
 export async function getOrdensCompra(): Promise<OrdemCompra[]> {
   await assertPermissao('ordens_compra', 'ver')
-  return withSupabaseCookieContext(() => getOrdensCompraCached())
+  return withSupabaseCookieContext(() => getOrdensCompraQuery())
 }
 
 // ─── Editar OC ────────────────────────────────────────────────────────────────
@@ -289,10 +290,87 @@ export async function atualizarQuantidadeItem(item_id: string, quantidade: numbe
   if (quantidade <= 0) throw new Error('Quantidade deve ser maior que zero.')
 
   const supabase = await createClient()
+  const { data: item, error: itemErr } = await supabase
+    .from('ordem_compra_itens')
+    .select('quantidade_vendida, quantidade')
+    .eq('id', item_id)
+    .single()
+
+  if (itemErr) throw new Error(itemErr.message)
+  if (!item) throw new Error('Item não encontrado.')
+
+  const quantidade_vendida = Number(item.quantidade_vendida ?? item.quantidade)
+  const quantidade_adicional = Math.max(0, quantidade - quantidade_vendida)
+
   const { error } = await supabase
     .from('ordem_compra_itens')
-    .update({ quantidade })
+    .update({ quantidade, quantidade_adicional })
     .eq('id', item_id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico', 'max')
+}
+
+export async function atualizarUnidadesAdicionaisItem(item_id: string, quantidade_adicional: number) {
+  await assertPermissao('ordens_compra', 'editar')
+  if (!Number.isFinite(quantidade_adicional) || quantidade_adicional < 0) {
+    throw new Error('Unidades adicionais inválidas.')
+  }
+
+  const supabase = await createClient()
+  const { data: item, error: itemErr } = await supabase
+    .from('ordem_compra_itens')
+    .select('quantidade_vendida')
+    .eq('id', item_id)
+    .single()
+
+  if (itemErr) throw new Error(itemErr.message)
+  if (!item) throw new Error('Item não encontrado.')
+
+  const quantidade_vendida = Number(item.quantidade_vendida ?? 0)
+  const quantidade_total = quantidade_vendida + Number(quantidade_adicional)
+
+  if (quantidade_total <= 0) throw new Error('Quantidade total inválida.')
+
+  const { error } = await supabase
+    .from('ordem_compra_itens')
+    .update({ quantidade_adicional, quantidade: quantidade_total })
+    .eq('id', item_id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico', 'max')
+}
+
+export async function criarItemOrdemCompra(
+  ordem_compra_id: string,
+  materia_prima_id: string,
+  quantidade_adicional: number,
+) {
+  await assertPermissao('ordens_compra', 'editar')
+  if (!Number.isFinite(quantidade_adicional) || quantidade_adicional <= 0) {
+    throw new Error('Unidades adicionais devem ser maiores que zero.')
+  }
+
+  const supabase = await createClient()
+  const { data: mp, error: mpErr } = await supabase
+    .from('materias_primas')
+    .select('preco_custo')
+    .eq('id', materia_prima_id)
+    .single()
+
+  if (mpErr) throw new Error(mpErr.message)
+  if (!mp) throw new Error('Matéria-prima não encontrada.')
+
+  const { error } = await supabase.from('ordem_compra_itens').insert({
+    ordem_compra_id,
+    materia_prima_id,
+    quantidade_vendida: 0,
+    quantidade_adicional,
+    quantidade: quantidade_adicional,
+    preco_unitario: mp.preco_custo ?? null,
+  })
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')

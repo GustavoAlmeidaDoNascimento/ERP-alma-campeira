@@ -1,20 +1,22 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import {
   getOrdensCompra,
   gerarOC,
   gerarTodasOCs,
-  atualizarQuantidadeItem,
+  atualizarUnidadesAdicionaisItem,
+  criarItemOrdemCompra,
   atualizarObservacaoOC,
   mudarStatusOC,
   deletarOC,
 } from '@/lib/actions/ordens-compra'
 import { STATUS_OC } from '@/types'
-import type { FilaFornecedor, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
+import type { FilaFornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -176,31 +178,75 @@ function OcDetalheModal({
   onClose: () => void
   onRefresh: () => void
 }) {
-  const [editandoQtd, setEditandoQtd] = useState<Record<string, string>>({})
+  const [editandoAdicional, setEditandoAdicional] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState<string | null>(null)
   const [obs, setObs] = useState(oc.observacao ?? '')
   const [salvandoObs, setSalvandoObs] = useState(false)
   const [mudandoStatus, setMudandoStatus] = useState(false)
   const [erro, setErro] = useState('')
   const [confirmandoRecebimento, setConfirmandoRecebimento] = useState(false)
+  const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([])
+  const [carregandoMateriasPrimas, setCarregandoMateriasPrimas] = useState(false)
+  const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
+  const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
+  const [adicionandoItem, setAdicionandoItem] = useState(false)
+
+  function parseNumero(raw: string): number {
+    const v = raw.trim().replace(',', '.')
+    const n = Number(v)
+    return Number.isFinite(n) ? n : NaN
+  }
 
   const itens = oc.itens ?? []
+  const idsMateriaJaNoPedido = useMemo(() => new Set(itens.map((i) => i.materia_prima_id)), [itens])
+
+  useEffect(() => {
+    if (!perm.editar || oc.status !== 'pendente') return
+    if (materiasPrimas.length > 0) return
+
+    let cancelled = false
+    async function carregar() {
+      setCarregandoMateriasPrimas(true)
+      setErro('')
+      try {
+        const mps = await getMatériasPrimas(200)
+        if (!cancelled) setMateriasPrimas(mps)
+      } catch (e: unknown) {
+        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar matérias-primas.')
+      } finally {
+        if (!cancelled) setCarregandoMateriasPrimas(false)
+      }
+    }
+
+    carregar()
+    return () => {
+      cancelled = true
+    }
+  }, [perm.editar, oc.status, materiasPrimas.length])
+
   const total = totalOC(
-    itens.map((i) => ({
-      ...i,
-      quantidade: editandoQtd[i.id] !== undefined ? Number(editandoQtd[i.id]) || i.quantidade : i.quantidade,
-    }))
+    itens.map((i) => {
+      const vendido = Number(i.quantidade_vendida ?? i.quantidade)
+      const adicionalBase = Number(i.quantidade_adicional ?? 0)
+      const rawAdicional = editandoAdicional[i.id]
+      const adicionalEditado = rawAdicional !== undefined ? parseNumero(rawAdicional) : adicionalBase
+      const adicional = Number.isFinite(adicionalEditado) ? adicionalEditado : adicionalBase
+      return { ...i, quantidade: vendido + adicional }
+    })
   )
 
-  async function salvarQtd(item: OrdemCompraItem) {
-    const raw = editandoQtd[item.id]
+  async function salvarAdicional(item: OrdemCompraItem) {
+    const raw = editandoAdicional[item.id]
     if (raw === undefined) return
-    const qty = Number(raw)
-    if (!qty || qty <= 0) { setErro('Quantidade inválida.'); return }
+    const adicional = parseNumero(raw)
+    if (!Number.isFinite(adicional) || adicional < 0) {
+      setErro('Unidades adicionais inválidas.')
+      return
+    }
     setSalvando(item.id); setErro('')
     try {
-      await atualizarQuantidadeItem(item.id, qty)
-      setEditandoQtd((prev) => { const n = { ...prev }; delete n[item.id]; return n })
+      await atualizarUnidadesAdicionaisItem(item.id, adicional)
+      setEditandoAdicional((prev) => { const n = { ...prev }; delete n[item.id]; return n })
       onRefresh()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
@@ -249,7 +295,15 @@ function OcDetalheModal({
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
-                {['Código', 'Matéria-Prima', 'Quantidade', 'Preço Unit.', 'Subtotal'].map((h) => (
+                {[
+                  'Código',
+                  'Matéria-Prima',
+                  'Vendido',
+                  'Unidades adicionais',
+                  'Qtd Total',
+                  'Preço Unit.',
+                  'Subtotal',
+                ].map((h) => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                     {h}
                   </th>
@@ -258,9 +312,14 @@ function OcDetalheModal({
             </thead>
             <tbody>
               {itens.map((item, idx) => {
-                const isEditing = editandoQtd[item.id] !== undefined
-                const displayQty = isEditing ? editandoQtd[item.id] : fmtQtd(item.quantidade)
-                const sub = (item.preco_unitario ?? 0) * (isEditing ? Number(editandoQtd[item.id]) || item.quantidade : item.quantidade)
+                const isEditing = editandoAdicional[item.id] !== undefined
+                const vendido = Number(item.quantidade_vendida ?? item.quantidade)
+                const adicionalBase = Number(item.quantidade_adicional ?? 0)
+                const rawAdicional = editandoAdicional[item.id]
+                const adicionalEditado = rawAdicional !== undefined ? parseNumero(rawAdicional) : adicionalBase
+                const adicional = Number.isFinite(adicionalEditado) ? adicionalEditado : adicionalBase
+                const totalQty = vendido + adicional
+                const sub = (item.preco_unitario ?? 0) * totalQty
                 return (
                   <tr
                     key={item.id}
@@ -275,17 +334,20 @@ function OcDetalheModal({
                     <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>
                       {item.materia_prima?.nome ?? '—'}
                     </td>
+                    <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
+                      {fmtQtd(vendido)}
+                    </td>
                     <td className="px-3 py-2.5">
                       {perm.editar && oc.status === 'pendente' ? (
                         <div className="flex items-center gap-1.5">
                           <input
                             type="number"
-                            min="0.001"
+                            min="0"
                             step="any"
-                            value={displayQty}
-                            onChange={(e) => setEditandoQtd((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                            value={isEditing ? editandoAdicional[item.id] : String(adicionalBase)}
+                            onChange={(e) => setEditandoAdicional((prev) => ({ ...prev, [item.id]: e.target.value }))}
                             onFocus={() => {
-                              if (!isEditing) setEditandoQtd((prev) => ({ ...prev, [item.id]: String(item.quantidade) }))
+                              if (!isEditing) setEditandoAdicional((prev) => ({ ...prev, [item.id]: String(adicionalBase) }))
                             }}
                             className="w-24 px-2 py-1 rounded text-sm text-right"
                             style={{
@@ -296,7 +358,7 @@ function OcDetalheModal({
                           />
                           {isEditing && (
                             <button
-                              onClick={() => salvarQtd(item)}
+                              onClick={() => salvarAdicional(item)}
                               disabled={salvando === item.id}
                               className="px-2 py-1 rounded text-xs font-semibold"
                               style={{ background: 'var(--ac-accent)', color: '#111827' }}
@@ -306,7 +368,7 @@ function OcDetalheModal({
                           )}
                           {isEditing && (
                             <button
-                              onClick={() => setEditandoQtd((prev) => { const n = { ...prev }; delete n[item.id]; return n })}
+                              onClick={() => setEditandoAdicional((prev) => { const n = { ...prev }; delete n[item.id]; return n })}
                               className="px-1.5 py-1 rounded text-xs"
                               style={{ color: 'var(--ac-muted)' }}
                             >
@@ -315,8 +377,11 @@ function OcDetalheModal({
                           )}
                         </div>
                       ) : (
-                        <span style={{ color: 'var(--ac-text)' }}>{fmtQtd(item.quantidade)}</span>
+                        <span style={{ color: 'var(--ac-text)' }}>{fmtQtd(adicionalBase)}</span>
                       )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
+                      <span style={{ color: 'var(--ac-text)' }}>{fmtQtd(totalQty)}</span>
                     </td>
                     <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
                       {item.preco_unitario != null ? fmt(item.preco_unitario) : '—'}
@@ -329,7 +394,7 @@ function OcDetalheModal({
               })}
               {/* Total */}
               <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 20%, transparent)' }}>
-                <td colSpan={4} className="px-3 py-2.5 text-right font-semibold text-sm" style={{ color: 'var(--ac-muted)' }}>
+                <td colSpan={6} className="px-3 py-2.5 text-right font-semibold text-sm" style={{ color: 'var(--ac-muted)' }}>
                   TOTAL
                 </td>
                 <td className="px-3 py-2.5 text-right font-bold text-base" style={{ color: 'var(--ac-text)' }}>
@@ -339,6 +404,95 @@ function OcDetalheModal({
             </tbody>
           </table>
         </div>
+
+        {/* Adicionar matéria-prima */}
+        {perm.editar && oc.status === 'pendente' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                Adicionar matéria-prima
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[240px]">
+                <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                  Matéria-prima
+                </label>
+                <select
+                  value={materiaPrimaParaAdicionar}
+                  onChange={(e) => setMateriaPrimaParaAdicionar(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm"
+                  style={{
+                    background: 'var(--ac-bg)',
+                    border: '1px solid var(--ac-border)',
+                    color: 'var(--ac-text)',
+                  }}
+                >
+                  <option value="">Selecione...</option>
+                  {materiasPrimas
+                    .filter((mp) => !idsMateriaJaNoPedido.has(mp.id))
+                    .map((mp) => (
+                      <option key={mp.id} value={mp.id}>
+                        {mp.codigo} — {mp.nome}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="w-[220px]">
+                <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                  Unidades adicionais
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={adicionalParaAdicionar}
+                  onChange={(e) => setAdicionalParaAdicionar(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm text-right"
+                  style={{
+                    background: 'var(--ac-bg)',
+                    border: '1px solid var(--ac-border)',
+                    color: 'var(--ac-text)',
+                  }}
+                />
+              </div>
+
+              <Button
+                variant="primary"
+                loading={adicionandoItem}
+                disabled={!materiaPrimaParaAdicionar || adicionandoItem}
+                onClick={async () => {
+                  setAdicionandoItem(true)
+                  setErro('')
+                  try {
+                    const adicional = parseNumero(adicionalParaAdicionar)
+                    if (!Number.isFinite(adicional) || adicional <= 0) {
+                      setErro('Unidades adicionais devem ser maiores que zero.')
+                      return
+                    }
+                    await criarItemOrdemCompra(oc.id, materiaPrimaParaAdicionar, adicional)
+                    setMateriaPrimaParaAdicionar('')
+                    setAdicionalParaAdicionar('')
+                    onRefresh()
+                  } catch (e: unknown) {
+                    setErro(e instanceof Error ? e.message : 'Erro ao adicionar matéria-prima.')
+                  } finally {
+                    setAdicionandoItem(false)
+                  }
+                }}
+              >
+                Adicionar
+              </Button>
+            </div>
+
+            {carregandoMateriasPrimas && (
+              <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
+                Carregando matérias-primas...
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Observações */}
         {perm.editar && (
@@ -452,6 +606,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [filtroStatus, setFiltroStatus] = useState<StatusOC | 'todas'>('todas')
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
+  const gerarOcInFlightRef = useRef<Record<string, boolean>>({})
+  const gerarTodasInFlightRef = useRef(false)
 
   useEffect(() => {
     if (aba !== 'historico' || ordensState.length > 0 || loadingHistorico) return
@@ -495,6 +651,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
 
   async function handleGerarOC(fornecedor_id: string | null) {
     const chave = fornecedor_id ?? '__sem_fornecedor__'
+    if (gerarOcInFlightRef.current[chave]) return
+    gerarOcInFlightRef.current[chave] = true
     setGerandoFornecedor(chave); setErro('')
     try {
       const codigo = await gerarOC(fornecedor_id)
@@ -505,10 +663,13 @@ export function OcClient({ fila, ordens, perm }: Props) {
       setErro(e instanceof Error ? e.message : 'Erro ao gerar OC.')
     } finally {
       setGerandoFornecedor(null)
+      gerarOcInFlightRef.current[chave] = false
     }
   }
 
   async function handleGerarTodas() {
+    if (gerarTodasInFlightRef.current) return
+    gerarTodasInFlightRef.current = true
     setGerandoTodas(true); setErro('')
     try {
       const n = await gerarTodasOCs()
@@ -519,6 +680,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       setErro(e instanceof Error ? e.message : 'Erro ao gerar OCs.')
     } finally {
       setGerandoTodas(false)
+      gerarTodasInFlightRef.current = false
     }
   }
 

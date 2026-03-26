@@ -207,6 +207,8 @@ export type OrdemCompraItem = {
   ordem_compra_id: string
   materia_prima_id: string
   quantidade: number
+  quantidade_vendida: number
+  quantidade_adicional: number
   preco_unitario: number | null
   materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'>
 }
