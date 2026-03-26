@@ -54,7 +54,7 @@ export async function criarCategoriaFaca(input: CategoriaInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
-  revalidateTag('categorias-faca-list')
+  revalidateTag('categorias-faca-list', 'default')
 }
 
 export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) {
@@ -73,7 +73,7 @@ export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) 
   if (error) throw new Error(error.message)
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
-  revalidateTag('categorias-faca-list')
+  revalidateTag('categorias-faca-list', 'default')
 }
 
 export async function deletarCategoriaFaca(id: string) {
@@ -83,5 +83,5 @@ export async function deletarCategoriaFaca(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
-  revalidateTag('categorias-faca-list')
+  revalidateTag('categorias-faca-list', 'default')
 }

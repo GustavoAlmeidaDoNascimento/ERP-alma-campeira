@@ -121,7 +121,7 @@ export async function criarVenda(input: VendaInput) {
   if (itemsError) throw new Error(itemsError.message)
 
   revalidatePath('/vendas')
-  revalidateTag('vendas-list')
+  revalidateTag('vendas-list', 'default')
 }
 
 export async function atualizarVenda(id: string, input: VendaInput) {
@@ -166,7 +166,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   if (itemsError) throw new Error(itemsError.message)
 
   revalidatePath('/vendas')
-  revalidateTag('vendas-list')
+  revalidateTag('vendas-list', 'default')
 }
 
 export async function avancarStatus(id: string, novoStatus: 'em_producao') {
@@ -180,7 +180,7 @@ export async function avancarStatus(id: string, novoStatus: 'em_producao') {
 
   if (error) throw new Error(error.message)
   revalidatePath('/vendas')
-  revalidateTag('vendas-list')
+  revalidateTag('vendas-list', 'default')
 }
 
 export async function marcarEntregue(id: string) {
@@ -269,10 +269,10 @@ export async function marcarEntregue(id: string) {
   revalidatePath('/vendas')
   revalidatePath('/facas')
   revalidatePath('/ordens-compra')
-  revalidateTag('vendas-list')
-  revalidateTag('facas-list')
-  revalidateTag('ordens-compra-historico')
-  revalidateTag('ordens-compra-fila')
+  revalidateTag('vendas-list', 'default')
+  revalidateTag('facas-list', 'default')
+  revalidateTag('ordens-compra-historico', 'default')
+  revalidateTag('ordens-compra-fila', 'default')
 }
 
 export async function deletarVenda(id: string) {
@@ -292,5 +292,5 @@ export async function deletarVenda(id: string) {
   const { error } = await supabase.from('pedidos').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/vendas')
-  revalidateTag('vendas-list')
+  revalidateTag('vendas-list', 'default')
 }

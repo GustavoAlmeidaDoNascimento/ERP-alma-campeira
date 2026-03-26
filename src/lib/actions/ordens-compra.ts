@@ -223,8 +223,8 @@ export async function gerarOC(fornecedor_id: string | null): Promise<string> {
   await supabase.from('fila_reposicao').delete().in('id', idsParaDeletar)
 
   revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico')
-  revalidateTag('ordens-compra-fila')
+  revalidateTag('ordens-compra-historico', 'default')
+  revalidateTag('ordens-compra-fila', 'default')
   return codigo
 }
 
@@ -249,8 +249,8 @@ export async function gerarTodasOCs(): Promise<number> {
   }
 
   revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico')
-  revalidateTag('ordens-compra-fila')
+  revalidateTag('ordens-compra-historico', 'default')
+  revalidateTag('ordens-compra-fila', 'default')
   return criadas
 }
 
@@ -296,7 +296,7 @@ export async function atualizarQuantidadeItem(item_id: string, quantidade: numbe
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico')
+  revalidateTag('ordens-compra-historico', 'default')
 }
 
 export async function atualizarObservacaoOC(id: string, observacao: string) {
@@ -309,7 +309,7 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico')
+  revalidateTag('ordens-compra-historico', 'default')
 }
 
 export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' | 'recebida') {
@@ -359,7 +359,7 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico')
+  revalidateTag('ordens-compra-historico', 'default')
 }
 
 export async function deletarOC(id: string) {
@@ -377,5 +377,5 @@ export async function deletarOC(id: string) {
   const { error } = await supabase.from('ordens_compra').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico')
+  revalidateTag('ordens-compra-historico', 'default')
 }

@@ -63,7 +63,7 @@ export async function criarMateriaPrima(input: MPInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list')
+  revalidateTag('materias-primas-list', 'default')
 }
 
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
@@ -83,7 +83,7 @@ export async function atualizarMateriaPrima(id: string, input: MPInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list')
+  revalidateTag('materias-primas-list', 'default')
 }
 
 export async function deletarMateriaPrima(id: string) {
@@ -103,5 +103,5 @@ export async function deletarMateriaPrima(id: string) {
   const { error } = await supabase.from('materias_primas').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list')
+  revalidateTag('materias-primas-list', 'default')
 }

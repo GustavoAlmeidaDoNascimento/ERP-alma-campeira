@@ -65,7 +65,7 @@ export async function criarFaca(input: FacaInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
-  revalidateTag('facas-list')
+  revalidateTag('facas-list', 'default')
 }
 
 export async function atualizarFaca(id: string, input: FacaInput) {
@@ -85,8 +85,10 @@ export async function atualizarFaca(id: string, input: FacaInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
-  revalidateTag('facas-list')
+  revalidateTag('facas-list', 'default')
 }
+
+export type DeletarFacaModo = 'desmontar' | 'apagar_materias_primas'
 
 const FOTO_BUCKET_FACAS = 'facas-fotos'
 
@@ -195,14 +197,114 @@ export async function salvarFacaComFoto(formData: FormData) {
   }
 
   revalidatePath('/facas')
-  revalidateTag('facas-list')
+  revalidateTag('facas-list', 'default')
 }
 
-export async function deletarFaca(id: string) {
+function round3(n: number) {
+  return Math.round(n * 1000) / 1000
+}
+
+export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar') {
   await assertPermissao('facas', 'deletar')
   const supabase = await createClient()
-  const { error } = await supabase.from('facas').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+
+  if (modo === 'desmontar') {
+    const { data: faca, error: facaErr } = await supabase
+      .from('facas')
+      .select('id, codigo, estoque_atual')
+      .eq('id', id)
+      .single()
+
+    if (facaErr) throw new Error(facaErr.message)
+    if (!faca) throw new Error('Faca não encontrada.')
+
+    const estoqueFaca = Number(faca.estoque_atual) || 0
+    if (estoqueFaca > 0) {
+      const { data: boms, error: bomsErr } = await supabase
+        .from('faca_materias_primas')
+        .select('materia_prima_id, quantidade')
+        .eq('faca_id', id)
+
+      if (bomsErr) throw new Error(bomsErr.message)
+
+      const mpIds = [...new Set((boms ?? []).map((b) => b.materia_prima_id))] as string[]
+      const { data: mps, error: mpsErr } = await supabase
+        .from('materias_primas')
+        .select('id, estoque_atual')
+        .in('id', mpIds)
+
+      if (mpsErr) throw new Error(mpsErr.message)
+
+      const mpMap = new Map<string, { estoque_atual: number }>()
+      for (const mp of mps ?? []) {
+        mpMap.set(mp.id, { estoque_atual: Number(mp.estoque_atual) || 0 })
+      }
+
+      const userId = await requireAuthenticatedUserId()
+
+      for (const bom of (boms ?? [])) {
+        const mp = mpMap.get(bom.materia_prima_id)
+        if (!mp) continue
+
+        const quantidadePorFaca = Number(bom.quantidade) || 0
+        const delta = round3(estoqueFaca * quantidadePorFaca)
+        if (!delta) continue
+
+        const novoEstoque = round3(mp.estoque_atual + delta)
+        mp.estoque_atual = novoEstoque
+
+        const { error: updErr } = await supabase
+          .from('materias_primas')
+          .update({ estoque_atual: novoEstoque })
+          .eq('id', bom.materia_prima_id)
+        if (updErr) throw new Error(updErr.message)
+
+        const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+          tipo: 'ajuste',
+          materia_prima_id: bom.materia_prima_id,
+          faca_id: id,
+          quantidade: delta,
+          observacao: `Desmontar faca ${faca.codigo}`,
+          usuario_id: userId,
+        })
+        if (movErr) throw new Error(movErr.message)
+      }
+    }
+  }
+
+  if (modo === 'apagar_materias_primas') {
+    const { data: boms, error: bomsErr } = await supabase
+      .from('faca_materias_primas')
+      .select('materia_prima_id')
+      .eq('faca_id', id)
+
+    if (bomsErr) throw new Error(bomsErr.message)
+    const mpIds = [...new Set((boms ?? []).map((b) => b.materia_prima_id))] as string[]
+
+    const { error: delFacaErr } = await supabase.from('facas').delete().eq('id', id)
+    if (delFacaErr) throw new Error(delFacaErr.message)
+
+    for (const mpId of mpIds) {
+      const { data: uso, error: usoErr } = await supabase
+        .from('faca_materias_primas')
+        .select('id')
+        .eq('materia_prima_id', mpId)
+        .limit(1)
+      if (usoErr) throw new Error(usoErr.message)
+
+      if (!uso || uso.length === 0) {
+        const { error: delMpErr } = await supabase.from('materias_primas').delete().eq('id', mpId)
+        if (delMpErr) throw new Error(delMpErr.message)
+      }
+    }
+
+    revalidatePath('/materias-primas')
+    revalidateTag('materias-primas-list', 'default')
+  } else {
+    const { error } = await supabase.from('facas').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  }
+
   revalidatePath('/facas')
-  revalidateTag('facas-list')
+  revalidateTag('facas-list', 'default')
 }

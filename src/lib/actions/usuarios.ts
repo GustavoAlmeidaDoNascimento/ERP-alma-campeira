@@ -98,7 +98,7 @@ export async function criarUsuario({
   })
   if (perfilError) throw new Error(perfilError.message)
   revalidatePath('/usuarios')
-  revalidateTag('usuarios-list')
+  revalidateTag('usuarios-list', 'default')
 }
 
 export async function atualizarPerfil(
@@ -139,7 +139,7 @@ export async function atualizarPerfil(
 
   updateTag('user-permissions')
   revalidatePath('/usuarios')
-  revalidateTag('usuarios-list')
+  revalidateTag('usuarios-list', 'default')
 }
 
 export async function deletarUsuario(id: string) {
@@ -148,5 +148,5 @@ export async function deletarUsuario(id: string) {
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) throw new Error(error.message)
   revalidatePath('/usuarios')
-  revalidateTag('usuarios-list')
+  revalidateTag('usuarios-list', 'default')
 }

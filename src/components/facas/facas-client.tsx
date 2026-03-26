@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { FacaModal } from './faca-modal'
-import { deletarFaca } from '@/lib/actions/facas'
+import { deletarFaca, type DeletarFacaModo } from '@/lib/actions/facas'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { statusEstoqueFaca } from '@/types'
 import type { Faca, CategoriaFacaDB } from '@/types'
@@ -26,6 +26,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Faca | null>(null)
   const [deletando, setDeletando] = useState<Faca | null>(null)
+  const [modoDelete, setModoDelete] = useState<DeletarFacaModo>('desmontar')
   const [erroDelete, setErroDelete] = useState('')
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [busca, setBusca] = useState('')
@@ -68,7 +69,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
     setErroDelete('')
     setLoadingDelete(true)
     try {
-      await deletarFaca(deletando.id)
+      await deletarFaca(deletando.id, modoDelete)
       setDeletando(null)
       refreshActiveTab()
     } catch (e: unknown) {
@@ -259,7 +260,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                           </button>
                         )}
                         {perm.deletar && (
-                          <button onClick={() => { setDeletando(faca); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
+                          <button onClick={() => { setDeletando(faca); setModoDelete('desmontar'); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626' }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
@@ -296,6 +297,22 @@ export function FacasClient({ facas, categorias, perm }: Props) {
           <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
             Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>? Esta ação não pode ser desfeita.
           </p>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              Como tratar as matérias-primas?
+            </label>
+            <select
+              value={modoDelete}
+              onChange={(e) => setModoDelete(e.target.value as DeletarFacaModo)}
+              className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-all appearance-none"
+              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+            >
+              <option value="apagar_materias_primas">{deletando?.nome}: apagar materias primas também</option>
+              <option value="desmontar">desmontar: retornar matérias primas ao estoque</option>
+            </select>
+          </div>
+
           {erroDelete && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroDelete}</p>
           )}
