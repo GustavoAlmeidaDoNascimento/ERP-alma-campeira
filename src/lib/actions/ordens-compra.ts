@@ -8,54 +8,127 @@ import type { OrdemCompra, FilaFornecedor } from '@/types'
 
 // ─── Fila de Reposição ────────────────────────────────────────────────────────
 
+async function carregarFilaReposicao(supabase: Awaited<ReturnType<typeof createClient>>): Promise<FilaFornecedor[]> {
+  const { data, error } = await supabase
+    .from('fila_reposicao')
+    .select(`
+      materia_prima_id,
+      fornecedor_id,
+      quantidade_pendente,
+      mp:materias_primas(id, codigo, nome, preco_custo),
+      fornecedor:fornecedores(id, nome)
+    `)
+
+  if (error) throw new Error(error.message)
+
+  const mapa = new Map<string, FilaFornecedor>()
+  for (const row of data ?? []) {
+    const mp = (Array.isArray(row.mp) ? row.mp[0] : row.mp) as {
+      id: string; codigo: string; nome: string; preco_custo: number
+    } | null
+    const forn = (Array.isArray(row.fornecedor) ? row.fornecedor[0] : row.fornecedor) as {
+      id: string; nome: string
+    } | null
+    if (!mp) continue
+    const chave = row.fornecedor_id ?? '__sem_fornecedor__'
+    if (!mapa.has(chave)) {
+      mapa.set(chave, {
+        fornecedor_id: row.fornecedor_id,
+        fornecedor_nome: forn?.nome ?? 'Sem fornecedor',
+        itens: [],
+      })
+    }
+    const grupo = mapa.get(chave)!
+    const existente = grupo.itens.find((i) => i.materia_prima_id === row.materia_prima_id)
+    if (existente) {
+      existente.quantidade_total += Number(row.quantidade_pendente)
+    } else {
+      grupo.itens.push({
+        materia_prima_id: row.materia_prima_id,
+        mp_codigo: mp.codigo,
+        mp_nome: mp.nome,
+        mp_preco_custo: Number(mp.preco_custo),
+        quantidade_total: Number(row.quantidade_pendente),
+      })
+    }
+  }
+
+  return Array.from(mapa.values()).sort((a, b) => a.fornecedor_nome.localeCompare(b.fornecedor_nome))
+}
+
+async function backfillFilaReposicaoFromEntregues(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<boolean> {
+  // Para evitar trabalho desnecessário, só backfill quando não há nada em fila.
+  const { count, error: countErr } = await supabase
+    .from('fila_reposicao')
+    .select('id', { count: 'exact', head: true })
+  if (countErr) throw new Error(countErr.message)
+  if (count != null && count > 0) return false
+
+  const { data: entregues, error: entreguesErr } = await supabase
+    .from('pedidos')
+    .select('id')
+    .eq('status', 'entregue')
+
+  if (entreguesErr) throw new Error(entreguesErr.message)
+  if (!entregues || entregues.length === 0) return false
+
+  let insertedAny = false
+
+  for (const p of entregues) {
+    const { data: exists } = await supabase
+      .from('fila_reposicao')
+      .select('id')
+      .eq('pedido_id', p.id)
+      .limit(1)
+
+    if (exists && exists.length > 0) continue
+
+    const { data: itens, error: itensErr } = await supabase
+      .from('pedido_itens')
+      .select('faca_id, quantidade')
+      .eq('pedido_id', p.id)
+
+    if (itensErr) throw new Error(itensErr.message)
+    if (!itens || itens.length === 0) continue
+
+    const facaIds = [...new Set(itens.map((i) => i.faca_id))]
+
+    const { data: boms, error: bomsErr } = await supabase
+      .from('faca_materias_primas')
+      .select('faca_id, materia_prima_id, quantidade, mp:materias_primas(id, fornecedor_id)')
+      .in('faca_id', facaIds)
+
+    if (bomsErr) throw new Error(bomsErr.message)
+    if (!boms || boms.length === 0) continue
+
+    for (const item of itens) {
+      const facaBom = (boms ?? []).filter((b) => b.faca_id === item.faca_id)
+      for (const bom of facaBom) {
+        const mp = (Array.isArray((bom as any).mp) ? (bom as any).mp[0] : (bom as any).mp) as
+          | { id: string; fornecedor_id: string | null }
+          | null
+        if (!mp) continue
+
+        await supabase.from('fila_reposicao').insert({
+          materia_prima_id: (bom as any).materia_prima_id,
+          fornecedor_id: mp.fornecedor_id,
+          quantidade_pendente: (bom as any).quantidade * item.quantidade,
+          pedido_id: p.id,
+        })
+        insertedAny = true
+      }
+    }
+  }
+
+  return insertedAny
+}
+
 const getFilaReposicaoCached = unstable_cache(
   async (): Promise<FilaFornecedor[]> => {
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('fila_reposicao')
-      .select(`
-        materia_prima_id,
-        fornecedor_id,
-        quantidade_pendente,
-        mp:materias_primas(id, codigo, nome, preco_custo),
-        fornecedor:fornecedores(id, nome)
-      `)
-
-    if (error) throw new Error(error.message)
-
-    const mapa = new Map<string, FilaFornecedor>()
-    for (const row of data ?? []) {
-      const mp = (Array.isArray(row.mp) ? row.mp[0] : row.mp) as {
-        id: string; codigo: string; nome: string; preco_custo: number
-      } | null
-      const forn = (Array.isArray(row.fornecedor) ? row.fornecedor[0] : row.fornecedor) as {
-        id: string; nome: string
-      } | null
-      if (!mp) continue
-      const chave = row.fornecedor_id ?? '__sem_fornecedor__'
-      if (!mapa.has(chave)) {
-        mapa.set(chave, {
-          fornecedor_id: row.fornecedor_id,
-          fornecedor_nome: forn?.nome ?? 'Sem fornecedor',
-          itens: [],
-        })
-      }
-      const grupo = mapa.get(chave)!
-      const existente = grupo.itens.find((i) => i.materia_prima_id === row.materia_prima_id)
-      if (existente) {
-        existente.quantidade_total += Number(row.quantidade_pendente)
-      } else {
-        grupo.itens.push({
-          materia_prima_id: row.materia_prima_id,
-          mp_codigo: mp.codigo,
-          mp_nome: mp.nome,
-          mp_preco_custo: Number(mp.preco_custo),
-          quantidade_total: Number(row.quantidade_pendente),
-        })
-      }
-    }
-
-    return Array.from(mapa.values()).sort((a, b) => a.fornecedor_nome.localeCompare(b.fornecedor_nome))
+    return carregarFilaReposicao(supabase)
   },
   ['ordens-compra-fila'],
   { revalidate: 30, tags: ['ordens-compra-fila'] }
@@ -63,7 +136,12 @@ const getFilaReposicaoCached = unstable_cache(
 
 export async function getFilaReposicao(): Promise<FilaFornecedor[]> {
   await assertPermissao('ordens_compra', 'ver')
-  return withSupabaseCookieContext(() => getFilaReposicaoCached())
+  return withSupabaseCookieContext(async () => {
+    const supabase = await createClient()
+    const didBackfill = await backfillFilaReposicaoFromEntregues(supabase)
+    if (didBackfill) return carregarFilaReposicao(supabase)
+    return getFilaReposicaoCached()
+  })
 }
 
 // ─── Gerar OC ─────────────────────────────────────────────────────────────────

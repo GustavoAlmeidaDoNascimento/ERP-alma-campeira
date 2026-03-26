@@ -29,7 +29,7 @@ const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
 
 export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }: Props) {
   const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciais)
-  const { refreshActiveTab } = useErpTabs()
+  const { refreshActiveTab, refreshTab } = useErpTabs()
   const [formAberto, setFormAberto] = useState(false)
   const [editando, setEditando] = useState<Pedido | null>(null)
   const [detalhe, setDetalhe] = useState<Pedido | null>(null)
@@ -61,7 +61,11 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }
     } catch {
       // Optimistic update continua válido se falhar
     }
-  }, [])
+
+    // Quando uma venda vira "entregue", isso alimenta a fila de reposição
+    // que é exibida na aba de Ordens de Compra.
+    if (novoStatus === 'entregue') refreshTab('/ordens-compra')
+  }, [refreshTab])
 
   const filtrados = useMemo(() => {
     return pedidos.filter((p) => {
