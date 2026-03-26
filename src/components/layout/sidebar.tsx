@@ -22,6 +22,12 @@ function getInitials(email: string) {
 export function Sidebar() {
   const { openTab, activeHref } = useErpTabs()
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
+    sections.reduce<Record<string, boolean>>((acc, section) => {
+      acc[section.label] = true
+      return acc
+    }, {}),
+  )
 
   useEffect(() => {
     const supabase = createClient()
@@ -60,14 +66,35 @@ export function Sidebar() {
         {sections.map((section) => (
           <div key={section.label} className="mb-1">
             {/* Label da seção */}
-            <p
-              className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest"
-              style={{ color: 'var(--ac-muted)', opacity: 0.6 }}
+            <button
+              type="button"
+              onClick={() => {
+                setExpandedSections((prev) => ({
+                  ...prev,
+                  [section.label]: !prev[section.label],
+                }))
+              }}
+              aria-expanded={expandedSections[section.label]}
+              className="w-full px-4 pt-3 pb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest transition-opacity hover:opacity-90"
+              style={{ color: 'var(--ac-muted)', opacity: 0.7 }}
             >
-              {section.label}
-            </p>
+              <span>{section.label}</span>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                className={[
+                  'size-3.5 transition-transform duration-200',
+                  expandedSections[section.label] ? 'rotate-180' : '',
+                ].join(' ')}
+                aria-hidden
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
             {/* Itens */}
-            {section.items.map((item) => {
+            {expandedSections[section.label] && section.items.map((item) => {
               const isActive = activeHref === item.href || activeHref.startsWith(item.href + '/')
               return (
                 <button
