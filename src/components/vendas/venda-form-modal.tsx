@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { criarVenda, atualizarVenda } from '@/lib/actions/vendas'
-import type { Pedido, Cliente, Faca } from '@/types'
+import { STATUS_PEDIDO } from '@/types'
+import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
 
 type Props = {
   open: boolean
@@ -27,6 +28,7 @@ function today() {
 export function VendaFormModal({ open, onClose, editando, clientes, facas }: Props) {
   const [clienteId, setClienteId] = useState('')
   const [dataPedido, setDataPedido] = useState(today())
+  const [status, setStatus] = useState<StatusPedido>('em_espera')
   const [observacao, setObservacao] = useState('')
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
   const [loading, setLoading] = useState(false)
@@ -38,6 +40,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas }: Pro
     if (editando) {
       setClienteId(editando.cliente_id ?? '')
       setDataPedido(editando.data_pedido)
+      setStatus(editando.status)
       setObservacao(editando.observacao ?? '')
       setItens(
         editando.itens && editando.itens.length > 0
@@ -51,6 +54,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas }: Pro
     } else {
       setClienteId('')
       setDataPedido(today())
+      setStatus('em_espera')
       setObservacao('')
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
     }
@@ -90,6 +94,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas }: Pro
       const input = {
         cliente_id: clienteId || null,
         data_pedido: dataPedido,
+        status,
         observacao,
         itens: itensValidos,
       }
@@ -129,8 +134,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas }: Pro
     >
       <div className="flex flex-col gap-5">
 
-        {/* Linha 1: Cliente + Data */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Linha 1: Cliente + Data + Status */}
+        <div className="grid grid-cols-3 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cliente</label>
             <select
@@ -158,6 +163,21 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas }: Pro
               onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
               onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as StatusPedido)}
+              className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+              style={selectStyle}
+              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+              onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+            >
+              <option value="em_espera">{STATUS_PEDIDO.em_espera.label}</option>
+              <option value="em_producao">{STATUS_PEDIDO.em_producao.label}</option>
+              <option value="entregue">{STATUS_PEDIDO.entregue.label}</option>
+            </select>
           </div>
         </div>
 

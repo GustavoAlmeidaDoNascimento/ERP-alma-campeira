@@ -4,7 +4,18 @@ import { revalidatePath } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
-import type { Pedido } from '@/types'
+import type { Pedido, StatusPedido } from '@/types'
+
+function normalizeStatusPedido(status: string): StatusPedido {
+  if (status === 'em_espera' || status === 'em_producao' || status === 'entregue') return status
+  if (status === 'orcamento' || status === 'confirmado') return 'em_espera'
+  if (status === 'cancelado') return 'entregue'
+  return 'em_espera'
+}
+
+function normalizePedido(pedido: Pedido): Pedido {
+  return { ...pedido, status: normalizeStatusPedido(String(pedido.status)) }
+}
 
 const getVendasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Pedido[]> => {
@@ -19,7 +30,7 @@ const getVendasCached = unstable_cache(
       .order('created_at', { ascending: false })
       .limit(limit)
     if (error) throw new Error(error.message)
-    return data as Pedido[]
+    return (data as Pedido[]).map(normalizePedido)
   },
   ['vendas-list'],
   { revalidate: 30 }
@@ -44,7 +55,7 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
     .single()
 
   if (error || !data) throw new Error(error?.message ?? 'Venda não encontrada.')
-  return data as Pedido
+  return normalizePedido(data as Pedido)
 }
 
 export async function gerarCodigoPedido(): Promise<string> {
@@ -71,6 +82,7 @@ export type VendaInput = {
   cliente_id: string | null
   data_pedido: string
   observacao: string
+  status: StatusPedido
   itens: VendaItemInput[]
 }
 
@@ -90,7 +102,7 @@ export async function criarVenda(input: VendaInput) {
       cliente_id: input.cliente_id || null,
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
-      status: 'orcamento',
+      status: input.status,
       valor_total,
     })
     .select('id')
@@ -122,8 +134,8 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     .select('status')
     .eq('id', id)
     .single()
-  if (!pedido || pedido.status !== 'orcamento') {
-    throw new Error('Apenas orçamentos podem ser editados.')
+  if (!pedido || normalizeStatusPedido(String(pedido.status)) === 'entregue') {
+    throw new Error('Vendas entregues não podem ser editadas.')
   }
 
   const valor_total = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
@@ -134,6 +146,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
       cliente_id: input.cliente_id || null,
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
+      status: input.status,
       valor_total,
     })
     .eq('id', id)
@@ -154,7 +167,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   revalidatePath('/vendas')
 }
 
-export async function avancarStatus(id: string, novoStatus: 'confirmado' | 'em_producao') {
+export async function avancarStatus(id: string, novoStatus: 'em_producao') {
   await assertPermissao('vendas', 'editar')
   const supabase = await createClient()
 
@@ -178,7 +191,9 @@ export async function marcarEntregue(id: string) {
     .single()
 
   if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
-  if (pedido.status !== 'em_producao') throw new Error('A venda precisa estar "Em Produção" para ser entregue.')
+  if (normalizeStatusPedido(String(pedido.status)) !== 'em_producao') {
+    throw new Error('A venda precisa estar "Em Produção" para ser entregue.')
+  }
 
   const itens = pedido.itens as { faca_id: string; quantidade: number }[]
 
@@ -251,28 +266,6 @@ export async function marcarEntregue(id: string) {
   revalidatePath('/facas')
 }
 
-export async function cancelarVenda(id: string) {
-  await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
-
-  const { data: pedido } = await supabase
-    .from('pedidos')
-    .select('status')
-    .eq('id', id)
-    .single()
-
-  if (pedido?.status === 'entregue') {
-    throw new Error('Vendas já entregues não podem ser canceladas.')
-  }
-
-  const { error } = await supabase
-    .from('pedidos')
-    .update({ status: 'cancelado' })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath('/vendas')
-}
-
 export async function deletarVenda(id: string) {
   await assertPermissao('vendas', 'deletar')
   const supabase = await createClient()
@@ -283,8 +276,8 @@ export async function deletarVenda(id: string) {
     .eq('id', id)
     .single()
 
-  if (pedido?.status !== 'orcamento') {
-    throw new Error('Apenas orçamentos podem ser excluídos.')
+  if (!pedido || normalizeStatusPedido(String(pedido.status)) !== 'em_espera') {
+    throw new Error('Apenas vendas em espera podem ser excluídas.')
   }
 
   const { error } = await supabase.from('pedidos').delete().eq('id', id)

@@ -20,11 +20,9 @@ type Props = {
 
 const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'todos', label: 'Todos' },
-  { value: 'orcamento', label: 'Orçamento' },
-  { value: 'confirmado', label: 'Confirmado' },
+  { value: 'em_espera', label: 'Em espera' },
   { value: 'em_producao', label: 'Em Produção' },
   { value: 'entregue', label: 'Entregue' },
-  { value: 'cancelado', label: 'Cancelado' },
 ]
 
 export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
@@ -87,7 +85,7 @@ export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
         <div>
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Vendas</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-            {pedidos.filter(p => p.status !== 'cancelado' && p.status !== 'entregue').length} vendas em aberto
+            {pedidos.filter(p => p.status !== 'entregue').length} vendas em aberto
           </p>
         </div>
         {perm.criar && (
@@ -171,8 +169,8 @@ export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
               )}
               {filtrados.map((p, i) => {
                 const st = STATUS_PEDIDO[p.status]
-                const podeEditar = p.status === 'orcamento' && perm.editar
-                const podeDeletar = p.status === 'orcamento' && perm.deletar
+                const podeEditar = p.status !== 'entregue' && perm.editar
+                const podeDeletar = p.status === 'em_espera' && perm.deletar
                 return (
                   <tr key={p.id}
                     style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
@@ -225,7 +223,7 @@ export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
                           )}
                         </button>
 
-                        {/* Editar (só orçamento) */}
+                        {/* Editar (somente não entregue) */}
                         {podeEditar && (
                           <button onClick={() => abrirEditar(p)} className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
@@ -239,7 +237,7 @@ export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
                           </button>
                         )}
 
-                        {/* Excluir (só orçamento) */}
+                        {/* Excluir (somente em espera) */}
                         {podeDeletar && (
                           <button onClick={() => { setDeletando(p); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}

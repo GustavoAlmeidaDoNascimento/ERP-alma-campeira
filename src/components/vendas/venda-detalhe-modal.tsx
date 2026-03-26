@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { avancarStatus, marcarEntregue, cancelarVenda } from '@/lib/actions/vendas'
+import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido } from '@/types'
 
@@ -132,32 +132,12 @@ export function VendaDetalheModal({ pedido, onClose, perm }: Props) {
         {/* Ações de status */}
         {perm.editar && (
           <div className="flex items-center justify-between gap-2 pt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
-            {/* Cancelar (esquerda) */}
-            <div>
-              {(pedido.status === 'orcamento' || pedido.status === 'confirmado' || pedido.status === 'em_producao') && (
-                <Button
-                  variant="danger"
-                  loading={loading === 'cancelar'}
-                  onClick={() => acao(() => cancelarVenda(pedido.id), 'cancelar')}
-                >
-                  Cancelar venda
-                </Button>
-              )}
-            </div>
+            <div />
 
             {/* Avançar status (direita) */}
             <div className="flex gap-2">
               <Button variant="secondary" onClick={onClose}>Fechar</Button>
-              {pedido.status === 'orcamento' && (
-                <Button
-                  loading={loading === 'confirmar'}
-                  onClick={() => acao(() => avancarStatus(pedido.id, 'confirmado'), 'confirmar')}
-                  style={{ background: '#1d4ed8', color: '#fff', border: 'none' }}
-                >
-                  Confirmar venda
-                </Button>
-              )}
-              {pedido.status === 'confirmado' && (
+              {pedido.status === 'em_espera' && (
                 <Button
                   loading={loading === 'producao'}
                   onClick={() => acao(() => avancarStatus(pedido.id, 'em_producao'), 'producao')}
