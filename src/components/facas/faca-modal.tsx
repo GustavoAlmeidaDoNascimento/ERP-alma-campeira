@@ -20,11 +20,12 @@ type Form = {
   categoria: string
   preco_venda: string
   estoque_atual: string
+  estoque_minimo: string
 }
 
 export function FacaModal({ open, onClose, editando, categorias }: Props) {
   const defaultCategoria = categorias[0]?.nome ?? ''
-  const [form, setForm] = useState<Form>({ nome: '', categoria: defaultCategoria, preco_venda: '', estoque_atual: '0' })
+  const [form, setForm] = useState<Form>({ nome: '', categoria: defaultCategoria, preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -35,9 +36,10 @@ export function FacaModal({ open, onClose, editando, categorias }: Props) {
         categoria: editando.categoria,
         preco_venda: String(editando.preco_venda),
         estoque_atual: String(editando.estoque_atual),
+        estoque_minimo: String(editando.estoque_minimo),
       })
     } else {
-      setForm({ nome: '', categoria: categorias[0]?.nome ?? '', preco_venda: '', estoque_atual: '0' })
+      setForm({ nome: '', categoria: categorias[0]?.nome ?? '', preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
     }
     setErro('')
   }, [editando, open, categorias])
@@ -60,6 +62,7 @@ export function FacaModal({ open, onClose, editando, categorias }: Props) {
         categoria: form.categoria,
         preco_venda: parseFloat(form.preco_venda),
         estoque_atual: parseInt(form.estoque_atual) || 0,
+        estoque_minimo: parseInt(form.estoque_minimo) || 0,
       }
 
       if (editando) {
@@ -131,7 +134,7 @@ export function FacaModal({ open, onClose, editando, categorias }: Props) {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Input
             id="preco_venda"
             label="Preço de Venda (R$) *"
@@ -149,6 +152,14 @@ export function FacaModal({ open, onClose, editando, categorias }: Props) {
             min="0"
             value={form.estoque_atual}
             onChange={(e) => set('estoque_atual', e.target.value)}
+          />
+          <Input
+            id="estoque_minimo"
+            label="Estoque Mínimo"
+            type="number"
+            min="0"
+            value={form.estoque_minimo}
+            onChange={(e) => set('estoque_minimo', e.target.value)}
           />
         </div>
 

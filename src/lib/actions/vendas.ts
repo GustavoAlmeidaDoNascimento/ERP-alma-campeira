@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
@@ -253,17 +253,20 @@ export async function marcarEntregue(id: string) {
     const facaBom = (boms ?? []).filter((b) => b.faca_id === item.faca_id)
     for (const bom of facaBom) {
       const mp = (Array.isArray(bom.mp) ? bom.mp[0] : bom.mp) as { id: string; fornecedor_id: string | null }
-      await supabase.from('fila_reposicao').insert({
+      const { error: filaErr } = await supabase.from('fila_reposicao').insert({
         materia_prima_id: bom.materia_prima_id,
         fornecedor_id: mp.fornecedor_id,
         quantidade_pendente: bom.quantidade * item.quantidade,
         pedido_id: id,
       })
+      if (filaErr) throw new Error(filaErr.message)
     }
   }
 
   revalidatePath('/vendas')
   revalidatePath('/facas')
+  revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-fila')
 }
 
 export async function deletarVenda(id: string) {

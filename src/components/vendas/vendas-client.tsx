@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
@@ -28,6 +29,7 @@ const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
 
 export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }: Props) {
   const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciais)
+  const router = useRouter()
   const [formAberto, setFormAberto] = useState(false)
   const [editando, setEditando] = useState<Pedido | null>(null)
   const [detalhe, setDetalhe] = useState<Pedido | null>(null)
@@ -59,7 +61,10 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }
     } catch {
       // Optimistic update continua válido se falhar
     }
-  }, [])
+
+    // Se a venda virar 'entregue', força a atualização da aba 'ordens-compra' (fila de reposição).
+    if (novoStatus === 'entregue') router.refresh()
+  }, [router])
 
   const filtrados = useMemo(() => {
     return pedidos.filter((p) => {

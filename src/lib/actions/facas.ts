@@ -45,6 +45,7 @@ type FacaInput = {
   categoria: string
   preco_venda: number
   estoque_atual: number
+  estoque_minimo: number
 }
 
 export async function criarFaca(input: FacaInput) {
@@ -58,6 +59,7 @@ export async function criarFaca(input: FacaInput) {
     categoria: input.categoria,
     preco_venda: input.preco_venda,
     estoque_atual: input.estoque_atual,
+    estoque_minimo: input.estoque_minimo,
   })
 
   if (error) throw new Error(error.message)
@@ -75,6 +77,7 @@ export async function atualizarFaca(id: string, input: FacaInput) {
       categoria: input.categoria,
       preco_venda: input.preco_venda,
       estoque_atual: input.estoque_atual,
+      estoque_minimo: input.estoque_minimo,
     })
     .eq('id', id)
 

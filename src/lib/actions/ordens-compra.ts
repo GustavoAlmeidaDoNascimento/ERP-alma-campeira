@@ -58,7 +58,7 @@ const getFilaReposicaoCached = unstable_cache(
     return Array.from(mapa.values()).sort((a, b) => a.fornecedor_nome.localeCompare(b.fornecedor_nome))
   },
   ['ordens-compra-fila'],
-  { revalidate: 30 }
+  { revalidate: 30, tags: ['ordens-compra-fila'] }
 )
 
 export async function getFilaReposicao(): Promise<FilaFornecedor[]> {

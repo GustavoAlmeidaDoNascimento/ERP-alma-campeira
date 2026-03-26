@@ -36,7 +36,14 @@ export type Faca = {
   foto_url: string | null
   preco_venda: number
   estoque_atual: number
+  estoque_minimo: number
   created_at: string
+}
+
+export function statusEstoqueFaca(faca: Faca): StatusEstoque {
+  if (faca.estoque_atual === 0) return 'critico'
+  if (faca.estoque_atual <= faca.estoque_minimo) return 'atencao'
+  return 'ok'
 }
 
 export type FacaMateriaPrima = {

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { FacaModal } from './faca-modal'
 import { deletarFaca } from '@/lib/actions/facas'
+import { BadgeEstoque } from '@/components/ui/badge-estoque'
+import { statusEstoqueFaca } from '@/types'
 import type { Faca, CategoriaFacaDB } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -123,8 +125,8 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Venda</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Disponível</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
+                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -138,7 +140,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
               )}
               {filtradas.map((faca, i) => {
                 const catStyle = badgeCategoria[faca.categoria] ?? badgeCategoria['Outro']
-                const disponivel = faca.estoque_atual > 0
+                const statusEstoque = statusEstoqueFaca(faca)
                 return (
                   <tr
                     key={faca.id}
@@ -160,21 +162,14 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                     <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
-                      {faca.estoque_atual}
+                    <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
+                      <span className="font-semibold">{faca.estoque_atual}</span>
+                      <span className="text-xs ml-1" style={{ color: 'var(--ac-muted)' }}>
+                        / {faca.estoque_minimo}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {disponivel ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
-                          style={{ color: '#16a34a', background: '#dcfce7', border: '1px solid #bbf7d0' }}>
-                          Em estoque
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
-                          style={{ color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5' }}>
-                          Sem estoque
-                        </span>
-                      )}
+                      <BadgeEstoque status={statusEstoque} />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
