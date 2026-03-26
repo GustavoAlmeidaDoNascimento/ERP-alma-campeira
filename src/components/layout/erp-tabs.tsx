@@ -513,6 +513,12 @@ function ErpTabsContent() {
                   data-tab-item
                   className="flex min-w-0 flex-shrink-0 items-center gap-2 rounded-md border pl-3 pr-1 py-1.5"
                   onPointerDown={(e) => onPointerDown(e, tab.href, i)}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement
+                    if (target.closest('[data-tab-close]')) return
+                    if (didDragRef.current) return
+                    selectTab(tab.href)
+                  }}
                   style={{
                     borderColor: isActive ? 'var(--ac-accent)' : 'var(--ac-border)',
                     background: isActive
@@ -529,7 +535,8 @@ function ErpTabsContent() {
                 >
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation()
                       if (didDragRef.current) return
                       selectTab(tab.href)
                     }}
@@ -549,7 +556,10 @@ function ErpTabsContent() {
                     type="button"
                     data-tab-close
                     aria-label={`Fechar aba ${tab.label}`}
-                    onClick={() => closeTab(tab.href)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      closeTab(tab.href)
+                    }}
                     className="rounded p-1 transition-colors hover:opacity-80"
                     style={{ color: 'var(--ac-muted)' }}
                   >
