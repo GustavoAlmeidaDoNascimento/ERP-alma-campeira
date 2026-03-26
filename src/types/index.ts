@@ -162,7 +162,7 @@ export type PedidoItem = {
   quantidade: number
   preco_unitario: number
   subtotal: number
-  faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda'>
+  faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda' | 'foto_url'>
 }
 
 export type Pedido = {

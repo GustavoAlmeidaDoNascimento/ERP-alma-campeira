@@ -49,7 +49,7 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
     .select(`
       *,
       cliente:clientes(id, nome, tipo),
-      itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda))
+      itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url))
     `)
     .eq('id', id)
     .single()

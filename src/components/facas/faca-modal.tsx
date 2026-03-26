@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { criarFaca, atualizarFaca } from '@/lib/actions/facas'
+import { salvarFacaComFoto } from '@/lib/actions/facas'
 import type { Faca, CategoriaFacaDB } from '@/types'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
   open: boolean
@@ -29,6 +30,12 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
   const [form, setForm] = useState<Form>({ nome: '', categoria: defaultCategoria, preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [fotoPreview, setFotoPreview] = useState<string>('')
+
+  const fotoPreviewAtual = editando?.foto_url
+    ? getOptimizedSupabaseImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
+    : ''
 
   useEffect(() => {
     if (editando) {
@@ -43,7 +50,15 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
       setForm({ nome: '', categoria: categorias[0]?.nome ?? '', preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
     }
     setErro('')
+    setFotoFile(null)
+    setFotoPreview('')
   }, [editando, open, categorias])
+
+  useEffect(() => {
+    return () => {
+      if (fotoPreview) URL.revokeObjectURL(fotoPreview)
+    }
+  }, [fotoPreview])
 
   function set(field: keyof Form, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -66,11 +81,16 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
         estoque_minimo: parseInt(form.estoque_minimo) || 0,
       }
 
-      if (editando) {
-        await atualizarFaca(editando.id, payload)
-      } else {
-        await criarFaca(payload)
-      }
+      const fd = new FormData()
+      if (editando?.id) fd.append('id', editando.id)
+      fd.append('nome', payload.nome)
+      fd.append('categoria', payload.categoria)
+      fd.append('preco_venda', String(payload.preco_venda))
+      fd.append('estoque_atual', String(payload.estoque_atual))
+      fd.append('estoque_minimo', String(payload.estoque_minimo))
+      if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
+
+      await salvarFacaComFoto(fd)
       onClose()
       onSaved?.()
     } catch (e: unknown) {
@@ -163,6 +183,77 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
             value={form.estoque_minimo}
             onChange={(e) => set('estoque_minimo', e.target.value)}
           />
+        </div>
+
+        {/* Foto (opcional) */}
+        <div className="flex items-start gap-3">
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 12,
+              border: '1px solid var(--ac-border)',
+              background: 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.06))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {fotoPreview ? (
+              <img
+                src={fotoPreview}
+                alt="Prévia da foto"
+                width={64}
+                height={64}
+                style={{ objectFit: 'cover', borderRadius: 12 }}
+              />
+            ) : fotoPreviewAtual ? (
+              <img
+                src={fotoPreviewAtual}
+                alt="Foto atual da faca"
+                width={64}
+                height={64}
+                style={{ objectFit: 'cover', borderRadius: 12 }}
+              />
+            ) : (
+              {/* Placeholder da foto: fundo suave + logo em amarelo */}
+              <div
+                aria-hidden="true"
+                style={{
+                  width: 40,
+                  height: 40,
+                  background: '#facc15',
+                  WebkitMaskImage: "url('/images/logo.png')",
+                  WebkitMaskRepeat: 'no-repeat',
+                  WebkitMaskPosition: 'center',
+                  WebkitMaskSize: 'contain',
+                  maskImage: "url('/images/logo.png')",
+                  maskRepeat: 'no-repeat',
+                  maskPosition: 'center',
+                  maskSize: 'contain',
+                }}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5" style={{ flex: 1 }}>
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Foto da faca</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null
+                setFotoFile(file)
+                if (file) setFotoPreview(URL.createObjectURL(file))
+                else setFotoPreview('')
+              }}
+              className="w-full"
+            />
+            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+              Opcional. Se selecionar uma foto, ela substitui a anterior.
+            </p>
+          </div>
         </div>
 
         {erro && (

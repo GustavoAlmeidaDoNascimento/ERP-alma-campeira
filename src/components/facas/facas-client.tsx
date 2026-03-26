@@ -9,6 +9,7 @@ import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { statusEstoqueFaca } from '@/types'
 import type { Faca, CategoriaFacaDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; perm: Perm }
@@ -41,6 +42,23 @@ export function FacasClient({ facas, categorias, perm }: Props) {
   }, [facas, busca, filtroCategoria])
 
   const categoriasDisponiveis = useMemo(() => [...new Set(facas.map((f) => f.categoria))].sort(), [facas])
+
+  const fotoUrlByFacaId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const f of facas) {
+      if (!f.foto_url) continue
+      map.set(
+        f.id,
+        getOptimizedSupabaseImageUrl(f.foto_url, {
+          width: 64,
+          height: 64,
+          quality: 65,
+          resize: 'cover',
+        })
+      )
+    }
+    return map
+  }, [facas])
 
   function abrirNovo() { setEditando(null); setModalAberto(true) }
   function abrirEditar(f: Faca) { setEditando(f); setModalAberto(true) }
@@ -124,6 +142,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Foto</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
@@ -136,7 +155,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
             <tbody>
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca || filtroCategoria ? 'Nenhum resultado para esse filtro.' : 'Nenhuma faca cadastrada ainda.'}
                   </td>
                 </tr>
@@ -151,6 +170,56 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const thumbUrl = fotoUrlByFacaId.get(faca.id)
+                        if (thumbUrl) {
+                          return (
+                            <img
+                              src={thumbUrl}
+                              alt={`Foto de ${faca.nome}`}
+                              width={64}
+                              height={64}
+                              loading="lazy"
+                              style={{ borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--ac-border)' }}
+                            />
+                          )
+                        }
+                        return (
+                          <div
+                            aria-label={`Sem foto para ${faca.nome}`}
+                            style={{
+                              width: 64,
+                              height: 64,
+                              borderRadius: 10,
+                              background: 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.06))',
+                              border: '1px solid var(--ac-border)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {/* Mostra o logo (monocromático) em amarelo no placeholder */}
+                            <div
+                              aria-hidden="true"
+                              style={{
+                                width: 36,
+                                height: 36,
+                                background: '#facc15',
+                                WebkitMaskImage: "url('/images/logo.png')",
+                                WebkitMaskRepeat: 'no-repeat',
+                                WebkitMaskPosition: 'center',
+                                WebkitMaskSize: 'contain',
+                                maskImage: "url('/images/logo.png')",
+                                maskRepeat: 'no-repeat',
+                                maskPosition: 'center',
+                                maskSize: 'contain',
+                              }}
+                            />
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
                       {faca.codigo}
                     </td>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { criarVenda, atualizarVenda } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
   open: boolean
@@ -34,6 +35,24 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+
+  const fotoUrlByFacaId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const f of facas) {
+      if (!f.foto_url) continue
+      map.set(
+        f.id,
+        getOptimizedSupabaseImageUrl(f.foto_url, {
+          width: 32,
+          height: 32,
+          quality: 60,
+          resize: 'cover',
+          fallbackUrl: '',
+        })
+      )
+    }
+    return map
+  }, [facas])
 
   useEffect(() => {
     if (!open) return
@@ -233,19 +252,54 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
                 <div key={idx} className="grid gap-2 items-center"
                   style={{ gridTemplateColumns: '1fr 80px 110px 90px 32px' }}>
                   {/* Faca */}
-                  <select
-                    value={item.faca_id}
-                    onChange={(e) => updateItem(idx, 'faca_id', e.target.value)}
-                    className="px-2.5 py-2 rounded-lg text-sm outline-none appearance-none"
-                    style={selectStyle}
-                    onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
-                    onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
-                  >
-                    <option value="">Selecionar faca...</option>
-                    {facas.map((f) => (
-                      <option key={f.id} value={f.id}>{f.codigo} — {f.nome}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const thumbUrl = item.faca_id ? fotoUrlByFacaId.get(item.faca_id) : undefined
+                      if (thumbUrl) {
+                        return (
+                          <img
+                            src={thumbUrl}
+                            alt="Foto da faca"
+                            width={32}
+                            height={32}
+                            style={{ borderRadius: 8, objectFit: 'cover', border: '1px solid var(--ac-border)' }}
+                          />
+                        )
+                      }
+                      return (
+                        <div
+                          aria-label="Sem foto"
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 10,
+                            background: '#facc15',
+                            border: '1px solid var(--ac-border)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img src="/images/favicon-yellow.png" alt="Sem foto" width={16} height={16} style={{ objectFit: 'contain' }} />
+                        </div>
+                      )
+                    })()}
+
+                    <select
+                      value={item.faca_id}
+                      onChange={(e) => updateItem(idx, 'faca_id', e.target.value)}
+                      className="px-2.5 py-2 rounded-lg text-sm outline-none appearance-none"
+                      style={selectStyle}
+                      onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+                    >
+                      <option value="">Selecionar faca...</option>
+                      {facas.map((f) => (
+                        <option key={f.id} value={f.id}>{f.codigo} — {f.nome}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   {/* Quantidade */}
                   <input

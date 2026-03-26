@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, StatusPedido } from '@/types'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
   pedido: Pedido | null
@@ -114,8 +115,59 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                 <tr key={item.id}
                   style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
                   <td className="px-4 py-2.5" style={{ color: 'var(--ac-text)' }}>
-                    <span className="font-mono text-xs mr-2" style={{ color: 'var(--ac-muted)' }}>{item.faca?.codigo}</span>
-                    {item.faca?.nome ?? '—'}
+                    {(() => {
+                      const thumbUrl = getOptimizedSupabaseImageUrl(item.faca?.foto_url, {
+                        width: 36,
+                        height: 36,
+                        quality: 60,
+                        resize: 'cover',
+                        fallbackUrl: '',
+                      })
+
+                      return (
+                        <div className="flex items-center gap-3">
+                          {thumbUrl ? (
+                            <img
+                              src={thumbUrl}
+                              alt={`Foto de ${item.faca?.nome ?? 'faca'}`}
+                              width={36}
+                              height={36}
+                              loading="lazy"
+                              style={{ borderRadius: 8, objectFit: 'cover', border: '1px solid var(--ac-border)' }}
+                            />
+                          ) : (
+                            <div
+                              aria-label={`Sem foto para ${item.faca?.nome ?? 'faca'}`}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 10,
+                                background: '#facc15',
+                                border: '1px solid var(--ac-border)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <img
+                                src="/images/favicon-yellow.png"
+                                alt="Sem foto"
+                                width={18}
+                                height={18}
+                                style={{ objectFit: 'contain' }}
+                              />
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
+                              {item.faca?.codigo}
+                            </span>
+                            <span className="text-sm">{item.faca?.nome ?? '—'}</span>
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="px-3 py-2.5 text-center tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                     {item.quantidade}
