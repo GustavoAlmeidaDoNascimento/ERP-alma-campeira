@@ -29,6 +29,8 @@ export function FacasClient({ facas, categorias, perm }: Props) {
   const [modoDelete, setModoDelete] = useState<DeletarFacaModo>('desmontar')
   const [erroDelete, setErroDelete] = useState('')
   const [loadingDelete, setLoadingDelete] = useState(false)
+  const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
+  const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>('')
   const [busca, setBusca] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
 
@@ -63,6 +65,20 @@ export function FacasClient({ facas, categorias, perm }: Props) {
 
   function abrirNovo() { setEditando(null); setModalAberto(true) }
   function abrirEditar(f: Faca) { setEditando(f); setModalAberto(true) }
+
+  function abrirFotoLightbox(faca: Faca, thumbFallback: string) {
+    if (!faca.foto_url) return
+    const srcGrande = getOptimizedSupabaseImageUrl(faca.foto_url, {
+      width: 520,
+      height: 520,
+      quality: 80,
+      resize: 'contain',
+      fallbackUrl: thumbFallback,
+    })
+
+    setFotoLightboxSrc(srcGrande || thumbFallback)
+    setFotoLightboxAlt(faca.nome)
+  }
 
   async function confirmarDelete() {
     if (!deletando) return
@@ -176,14 +192,32 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                         const thumbUrl = fotoUrlByFacaId.get(faca.id)
                         if (thumbUrl) {
                           return (
-                            <img
-                              src={thumbUrl}
-                              alt={`Foto de ${faca.nome}`}
-                              width={64}
-                              height={64}
-                              loading="lazy"
-                              style={{ borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--ac-border)' }}
-                            />
+                            <button
+                              type="button"
+                              onClick={() => abrirFotoLightbox(faca, thumbUrl)}
+                              aria-label={`Expandir foto de ${faca.nome}`}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                borderRadius: 10,
+                                cursor: 'zoom-in',
+                              }}
+                            >
+                              <img
+                                src={thumbUrl}
+                                alt={`Foto de ${faca.nome}`}
+                                width={64}
+                                height={64}
+                                loading="lazy"
+                                style={{
+                                  borderRadius: '10px',
+                                  objectFit: 'cover',
+                                  border: '1px solid var(--ac-border)',
+                                  display: 'block',
+                                }}
+                              />
+                            </button>
                           )
                         }
                         return (
@@ -200,22 +234,12 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                               justifyContent: 'center',
                             }}
                           >
-                            {/* Mostra o logo (monocromático) em amarelo no placeholder */}
-                            <div
-                              aria-hidden="true"
-                              style={{
-                                width: 36,
-                                height: 36,
-                                background: '#facc15',
-                                WebkitMaskImage: "url('/images/logo.png')",
-                                WebkitMaskRepeat: 'no-repeat',
-                                WebkitMaskPosition: 'center',
-                                WebkitMaskSize: 'contain',
-                                maskImage: "url('/images/logo.png')",
-                                maskRepeat: 'no-repeat',
-                                maskPosition: 'center',
-                                maskSize: 'contain',
-                              }}
+                            <img
+                              src="/images/favicon-yellow.png"
+                              alt="Sem foto"
+                              width={28}
+                              height={28}
+                              style={{ objectFit: 'contain' }}
                             />
                           </div>
                         )
@@ -320,6 +344,24 @@ export function FacasClient({ facas, categorias, perm }: Props) {
             <Button variant="secondary" onClick={() => setDeletando(null)}>Cancelar</Button>
             <Button variant="danger" loading={loadingDelete} onClick={confirmarDelete}>Excluir</Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!fotoLightboxSrc}
+        onClose={() => {
+          setFotoLightboxSrc('')
+          setFotoLightboxAlt('')
+        }}
+        title="Foto da faca"
+        width="620px"
+      >
+        <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
+          <img
+            src={fotoLightboxSrc}
+            alt={`Foto de ${fotoLightboxAlt}`}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
         </div>
       </Modal>
     </>

@@ -65,7 +65,7 @@ export async function criarFaca(input: FacaInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
-  revalidateTag('facas-list', 'default')
+  revalidateTag('facas-list', 'max')
 }
 
 export async function atualizarFaca(id: string, input: FacaInput) {
@@ -85,7 +85,7 @@ export async function atualizarFaca(id: string, input: FacaInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
-  revalidateTag('facas-list', 'default')
+  revalidateTag('facas-list', 'max')
 }
 
 export type DeletarFacaModo = 'desmontar' | 'apagar_materias_primas'
@@ -197,7 +197,7 @@ export async function salvarFacaComFoto(formData: FormData) {
   }
 
   revalidatePath('/facas')
-  revalidateTag('facas-list', 'default')
+  revalidateTag('facas-list', 'max')
 }
 
 function round3(n: number) {
@@ -275,7 +275,7 @@ export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar
 
     // Atualiza telas de matérias-primas após devolver o estoque.
     revalidatePath('/materias-primas')
-    revalidateTag('materias-primas-list', 'default')
+    revalidateTag('materias-primas-list', 'max')
   }
 
   if (modo === 'apagar_materias_primas') {
@@ -305,12 +305,12 @@ export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar
     }
 
     revalidatePath('/materias-primas')
-    revalidateTag('materias-primas-list', 'default')
+    revalidateTag('materias-primas-list', 'max')
   } else {
     const { error } = await supabase.from('facas').delete().eq('id', id)
     if (error) throw new Error(error.message)
   }
 
   revalidatePath('/facas')
-  revalidateTag('facas-list', 'default')
+  revalidateTag('facas-list', 'max')
 }
