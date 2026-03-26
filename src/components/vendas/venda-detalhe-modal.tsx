@@ -5,26 +5,34 @@ import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
-import type { Pedido } from '@/types'
+import type { Pedido, StatusPedido } from '@/types'
 
 type Props = {
   pedido: Pedido | null
   onClose: () => void
+  onStatusChange?: (id: string, novoStatus: StatusPedido, entregue_at?: string) => void
   perm: { editar: boolean }
 }
 
-export function VendaDetalheModal({ pedido, onClose, perm }: Props) {
+export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [erro, setErro] = useState('')
 
   if (!pedido) return null
 
   const status = STATUS_PEDIDO[pedido.status]
+  const pedidoId = pedido.id
 
-  async function acao(fn: () => Promise<void>, key: string) {
+  async function acao(
+    fn: () => Promise<void>,
+    key: string,
+    novoStatus?: StatusPedido,
+    entregue_at?: string,
+  ) {
     setErro(''); setLoading(key)
     try {
       await fn()
+      if (novoStatus) onStatusChange?.(pedidoId, novoStatus, entregue_at)
       onClose()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro.')
@@ -140,7 +148,11 @@ export function VendaDetalheModal({ pedido, onClose, perm }: Props) {
               {pedido.status === 'em_espera' && (
                 <Button
                   loading={loading === 'producao'}
-                  onClick={() => acao(() => avancarStatus(pedido.id, 'em_producao'), 'producao')}
+                  onClick={() => acao(
+                    () => avancarStatus(pedido.id, 'em_producao'),
+                    'producao',
+                    'em_producao',
+                  )}
                   style={{ background: '#b45309', color: '#fff', border: 'none' }}
                 >
                   Iniciar produção
@@ -149,7 +161,12 @@ export function VendaDetalheModal({ pedido, onClose, perm }: Props) {
               {pedido.status === 'em_producao' && (
                 <Button
                   loading={loading === 'entregar'}
-                  onClick={() => acao(() => marcarEntregue(pedido.id), 'entregar')}
+                  onClick={() => acao(
+                    () => marcarEntregue(pedido.id),
+                    'entregar',
+                    'entregue',
+                    new Date().toISOString(),
+                  )}
                   style={{ background: '#15803d', color: '#fff', border: 'none' }}
                 >
                   Marcar como entregue

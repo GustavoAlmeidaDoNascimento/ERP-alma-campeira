@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
 import { VendaDetalheModal } from './venda-detalhe-modal'
 import { deletarVenda, getVendaDetalhe } from '@/lib/actions/vendas'
+import { getErpTabData } from '@/lib/actions/erp-tab-data'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
 
@@ -25,7 +26,8 @@ const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'entregue', label: 'Entregue' },
 ]
 
-export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
+export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }: Props) {
+  const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciais)
   const [formAberto, setFormAberto] = useState(false)
   const [editando, setEditando] = useState<Pedido | null>(null)
   const [detalhe, setDetalhe] = useState<Pedido | null>(null)
@@ -35,6 +37,29 @@ export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [filtroStatus, setFiltroStatus] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
+
+  // Sincroniza quando TabPane re-busca dados (ex: ao reabrir a aba)
+  useEffect(() => {
+    setPedidos(pedidosIniciais)
+  }, [pedidosIniciais])
+
+  const handleStatusChange = useCallback(async (id: string, novoStatus: StatusPedido, entregue_at?: string) => {
+    // 1. Atualiza na hora (optimistic update)
+    setPedidos((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, status: novoStatus, ...(entregue_at ? { entregue_at } : {}) }
+          : p
+      )
+    )
+    // 2. Re-fetch em background para garantir dados frescos do servidor
+    try {
+      const fresh = await getErpTabData('/vendas')
+      if (fresh.kind === 'vendas') setPedidos(fresh.pedidos)
+    } catch {
+      // Optimistic update continua válido se falhar
+    }
+  }, [])
 
   const filtrados = useMemo(() => {
     return pedidos.filter((p) => {
@@ -273,6 +298,7 @@ export function VendasClient({ pedidos, clientes, facas, perm }: Props) {
       <VendaDetalheModal
         pedido={detalhe}
         onClose={() => setDetalhe(null)}
+        onStatusChange={handleStatusChange}
         perm={perm}
       />
 
