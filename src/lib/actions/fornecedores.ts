@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
@@ -18,7 +18,7 @@ const getFornecedoresCached = unstable_cache(
     return data as Fornecedor[]
   },
   ['fornecedores-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['fornecedores-list'] }
 )
 
 export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
@@ -42,6 +42,7 @@ export async function criarFornecedor(input: FornecedorInput) {
   })
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
+  revalidateTag('fornecedores-list')
 }
 
 export async function atualizarFornecedor(id: string, input: FornecedorInput) {
@@ -57,6 +58,7 @@ export async function atualizarFornecedor(id: string, input: FornecedorInput) {
     .eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
+  revalidateTag('fornecedores-list')
 }
 
 export async function deletarFornecedor(id: string) {
@@ -76,4 +78,5 @@ export async function deletarFornecedor(id: string) {
   const { error } = await supabase.from('fornecedores').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
+  revalidateTag('fornecedores-list')
 }

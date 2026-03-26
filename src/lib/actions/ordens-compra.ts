@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser } from '@/lib/auth'
@@ -145,6 +145,8 @@ export async function gerarOC(fornecedor_id: string | null): Promise<string> {
   await supabase.from('fila_reposicao').delete().in('id', idsParaDeletar)
 
   revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico')
+  revalidateTag('ordens-compra-fila')
   return codigo
 }
 
@@ -169,6 +171,8 @@ export async function gerarTodasOCs(): Promise<number> {
   }
 
   revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico')
+  revalidateTag('ordens-compra-fila')
   return criadas
 }
 
@@ -192,7 +196,7 @@ const getOrdensCompraCached = unstable_cache(
     return data as OrdemCompra[]
   },
   ['ordens-compra-historico'],
-  { revalidate: 30 }
+  { revalidate: 30, tags: ['ordens-compra-historico'] }
 )
 
 export async function getOrdensCompra(): Promise<OrdemCompra[]> {
@@ -214,6 +218,7 @@ export async function atualizarQuantidadeItem(item_id: string, quantidade: numbe
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico')
 }
 
 export async function atualizarObservacaoOC(id: string, observacao: string) {
@@ -226,6 +231,7 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico')
 }
 
 export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' | 'recebida') {
@@ -275,6 +281,7 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico')
 }
 
 export async function deletarOC(id: string) {
@@ -292,4 +299,5 @@ export async function deletarOC(id: string) {
   const { error } = await supabase.from('ordens_compra').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico')
 }

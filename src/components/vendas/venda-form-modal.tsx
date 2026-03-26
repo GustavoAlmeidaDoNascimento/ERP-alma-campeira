@@ -13,6 +13,7 @@ type Props = {
   editando: Pedido | null
   clientes: Cliente[]
   facas: Faca[]
+  onSaved?: () => void
 }
 
 type ItemForm = {
@@ -25,7 +26,7 @@ function today() {
   return new Date().toISOString().split('T')[0]
 }
 
-export function VendaFormModal({ open, onClose, editando, clientes, facas }: Props) {
+export function VendaFormModal({ open, onClose, editando, clientes, facas, onSaved }: Props) {
   const [clienteId, setClienteId] = useState('')
   const [dataPedido, setDataPedido] = useState(today())
   const [status, setStatus] = useState<StatusPedido>('em_espera')
@@ -101,6 +102,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas }: Pro
       if (editando) await atualizarVenda(editando.id, input)
       else await criarVenda(input)
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {

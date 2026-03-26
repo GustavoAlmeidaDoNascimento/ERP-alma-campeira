@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import {
@@ -15,6 +14,7 @@ import {
 } from '@/lib/actions/ordens-compra'
 import { STATUS_OC } from '@/types'
 import type { FilaFornecedor, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -439,7 +439,7 @@ function OcDetalheModal({
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export function OcClient({ fila, ordens, perm }: Props) {
-  const router = useRouter()
+  const { refreshActiveTab } = useErpTabs()
   const [aba, setAba] = useState<'fila' | 'historico'>('fila')
   const [ordensState, setOrdensState] = useState<OrdemCompra[]>(ordens)
   const [loadingHistorico, setLoadingHistorico] = useState(false)
@@ -475,7 +475,18 @@ export function OcClient({ fila, ordens, perm }: Props) {
     }
   }, [aba, ordensState.length, loadingHistorico])
 
-  function refresh() { router.refresh() }
+  async function refresh() {
+    refreshActiveTab()
+    setLoadingHistorico(true)
+    try {
+      const data = await getOrdensCompra()
+      setOrdensState(data)
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Erro ao atualizar histórico.')
+    } finally {
+      setLoadingHistorico(false)
+    }
+  }
 
   function flash(msg: string) {
     setSucesso(msg)

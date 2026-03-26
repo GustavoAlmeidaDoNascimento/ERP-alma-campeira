@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { updateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
@@ -20,7 +20,7 @@ const getCargosCached = unstable_cache(
     return data as Cargo[]
   },
   ['cargos-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['cargos-list'] }
 )
 
 export async function getCargos(limit = 50): Promise<Cargo[]> {
@@ -59,6 +59,7 @@ export async function criarCargo(input: CargoInput) {
   updateTag('user-permissions')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
+  revalidateTag('cargos-list')
 }
 
 export async function atualizarCargo(id: string, input: CargoInput) {
@@ -87,6 +88,7 @@ export async function atualizarCargo(id: string, input: CargoInput) {
   updateTag('user-permissions')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
+  revalidateTag('cargos-list')
 }
 
 export async function deletarCargo(id: string) {
@@ -107,4 +109,5 @@ export async function deletarCargo(id: string) {
   if (error) throw new Error(error.message)
 
   revalidatePath('/cargos')
+  revalidateTag('cargos-list')
 }

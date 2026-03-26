@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
@@ -18,7 +18,7 @@ const getFacasCached = unstable_cache(
     return data as Faca[]
   },
   ['facas-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['facas-list'] }
 )
 
 export async function getFacas(limit = 80): Promise<Faca[]> {
@@ -64,6 +64,7 @@ export async function criarFaca(input: FacaInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
+  revalidateTag('facas-list')
 }
 
 export async function atualizarFaca(id: string, input: FacaInput) {
@@ -83,6 +84,7 @@ export async function atualizarFaca(id: string, input: FacaInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
+  revalidateTag('facas-list')
 }
 
 export async function deletarFaca(id: string) {
@@ -91,4 +93,5 @@ export async function deletarFaca(id: string) {
   const { error } = await supabase.from('facas').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
+  revalidateTag('facas-list')
 }

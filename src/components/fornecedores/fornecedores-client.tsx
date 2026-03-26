@@ -6,10 +6,12 @@ import { Modal } from '@/components/ui/modal'
 import { FornecedorModal } from './fornecedor-modal'
 import { deletarFornecedor } from '@/lib/actions/fornecedores'
 import type { Fornecedor } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Fornecedor[]; perm: Perm }) {
+  const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Fornecedor | null>(null)
   const [deletando, setDeletando] = useState<Fornecedor | null>(null)
@@ -35,6 +37,7 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
     try {
       await deletarFornecedor(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -152,7 +155,12 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
         </div>
       </div>
 
-      <FornecedorModal open={modalAberto} onClose={() => setModalAberto(false)} editando={editando} />
+      <FornecedorModal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        editando={editando}
+        onSaved={refreshActiveTab}
+      />
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir fornecedor">
         <div className="flex flex-col gap-4">

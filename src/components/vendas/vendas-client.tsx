@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
@@ -10,6 +9,7 @@ import { deletarVenda, getVendaDetalhe } from '@/lib/actions/vendas'
 import { getErpTabData } from '@/lib/actions/erp-tab-data'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -29,7 +29,7 @@ const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
 
 export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }: Props) {
   const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciais)
-  const router = useRouter()
+  const { refreshActiveTab } = useErpTabs()
   const [formAberto, setFormAberto] = useState(false)
   const [editando, setEditando] = useState<Pedido | null>(null)
   const [detalhe, setDetalhe] = useState<Pedido | null>(null)
@@ -61,10 +61,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }
     } catch {
       // Optimistic update continua válido se falhar
     }
-
-    // Se a venda virar 'entregue', força a atualização da aba 'ordens-compra' (fila de reposição).
-    if (novoStatus === 'entregue') router.refresh()
-  }, [router])
+  }, [])
 
   const filtrados = useMemo(() => {
     return pedidos.filter((p) => {
@@ -94,6 +91,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }
     try {
       await deletarVenda(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -298,6 +296,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }
         editando={editando}
         clientes={clientes}
         facas={facas}
+        onSaved={refreshActiveTab}
       />
 
       <VendaDetalheModal

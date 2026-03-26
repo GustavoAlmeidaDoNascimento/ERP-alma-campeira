@@ -1,7 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-import { unstable_cache } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { MateriaPrima } from '@/types'
@@ -18,7 +17,7 @@ const getMateriasPrimasCached = unstable_cache(
     return data as MateriaPrima[]
   },
   ['materias-primas-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['materias-primas-list'] }
 )
 
 export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
@@ -64,6 +63,7 @@ export async function criarMateriaPrima(input: MPInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
+  revalidateTag('materias-primas-list')
 }
 
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
@@ -83,6 +83,7 @@ export async function atualizarMateriaPrima(id: string, input: MPInput) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
+  revalidateTag('materias-primas-list')
 }
 
 export async function deletarMateriaPrima(id: string) {
@@ -102,4 +103,5 @@ export async function deletarMateriaPrima(id: string) {
   const { error } = await supabase.from('materias_primas').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
+  revalidateTag('materias-primas-list')
 }

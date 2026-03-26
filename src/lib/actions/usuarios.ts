@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { updateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -45,7 +45,7 @@ const getUsuariosCached = unstable_cache(
     }) as Usuario[]
   },
   ['usuarios-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['usuarios-list'] }
 )
 
 export async function getUsuarios(limit = 100): Promise<Usuario[]> {
@@ -98,6 +98,7 @@ export async function criarUsuario({
   })
   if (perfilError) throw new Error(perfilError.message)
   revalidatePath('/usuarios')
+  revalidateTag('usuarios-list')
 }
 
 export async function atualizarPerfil(
@@ -138,6 +139,7 @@ export async function atualizarPerfil(
 
   updateTag('user-permissions')
   revalidatePath('/usuarios')
+  revalidateTag('usuarios-list')
 }
 
 export async function deletarUsuario(id: string) {
@@ -146,4 +148,5 @@ export async function deletarUsuario(id: string) {
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) throw new Error(error.message)
   revalidatePath('/usuarios')
+  revalidateTag('usuarios-list')
 }

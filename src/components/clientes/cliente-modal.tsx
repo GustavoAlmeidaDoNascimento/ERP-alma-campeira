@@ -11,6 +11,7 @@ type Props = {
   open: boolean
   onClose: () => void
   editando: Cliente | null
+  onSaved?: () => void
 }
 
 const ESTADOS_BR = [
@@ -18,13 +19,51 @@ const ESTADOS_BR = [
   'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
 ]
 
-export function ClienteModal({ open, onClose, editando }: Props) {
+type InputProps = {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: string
+}
+
+const inputStyle = {
+  background: 'var(--ac-card)',
+  border: '1px solid var(--ac-border)',
+  color: 'var(--ac-text)',
+}
+
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+}: InputProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all"
+        style={inputStyle}
+        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--ac-accent) 20%, transparent)' }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)'; e.currentTarget.style.boxShadow = 'none' }}
+      />
+    </div>
+  )
+}
+
+export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
   const [nome, setNome] = useState('')
   const [tipo, setTipo] = useState<string>('Lojista')
   const [telefone, setTelefone] = useState('')
   const [email, setEmail] = useState('')
   const [cidade, setCidade] = useState('')
-  const [estado, setEstado] = useState('')
+  const [estado, setEstado] = useState('RS')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -35,7 +74,7 @@ export function ClienteModal({ open, onClose, editando }: Props) {
       setTelefone(editando?.telefone ?? '')
       setEmail(editando?.email ?? '')
       setCidade(editando?.cidade ?? '')
-      setEstado(editando?.estado ?? '')
+      setEstado(editando?.estado ?? 'RS')
       setErro('')
     }
   }, [open, editando])
@@ -48,37 +87,12 @@ export function ClienteModal({ open, onClose, editando }: Props) {
       if (editando) await atualizarCliente(editando.id, input)
       else await criarCliente(input)
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {
       setLoading(false)
     }
-  }
-
-  const inputStyle = {
-    background: 'var(--ac-card)',
-    border: '1px solid var(--ac-border)',
-    color: 'var(--ac-text)',
-  }
-
-  function Input({ label, value, onChange, placeholder, type = 'text' }: {
-    label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string
-  }) {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>{label}</label>
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all"
-          style={inputStyle}
-          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--ac-accent) 20%, transparent)' }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)'; e.currentTarget.style.boxShadow = 'none' }}
-        />
-      </div>
-    )
   }
 
   return (

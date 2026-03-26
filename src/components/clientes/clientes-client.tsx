@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { ClienteModal } from './cliente-modal'
 import { deletarCliente } from '@/lib/actions/clientes'
 import type { Cliente } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -16,6 +17,7 @@ const TIPO_STYLE: Record<string, React.CSSProperties> = {
 }
 
 export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: Perm }) {
+  const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Cliente | null>(null)
   const [deletando, setDeletando] = useState<Cliente | null>(null)
@@ -44,6 +46,7 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
     try {
       await deletarCliente(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -165,7 +168,12 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
         </div>
       </div>
 
-      <ClienteModal open={modalAberto} onClose={() => setModalAberto(false)} editando={editando} />
+      <ClienteModal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        editando={editando}
+        onSaved={refreshActiveTab}
+      />
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir cliente">
         <div className="flex flex-col gap-4">

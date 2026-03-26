@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { criarCategoriaFaca, atualizarCategoriaFaca, deletarCategoriaFaca } from '@/lib/actions/categorias-faca'
@@ -11,6 +10,7 @@ import {
   type PaletaCategoria,
 } from '@/lib/categoria-faca-paleta'
 import type { CategoriaFacaDB } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type FormCat = {
   nome: string
@@ -78,7 +78,7 @@ type Props = {
 }
 
 export function CategoriasFacaSection({ categorias }: Props) {
-  const router = useRouter()
+  const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<CategoriaFacaDB | null>(null)
   const [deletando, setDeletando] = useState<CategoriaFacaDB | null>(null)
@@ -135,7 +135,7 @@ export function CategoriasFacaSection({ categorias }: Props) {
         await criarCategoriaFaca(payload)
       }
       setModalAberto(false)
-      router.refresh()
+      refreshActiveTab()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {
@@ -150,7 +150,7 @@ export function CategoriasFacaSection({ categorias }: Props) {
     try {
       await deletarCategoriaFaca(deletando.id)
       setDeletando(null)
-      router.refresh()
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {

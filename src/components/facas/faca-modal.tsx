@@ -13,6 +13,7 @@ type Props = {
   onClose: () => void
   editando?: Faca | null
   categorias: CategoriaFacaDB[]
+  onSaved?: () => void
 }
 
 type Form = {
@@ -23,7 +24,7 @@ type Form = {
   estoque_minimo: string
 }
 
-export function FacaModal({ open, onClose, editando, categorias }: Props) {
+export function FacaModal({ open, onClose, editando, categorias, onSaved }: Props) {
   const defaultCategoria = categorias[0]?.nome ?? ''
   const [form, setForm] = useState<Form>({ nome: '', categoria: defaultCategoria, preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
   const [erro, setErro] = useState('')
@@ -71,6 +72,7 @@ export function FacaModal({ open, onClose, editando, categorias }: Props) {
         await criarFaca(payload)
       }
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {

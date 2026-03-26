@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath, unstable_cache } from 'next/cache'
+import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { CategoriaFacaDB } from '@/types'
@@ -16,7 +16,7 @@ const getCategoriasFacaCached = unstable_cache(
     return data as CategoriaFacaDB[]
   },
   ['categorias-faca-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['categorias-faca-list'] }
 )
 
 export async function getCategoriasFaca(): Promise<CategoriaFacaDB[]> {
@@ -54,6 +54,7 @@ export async function criarCategoriaFaca(input: CategoriaInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
+  revalidateTag('categorias-faca-list')
 }
 
 export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) {
@@ -72,6 +73,7 @@ export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) 
   if (error) throw new Error(error.message)
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
+  revalidateTag('categorias-faca-list')
 }
 
 export async function deletarCategoriaFaca(id: string) {
@@ -81,4 +83,5 @@ export async function deletarCategoriaFaca(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
+  revalidateTag('categorias-faca-list')
 }

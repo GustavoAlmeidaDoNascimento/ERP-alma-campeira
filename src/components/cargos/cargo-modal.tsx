@@ -16,9 +16,10 @@ type Props = {
   open: boolean
   onClose: () => void
   editando?: Cargo | null
+  onSaved?: () => void
 }
 
-export function CargoModal({ open, onClose, editando }: Props) {
+export function CargoModal({ open, onClose, editando, onSaved }: Props) {
   const [nome, setNome] = useState('')
   const [descricao, setDescricao] = useState('')
   const [cor, setCor] = useState('#7c3aed')
@@ -55,6 +56,7 @@ export function CargoModal({ open, onClose, editando }: Props) {
         await criarCargo(payload)
       }
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {

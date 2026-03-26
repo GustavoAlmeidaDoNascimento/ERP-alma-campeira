@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
@@ -18,7 +18,7 @@ const getClientesCached = unstable_cache(
     return data as Cliente[]
   },
   ['clientes-list'],
-  { revalidate: 60 }
+  { revalidate: 60, tags: ['clientes-list'] }
 )
 
 export async function getClientes(limit = 50): Promise<Cliente[]> {
@@ -48,6 +48,7 @@ export async function criarCliente(input: ClienteInput) {
   })
   if (error) throw new Error(error.message)
   revalidatePath('/clientes')
+  revalidateTag('clientes-list')
 }
 
 export async function atualizarCliente(id: string, input: ClienteInput) {
@@ -67,6 +68,8 @@ export async function atualizarCliente(id: string, input: ClienteInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/clientes')
   revalidatePath('/vendas')
+  revalidateTag('clientes-list')
+  revalidateTag('vendas-list')
 }
 
 export async function deletarCliente(id: string) {
@@ -86,4 +89,6 @@ export async function deletarCliente(id: string) {
   const { error } = await supabase.from('clientes').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/clientes')
+  revalidateTag('clientes-list')
+  revalidateTag('vendas-list')
 }

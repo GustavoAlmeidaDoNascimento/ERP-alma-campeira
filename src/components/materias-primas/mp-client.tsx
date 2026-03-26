@@ -8,6 +8,7 @@ import { MPModal } from './mp-modal'
 import { deletarMateriaPrima } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
 import type { MateriaPrima, Fornecedor } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -18,6 +19,7 @@ type Props = {
 }
 
 export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
+  const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<MateriaPrima | null>(null)
   const [deletando, setDeletando] = useState<MateriaPrima | null>(null)
@@ -53,6 +55,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
     try {
       await deletarMateriaPrima(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -232,6 +235,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
         onClose={() => setModalAberto(false)}
         fornecedores={fornecedores}
         editando={editando}
+        onSaved={refreshActiveTab}
       />
 
       {/* Modal de confirmação de delete */}

@@ -54,6 +54,9 @@ type ErpTabsContextValue = {
   selectTab: (href: string) => void
   closeTab: (href: string) => void
   reorderTabs: (fromHref: string, toHref: string) => void
+  tabRefreshSeq: Record<string, number>
+  refreshTab: (href: string) => void
+  refreshActiveTab: () => void
 }
 
 const ErpTabsContext = createContext<ErpTabsContextValue | null>(null)
@@ -194,10 +197,14 @@ function TabPane({
   href,
   cachedData,
   onData,
+  active,
+  refreshSeq,
 }: {
   href: string
   cachedData?: ErpTabData | undefined
   onData?: (href: string, data: ErpTabData) => void
+  active: boolean
+  refreshSeq: number
 }) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     cachedData ? 'ready' : 'loading'
@@ -214,6 +221,8 @@ function TabPane({
   }, [])
 
   useEffect(() => {
+    if (!active) return
+
     let cancelled = false
     async function run() {
       try {
@@ -222,6 +231,9 @@ function TabPane({
         if (!cachedData) {
           setStatus('loading')
           setData(null)
+          setErrMsg('')
+        } else {
+          // Mantém o conteúdo atual enquanto busca em background
           setErrMsg('')
         }
 
@@ -249,7 +261,7 @@ function TabPane({
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [href])
+  }, [href, active, refreshSeq])
 
   if (status === 'loading') return <TabSkeleton href={href} />
   if (status === 'error') {
@@ -370,7 +382,7 @@ type DragState = {
 }
 
 function ErpTabsContent() {
-  const { openTabs, activeHref, selectTab, closeTab, reorderTabs } = useErpTabs()
+  const { openTabs, activeHref, selectTab, closeTab, reorderTabs, tabRefreshSeq } = useErpTabs()
 
   // Client-side data cache — stale-while-revalidate pattern.
   // Returning to a visited tab shows cached data instantly while refreshing in background.
@@ -669,6 +681,8 @@ function ErpTabsContent() {
                 href={tab.href}
                 cachedData={dataCacheRef.current.get(tab.href)}
                 onData={handleTabData}
+                active={isActive}
+                refreshSeq={tabRefreshSeq[tab.href] ?? 0}
               />
             </div>
           )
@@ -705,6 +719,18 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     const normalizedActive = storedActive ? normalizeHref(storedActive) : storedTabs[0]?.href
     return normalizedActive || ''
   })
+
+  // Sinal para refetch por aba (usado pelos CRUDs para atualizar só a aba ativa)
+  const [tabRefreshSeq, setTabRefreshSeq] = useState<Record<string, number>>({})
+  const refreshTab = useCallback((href: string) => {
+    const normalizedHref = normalizeHref(href)
+    setTabRefreshSeq((prev) => ({ ...prev, [normalizedHref]: (prev[normalizedHref] ?? 0) + 1 }))
+  }, [])
+
+  const refreshActiveTab = useCallback(() => {
+    if (!activeHref) return
+    refreshTab(activeHref)
+  }, [activeHref, refreshTab])
 
   const persist = useCallback((tabs: OpenTab[], active: string) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs))
@@ -790,8 +816,11 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
       selectTab,
       closeTab,
       reorderTabs,
+      tabRefreshSeq,
+      refreshTab,
+      refreshActiveTab,
     }),
-    [openTabs, activeHref, openTab, selectTab, closeTab, reorderTabs]
+    [openTabs, activeHref, openTab, selectTab, closeTab, reorderTabs, tabRefreshSeq, refreshTab, refreshActiveTab]
   )
 
   return <ErpTabsContext.Provider value={value}>{children}</ErpTabsContext.Provider>

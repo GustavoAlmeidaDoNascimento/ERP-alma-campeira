@@ -15,9 +15,10 @@ type Props = {
   onClose: () => void
   editando?: Usuario | null
   cargos: Pick<Cargo, 'id' | 'nome' | 'cor' | 'permissoes'>[]
+  onSaved?: () => void
 }
 
-export function UsuarioModal({ open, onClose, editando, cargos }: Props) {
+export function UsuarioModal({ open, onClose, editando, cargos, onSaved }: Props) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
@@ -119,6 +120,7 @@ export function UsuarioModal({ open, onClose, editando, cargos }: Props) {
         await criarUsuario({ email, senha, nome, cargo_id: cargoId || null })
       }
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {

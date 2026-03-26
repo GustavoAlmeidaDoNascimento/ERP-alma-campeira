@@ -11,13 +11,14 @@ type Props = {
   open: boolean
   onClose: () => void
   editando?: Fornecedor | null
+  onSaved?: () => void
 }
 
 type Form = { nome: string; telefone: string; email: string }
 
 const formVazio: Form = { nome: '', telefone: '', email: '' }
 
-export function FornecedorModal({ open, onClose, editando }: Props) {
+export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
   const [form, setForm] = useState<Form>(formVazio)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
@@ -52,6 +53,7 @@ export function FornecedorModal({ open, onClose, editando }: Props) {
         await criarFornecedor(form)
       }
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {

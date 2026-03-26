@@ -8,11 +8,13 @@ import { deletarFaca } from '@/lib/actions/facas'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { statusEstoqueFaca } from '@/types'
 import type { Faca, CategoriaFacaDB } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; perm: Perm }
 
 export function FacasClient({ facas, categorias, perm }: Props) {
+  const { refreshActiveTab } = useErpTabs()
   const badgeCategoria = useMemo(() => {
     const map: Record<string, React.CSSProperties> = {}
     for (const cat of categorias) {
@@ -50,6 +52,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
     try {
       await deletarFaca(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -211,7 +214,13 @@ export function FacasClient({ facas, categorias, perm }: Props) {
         </div>
       </div>
 
-      <FacaModal open={modalAberto} onClose={() => setModalAberto(false)} editando={editando} categorias={categorias} />
+      <FacaModal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        editando={editando}
+        categorias={categorias}
+        onSaved={refreshActiveTab}
+      />
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir faca">
         <div className="flex flex-col gap-4">

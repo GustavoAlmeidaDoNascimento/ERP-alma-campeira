@@ -13,6 +13,7 @@ type Props = {
   onClose: () => void
   fornecedores: Fornecedor[]
   editando?: MateriaPrima | null
+  onSaved?: () => void
 }
 
 type Form = {
@@ -31,7 +32,7 @@ const formVazio: Form = {
   estoque_minimo: '0',
 }
 
-export function MPModal({ open, onClose, fornecedores, editando }: Props) {
+export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Props) {
   const [form, setForm] = useState<Form>(formVazio)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
@@ -78,6 +79,7 @@ export function MPModal({ open, onClose, fornecedores, editando }: Props) {
         await criarMateriaPrima(payload)
       }
       onClose()
+      onSaved?.()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {

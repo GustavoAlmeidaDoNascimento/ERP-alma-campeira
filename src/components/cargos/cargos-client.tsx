@@ -9,10 +9,12 @@ import { deletarCargo } from '@/lib/actions/cargos'
 import { permissoesFromArray } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 import type { Cargo } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 export function CargosClient({ cargos, perm }: { cargos: Cargo[]; perm: Perm }) {
+  const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Cargo | null>(null)
   const [visualizando, setVisualizando] = useState<Cargo | null>(null)
@@ -30,6 +32,7 @@ export function CargosClient({ cargos, perm }: { cargos: Cargo[]; perm: Perm }) 
     try {
       await deletarCargo(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -182,7 +185,12 @@ export function CargosClient({ cargos, perm }: { cargos: Cargo[]; perm: Perm }) 
       </div>
 
       {/* Modal criar/editar */}
-      <CargoModal open={modalAberto} onClose={() => setModalAberto(false)} editando={editando} />
+      <CargoModal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        editando={editando}
+        onSaved={refreshActiveTab}
+      />
 
       {/* Modal visualizar permissões */}
       {visualizando && (

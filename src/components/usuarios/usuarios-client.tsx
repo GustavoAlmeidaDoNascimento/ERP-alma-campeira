@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { UsuarioModal } from './usuario-modal'
 import { deletarUsuario } from '@/lib/actions/usuarios'
 import type { Usuario, Cargo } from '@/types'
+import { useErpTabs } from '@/components/layout/erp-tabs'
 
 // Badge de cargo ou "Personalizado"
 function CargoBadge({ usuario }: { usuario: Usuario }) {
@@ -52,6 +53,7 @@ type Props = {
 }
 
 export function UsuariosClient({ usuarios, cargos, perm }: Props) {
+  const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Usuario | null>(null)
   const [deletando, setDeletando] = useState<Usuario | null>(null)
@@ -70,6 +72,7 @@ export function UsuariosClient({ usuarios, cargos, perm }: Props) {
     try {
       await deletarUsuario(deletando.id)
       setDeletando(null)
+      refreshActiveTab()
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -186,7 +189,13 @@ export function UsuariosClient({ usuarios, cargos, perm }: Props) {
         </div>
       </div>
 
-      <UsuarioModal open={modalAberto} onClose={() => setModalAberto(false)} editando={editando} cargos={cargosSimples} />
+      <UsuarioModal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        editando={editando}
+        cargos={cargosSimples}
+        onSaved={refreshActiveTab}
+      />
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir usuário">
         <div className="flex flex-col gap-4">
