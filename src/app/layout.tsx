@@ -12,6 +12,11 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: 'ERP Alma Campeira',
   description: 'ERP da cutelaria Alma Campeira',
+  icons: {
+    icon: '/images/favicon-yellow.png',
+    shortcut: '/images/favicon-yellow.png',
+    apple: '/images/favicon-yellow.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
