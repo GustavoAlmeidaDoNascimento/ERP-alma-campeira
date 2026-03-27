@@ -89,9 +89,8 @@ export function CargosClient({ cargos, perm }: { cargos: Cargo[]; perm: Perm }) 
                   <div className="flex items-center gap-3">
                     <div className="size-10 rounded-xl flex items-center justify-center flex-shrink-0"
                       style={{ background: `${cargo.cor}22`, border: `1.5px solid ${cargo.cor}44` }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke={cargo.cor} strokeWidth={1.8} className="size-5">
-                        <path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
-                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke={cargo.cor} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
                     </div>
                     <div>
