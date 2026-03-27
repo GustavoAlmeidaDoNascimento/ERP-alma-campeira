@@ -55,6 +55,7 @@ type ErpTabsContextValue = {
   selectTab: (href: string) => void
   closeTab: (href: string) => void
   reorderTabs: (fromHref: string, toHref: string) => void
+  updateTabLabel: (href: string, label: string) => void
   tabRefreshSeq: Record<string, number>
   refreshTab: (href: string) => void
   refreshActiveTab: () => void
@@ -395,6 +396,16 @@ function Wallpaper() {
   )
 }
 
+/** Título na aba de detalhe de faca: nome completo até este tamanho; acima, reticências. */
+const FACA_TAB_TITLE_MAX = 44
+
+function formatFacaTabLabel(nome: string): string {
+  const n = nome.trim()
+  if (!n) return 'Faca'
+  if (n.length <= FACA_TAB_TITLE_MAX) return n
+  return `${n.slice(0, FACA_TAB_TITLE_MAX - 1)}…`
+}
+
 const HOLD_MS = 180
 
 type DragState = {
@@ -408,37 +419,45 @@ type DragState = {
 }
 
 function ErpTabsContent() {
-  const { openTabs, activeHref, selectTab, closeTab, reorderTabs, tabRefreshSeq } = useErpTabs()
+  const { openTabs, activeHref, selectTab, closeTab, reorderTabs, tabRefreshSeq, updateTabLabel } = useErpTabs()
 
   // Client-side data cache — stale-while-revalidate pattern.
   // Returning to a visited tab shows cached data instantly while refreshing in background.
   const dataCacheRef = useRef(new Map<string, ErpTabData>())
 
-  const handleTabData = useCallback((href: string, data: ErpTabData) => {
-    dataCacheRef.current.set(href, data)
+  const handleTabData = useCallback(
+    (href: string, data: ErpTabData) => {
+      dataCacheRef.current.set(href, data)
 
-    // Prefetch adjacent open tabs that aren't cached yet
-    const idx = openTabs.findIndex((t) => t.href === href)
-    if (idx === -1) return
-    const adjacent = [openTabs[idx - 1], openTabs[idx + 1]].filter(Boolean)
-    for (const tab of adjacent) {
-      if (!dataCacheRef.current.has(tab.href)) {
-        setTimeout(() => {
-          if (dataCacheRef.current.has(tab.href)) return
-          if (LOG) console.log('[TABS] prefetch start', { href: tab.href })
-          getErpTabData(tab.href)
-            .then((d) => {
-              dataCacheRef.current.set(tab.href, d)
-              if (LOG) console.log('[TABS] prefetch done', { href: tab.href })
-            })
-            .catch(() => {
-              if (LOG) console.log('[TABS] prefetch failed', { href: tab.href })
-            })
-        }, 200)
+      if (data.kind === 'faca-detalhe') {
+        const nome = data.detalhe.faca.nome?.trim() || data.detalhe.faca.codigo?.trim() || ''
+        updateTabLabel(href, formatFacaTabLabel(nome))
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTabs])
+
+      // Prefetch adjacent open tabs that aren't cached yet
+      const idx = openTabs.findIndex((t) => t.href === href)
+      if (idx === -1) return
+      const adjacent = [openTabs[idx - 1], openTabs[idx + 1]].filter(Boolean)
+      for (const tab of adjacent) {
+        if (!dataCacheRef.current.has(tab.href)) {
+          setTimeout(() => {
+            if (dataCacheRef.current.has(tab.href)) return
+            if (LOG) console.log('[TABS] prefetch start', { href: tab.href })
+            getErpTabData(tab.href)
+              .then((d) => {
+                dataCacheRef.current.set(tab.href, d)
+                if (LOG) console.log('[TABS] prefetch done', { href: tab.href })
+              })
+              .catch(() => {
+                if (LOG) console.log('[TABS] prefetch failed', { href: tab.href })
+              })
+          }, 200)
+        }
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [openTabs, updateTabLabel]
+  )
 
   // Track which tabs have been visited at least once — only those get mounted.
   // On refresh, only the active tab is in this set, so only it fetches data.
@@ -662,7 +681,15 @@ function ErpTabsContent() {
                         {tabIcon}
                       </span>
                     ) : null}
-                    <span className="truncate max-w-[180px] sm:max-w-[220px] text-xs sm:text-sm">{tab.label}</span>
+                    <span
+                      className={
+                        tab.href.startsWith('/facas/')
+                          ? 'truncate max-w-[min(20rem,78vw)] sm:max-w-[min(24rem,55vw)] lg:max-w-[28rem] text-xs sm:text-sm'
+                          : 'truncate max-w-[180px] sm:max-w-[220px] text-xs sm:text-sm'
+                      }
+                    >
+                      {tab.label}
+                    </span>
                   </button>
 
                   <button
@@ -834,6 +861,22 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     [activeHref, persist]
   )
 
+  const updateTabLabel = useCallback(
+    (href: string, label: string) => {
+      const normalizedHref = normalizeHref(href)
+      setOpenTabs((prev) => {
+        const idx = prev.findIndex((t) => t.href === normalizedHref)
+        if (idx < 0) return prev
+        if (prev[idx].label === label) return prev
+        const next = [...prev]
+        next[idx] = { ...next[idx], label }
+        persist(next, activeHref)
+        return next
+      })
+    },
+    [persist, activeHref]
+  )
+
   const value: ErpTabsContextValue = useMemo(
     () => ({
       openTabs,
@@ -842,11 +885,23 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
       selectTab,
       closeTab,
       reorderTabs,
+      updateTabLabel,
       tabRefreshSeq,
       refreshTab,
       refreshActiveTab,
     }),
-    [openTabs, activeHref, openTab, selectTab, closeTab, reorderTabs, tabRefreshSeq, refreshTab, refreshActiveTab]
+    [
+      openTabs,
+      activeHref,
+      openTab,
+      selectTab,
+      closeTab,
+      reorderTabs,
+      updateTabLabel,
+      tabRefreshSeq,
+      refreshTab,
+      refreshActiveTab,
+    ]
   )
 
   return <ErpTabsContext.Provider value={value}>{children}</ErpTabsContext.Provider>
