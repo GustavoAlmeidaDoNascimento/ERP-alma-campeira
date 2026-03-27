@@ -9,7 +9,7 @@ import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
 import { getUsuarios } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
-import { getFilaReposicao } from '@/lib/actions/ordens-compra'
+import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, Pedido, Cliente, Usuario, Cargo } from '@/types'
 
@@ -36,6 +36,7 @@ export type ErpTabData =
   | {
       kind: 'ordens-compra'
       fila: Awaited<ReturnType<typeof getFilaReposicao>>
+      ordens: Awaited<ReturnType<typeof getOrdensCompra>>
       perm: Perm
     }
   | {
@@ -111,13 +112,14 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/ordens-compra') {
-    const [perms, fila] = await Promise.all([
+    const [perms, fila, ordens] = await Promise.all([
       getPermissoesEfetivas(),
       getFilaReposicao(),
+      getOrdensCompra(),
     ])
     const perm = perms.ordens_compra as Perm
     assertAllowed(perm, 'ordens_compra')
-    return { kind: 'ordens-compra', fila, perm }
+    return { kind: 'ordens-compra', fila, ordens, perm }
   }
 
   if (path === '/vendas') {

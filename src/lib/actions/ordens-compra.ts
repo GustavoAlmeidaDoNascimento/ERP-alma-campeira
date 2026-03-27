@@ -159,7 +159,10 @@ async function gerarCodigoOC(supabase: Awaited<ReturnType<typeof createClient>>)
   return `OC-${String(num + 1).padStart(4, '0')}`
 }
 
-export async function gerarOC(fornecedor_id: string | null): Promise<string> {
+export async function gerarOC(
+  fornecedor_id: string | null,
+  adicionaisPorMateriaPrima: Record<string, number> = {},
+): Promise<string> {
   await assertPermissao('ordens_compra', 'criar')
   const supabase = await createClient()
 
@@ -208,14 +211,20 @@ export async function gerarOC(fornecedor_id: string | null): Promise<string> {
   if (ocErr || !oc) throw new Error(ocErr?.message ?? 'Erro ao criar OC.')
 
   // Criar itens
-  const itens = Array.from(agrupado.entries()).map(([mp_id, { quantidade, preco_custo }]) => ({
-    ordem_compra_id: oc.id,
-    materia_prima_id: mp_id,
-    quantidade_vendida: quantidade,
-    quantidade_adicional: 0,
-    quantidade,
-    preco_unitario: preco_custo,
-  }))
+  const itens = Array.from(agrupado.entries()).map(([mp_id, { quantidade, preco_custo }]) => {
+    const adicionalBruto = adicionaisPorMateriaPrima[mp_id] ?? 0
+    const quantidade_adicional = Number.isFinite(adicionalBruto) ? Math.max(0, adicionalBruto) : 0
+    const quantidade_total = quantidade + quantidade_adicional
+
+    return {
+      ordem_compra_id: oc.id,
+      materia_prima_id: mp_id,
+      quantidade_vendida: quantidade,
+      quantidade_adicional,
+      quantidade: quantidade_total,
+      preco_unitario: preco_custo,
+    }
+  })
 
   const { error: itensErr } = await supabase.from('ordem_compra_itens').insert(itens)
   if (itensErr) throw new Error(itensErr.message)

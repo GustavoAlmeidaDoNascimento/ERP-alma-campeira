@@ -6,7 +6,6 @@ import { Modal } from '@/components/ui/modal'
 import {
   getOrdensCompra,
   gerarOC,
-  gerarTodasOCs,
   atualizarUnidadesAdicionaisItem,
   criarItemOrdemCompra,
   atualizarObservacaoOC,
@@ -608,6 +607,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [sucesso, setSucesso] = useState('')
   const gerarOcInFlightRef = useRef<Record<string, boolean>>({})
   const gerarTodasInFlightRef = useRef(false)
+  const [adicionaisFila, setAdicionaisFila] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (aba !== 'historico' || ordensState.length > 0 || loadingHistorico) return
@@ -649,14 +649,24 @@ export function OcClient({ fila, ordens, perm }: Props) {
     setTimeout(() => setSucesso(''), 3500)
   }
 
-  async function handleGerarOC(fornecedor_id: string | null) {
+  function parseNumero(raw: string): number {
+    const v = raw.trim().replace(',', '.')
+    const n = Number(v)
+    return Number.isFinite(n) ? n : NaN
+  }
+
+  async function handleGerarOC(
+    fornecedor_id: string | null,
+    adicionaisPorMateriaPrima: Record<string, number> = {},
+  ) {
     const chave = fornecedor_id ?? '__sem_fornecedor__'
     if (gerarOcInFlightRef.current[chave]) return
     gerarOcInFlightRef.current[chave] = true
     setGerandoFornecedor(chave); setErro('')
     try {
-      const codigo = await gerarOC(fornecedor_id)
+      const codigo = await gerarOC(fornecedor_id, adicionaisPorMateriaPrima)
       flash(`OC ${codigo} gerada com sucesso.`)
+      setAdicionaisFila({})
       refresh()
       setAba('historico')
     } catch (e: unknown) {
@@ -672,8 +682,20 @@ export function OcClient({ fila, ordens, perm }: Props) {
     gerarTodasInFlightRef.current = true
     setGerandoTodas(true); setErro('')
     try {
-      const n = await gerarTodasOCs()
-      flash(`${n} ${n === 1 ? 'OC gerada' : 'OCs geradas'} com sucesso.`)
+      let criadas = 0
+      for (const grupo of fila) {
+        const adicionaisPorMateriaPrima: Record<string, number> = {}
+        for (const it of grupo.itens) {
+          adicionaisPorMateriaPrima[it.materia_prima_id] = parseNumero(
+            adicionaisFila[it.materia_prima_id] ?? '0',
+          )
+        }
+        await gerarOC(grupo.fornecedor_id, adicionaisPorMateriaPrima)
+        criadas++
+      }
+
+      flash(`${criadas} ${criadas === 1 ? 'OC gerada' : 'OCs geradas'} com sucesso.`)
+      setAdicionaisFila({})
       refresh()
       setAba('historico')
     } catch (e: unknown) {
@@ -809,7 +831,11 @@ export function OcClient({ fila, ordens, perm }: Props) {
               {fila.map((grupo) => {
                 const chave = grupo.fornecedor_id ?? '__sem_fornecedor__'
                 const isGerando = gerandoFornecedor === chave
-                const totalValor = grupo.itens.reduce((s, i) => s + i.mp_preco_custo * i.quantidade_total, 0)
+                const totalValor = grupo.itens.reduce((s, i) => {
+                  const adicional = parseNumero(adicionaisFila[i.materia_prima_id] ?? '0')
+                  const adicionalSafe = Number.isFinite(adicional) ? adicional : 0
+                  return s + i.mp_preco_custo * (i.quantidade_total + adicionalSafe)
+                }, 0)
                 return (
                   <div
                     key={chave}
@@ -830,7 +856,15 @@ export function OcClient({ fila, ordens, perm }: Props) {
                         <Button
                           variant="primary"
                           loading={isGerando}
-                          onClick={() => handleGerarOC(grupo.fornecedor_id)}
+                          onClick={() => {
+                            const adicionaisPorMateriaPrima: Record<string, number> = {}
+                            for (const it of grupo.itens) {
+                              adicionaisPorMateriaPrima[it.materia_prima_id] = parseNumero(
+                                adicionaisFila[it.materia_prima_id] ?? '0',
+                              )
+                            }
+                            handleGerarOC(grupo.fornecedor_id, adicionaisPorMateriaPrima)
+                          }}
                         >
                           Gerar OC
                         </Button>
@@ -844,7 +878,9 @@ export function OcClient({ fila, ordens, perm }: Props) {
                           <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
                             <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                             <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Matéria-Prima</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd. Pendente</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendido</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Unidades adicionais</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd Total</th>
                             <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Unit.</th>
                             <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estimativa</th>
                           </tr>
@@ -860,11 +896,44 @@ export function OcClient({ fila, ordens, perm }: Props) {
                               <td className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--ac-accent)' }}>
                                 {fmtQtd(item.quantidade_total)}
                               </td>
+                              <td className="px-3 py-2.5 text-right">
+                                {perm.criar ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    disabled={isGerando}
+                                    value={adicionaisFila[item.materia_prima_id] ?? ''}
+                                    onChange={(e) =>
+                                      setAdicionaisFila((prev) => ({ ...prev, [item.materia_prima_id]: e.target.value }))
+                                    }
+                                    className="w-24 px-2 py-1 rounded text-sm text-right"
+                                    style={{
+                                      border: '1px solid var(--ac-border)',
+                                      background: 'var(--ac-bg)',
+                                      color: 'var(--ac-text)',
+                                    }}
+                                  />
+                                ) : (
+                                  <span style={{ color: 'var(--ac-text)' }}>—</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
+                                {(() => {
+                                  const adicional = parseNumero(adicionaisFila[item.materia_prima_id] ?? '0')
+                                  const adicionalSafe = Number.isFinite(adicional) ? adicional : 0
+                                  return fmtQtd(item.quantidade_total + adicionalSafe)
+                                })()}
+                              </td>
                               <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
                                 {fmt(item.mp_preco_custo)}
                               </td>
                               <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
-                                {fmt(item.mp_preco_custo * item.quantidade_total)}
+                                {(() => {
+                                  const adicional = parseNumero(adicionaisFila[item.materia_prima_id] ?? '0')
+                                  const adicionalSafe = Number.isFinite(adicional) ? adicional : 0
+                                  return fmt(item.mp_preco_custo * (item.quantidade_total + adicionalSafe))
+                                })()}
                               </td>
                             </tr>
                           ))}
@@ -929,7 +998,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)' }}>
-                    {['Código', 'Fornecedor', 'Data', 'Itens', 'Total Estimado', 'Status', ''].map((h) => (
+                    {['Código', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
                       <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left ${h === '' ? 'w-20' : ''}`} style={{ color: 'var(--ac-muted)' }}>
                         {h}
                       </th>
@@ -939,6 +1008,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
                 <tbody>
                   {ordensFiltradas.map((oc, idx) => {
                     const itens = oc.itens ?? []
+                    const quantidadeFinal = itens.reduce((acc, item) => acc + Number(item.quantidade ?? 0), 0)
                     const total = totalOC(itens)
                     return (
                       <tr
@@ -959,7 +1029,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
                           {fmtData(oc.data_geracao)}
                         </td>
                         <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
-                          {itens.length}
+                          {fmtQtd(quantidadeFinal)}
                         </td>
                         <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
                           {fmt(total)}

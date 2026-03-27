@@ -283,7 +283,7 @@ function TabPane({
     case 'fornecedores':
       return <FornecedoresClient fornecedores={data.fornecedores} perm={data.perm} />
     case 'ordens-compra':
-      return <OcClient fila={data.fila} ordens={[]} perm={data.perm} />
+      return <OcClient fila={data.fila} ordens={data.ordens} perm={data.perm} />
     case 'vendas':
       return <VendasClient pedidos={data.pedidos} clientes={data.clientes} facas={data.facas} perm={data.perm} />
     case 'clientes':
