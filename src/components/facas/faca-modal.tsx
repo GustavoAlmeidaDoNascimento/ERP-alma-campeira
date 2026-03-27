@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { salvarFacaComFoto } from '@/lib/actions/facas'
-import type { Faca, CategoriaFacaDB } from '@/types'
+import { salvarFacaComFoto, getFacaBOM } from '@/lib/actions/facas'
+import type { Faca, CategoriaFacaDB, MateriaPrima, FacaMateriaPrima } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
@@ -14,6 +14,7 @@ type Props = {
   onClose: () => void
   editando?: Faca | null
   categorias: CategoriaFacaDB[]
+  materiasPrimas: MateriaPrima[]
   onSaved?: () => void
 }
 
@@ -25,11 +26,18 @@ type Form = {
   estoque_minimo: string
 }
 
-export function FacaModal({ open, onClose, editando, categorias, onSaved }: Props) {
+type BomItem = {
+  materia_prima_id: string
+  quantidade: string
+}
+
+export function FacaModal({ open, onClose, editando, categorias, materiasPrimas, onSaved }: Props) {
   const defaultCategoria = categorias[0]?.nome ?? ''
   const [form, setForm] = useState<Form>({ nome: '', categoria: defaultCategoria, preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
+  const [bomItens, setBomItens] = useState<BomItem[]>([])
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingBom, setLoadingBom] = useState(false)
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string>('')
   const [fotoDragActive, setFotoDragActive] = useState(false)
@@ -42,6 +50,22 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
     ? getOptimizedSupabaseImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
     : ''
 
+  // Carregar BOM ao editar
+  const carregarBOM = useCallback(async (facaId: string) => {
+    setLoadingBom(true)
+    try {
+      const bom: FacaMateriaPrima[] = await getFacaBOM(facaId)
+      setBomItens(bom.map((b) => ({
+        materia_prima_id: b.materia_prima_id,
+        quantidade: String(b.quantidade),
+      })))
+    } catch {
+      setBomItens([])
+    } finally {
+      setLoadingBom(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (editando) {
       setForm({
@@ -51,13 +75,15 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
         estoque_atual: String(editando.estoque_atual),
         estoque_minimo: String(editando.estoque_minimo),
       })
+      carregarBOM(editando.id)
     } else {
       setForm({ nome: '', categoria: categorias[0]?.nome ?? '', preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
+      setBomItens([])
     }
     setErro('')
     setFotoFile(null)
     setFotoPreview('')
-  }, [editando, open, categorias])
+  }, [editando, open, categorias, carregarBOM])
 
   useEffect(() => {
     return () => {
@@ -85,6 +111,28 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
     setForm((f) => ({ ...f, [field]: value }))
   }
 
+  // BOM helpers
+  function adicionarBomItem() {
+    setBomItens((prev) => [...prev, { materia_prima_id: '', quantidade: '1' }])
+  }
+
+  function removerBomItem(index: number) {
+    setBomItens((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function atualizarBomItem(index: number, field: keyof BomItem, value: string) {
+    setBomItens((prev) => prev.map((item, i) => i === index ? { ...item, [field]: value } : item))
+  }
+
+  // MPs já selecionadas (para filtrar dos dropdowns)
+  function mpsSelecionadas(excluirIndex: number): Set<string> {
+    const set = new Set<string>()
+    bomItens.forEach((item, i) => {
+      if (i !== excluirIndex && item.materia_prima_id) set.add(item.materia_prima_id)
+    })
+    return set
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
@@ -92,24 +140,31 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
     if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
     if (!form.preco_venda || isNaN(Number(form.preco_venda))) { setErro('Preço de venda inválido.'); return }
 
+    // Validar BOM
+    if (bomItens.length === 0) { setErro('Adicione pelo menos 1 matéria-prima.'); return }
+    for (const item of bomItens) {
+      if (!item.materia_prima_id) { setErro('Selecione a matéria-prima em todos os itens.'); return }
+      if (!item.quantidade || isNaN(Number(item.quantidade)) || Number(item.quantidade) <= 0) {
+        setErro('Quantidade deve ser maior que 0 em todos os itens.'); return
+      }
+    }
+
     setLoading(true)
     try {
-      const payload = {
-        nome: form.nome,
-        categoria: form.categoria,
-        preco_venda: parseFloat(form.preco_venda),
-        estoque_atual: parseInt(form.estoque_atual) || 0,
-        estoque_minimo: parseInt(form.estoque_minimo) || 0,
-      }
-
       const fd = new FormData()
       if (editando?.id) fd.append('id', editando.id)
-      fd.append('nome', payload.nome)
-      fd.append('categoria', payload.categoria)
-      fd.append('preco_venda', String(payload.preco_venda))
-      fd.append('estoque_atual', String(payload.estoque_atual))
-      fd.append('estoque_minimo', String(payload.estoque_minimo))
+      fd.append('nome', form.nome)
+      fd.append('categoria', form.categoria)
+      fd.append('preco_venda', String(parseFloat(form.preco_venda)))
+      fd.append('estoque_atual', String(parseInt(form.estoque_atual) || 0))
+      fd.append('estoque_minimo', String(parseInt(form.estoque_minimo) || 0))
       if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
+
+      // BOM como JSON
+      fd.append('bom', JSON.stringify(bomItens.map((i) => ({
+        materia_prima_id: i.materia_prima_id,
+        quantidade: parseFloat(i.quantidade),
+      }))))
 
       await salvarFacaComFoto(fd)
       onClose()
@@ -122,7 +177,7 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={editando ? `Editar — ${editando.codigo}` : 'Nova Faca'}>
+    <Modal open={open} onClose={onClose} title={editando ? `Editar — ${editando.codigo}` : 'Nova Faca'} width="640px">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input
           id="nome"
@@ -204,6 +259,111 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
             value={form.estoque_minimo}
             onChange={(e) => set('estoque_minimo', e.target.value)}
           />
+        </div>
+
+        {/* ========== SEÇÃO BOM (Matérias-Primas) ========== */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              Matérias-Primas *
+            </label>
+            <button
+              type="button"
+              onClick={adicionarBomItem}
+              className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-colors"
+              style={{ color: 'var(--ac-accent)', background: 'color-mix(in srgb, var(--ac-accent) 10%, transparent)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-accent) 18%, transparent)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-accent) 10%, transparent)')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-3.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Adicionar
+            </button>
+          </div>
+
+          {loadingBom ? (
+            <div className="text-xs py-3 text-center" style={{ color: 'var(--ac-muted)' }}>Carregando matérias-primas...</div>
+          ) : bomItens.length === 0 ? (
+            <div
+              className="text-xs py-4 text-center rounded-lg"
+              style={{ color: 'var(--ac-muted)', background: 'var(--ac-bg)', border: '1px dashed var(--ac-border)' }}
+            >
+              Nenhuma matéria-prima adicionada. Clique em &quot;Adicionar&quot; acima.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {bomItens.map((item, idx) => {
+                const selecionadas = mpsSelecionadas(idx)
+                const disponiveis = materiasPrimas.filter((mp) => !selecionadas.has(mp.id))
+
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <select
+                      value={item.materia_prima_id}
+                      onChange={(e) => atualizarBomItem(idx, 'materia_prima_id', e.target.value)}
+                      className="flex-1 rounded-lg px-3 py-2 text-sm outline-none transition-all appearance-none"
+                      style={{
+                        background: 'var(--ac-card)',
+                        border: '1px solid var(--ac-border)',
+                        color: 'var(--ac-text)',
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 8px center',
+                        backgroundSize: '14px',
+                        paddingRight: '30px',
+                      }}
+                    >
+                      <option value="">Selecione...</option>
+                      {disponiveis.map((mp) => (
+                        <option key={mp.id} value={mp.id}>
+                          {mp.codigo} — {mp.nome}
+                        </option>
+                      ))}
+                      {/* Se o item já selecionado não está em disponiveis (porque foi selecionado antes), inclui-lo */}
+                      {item.materia_prima_id && !disponiveis.some((mp) => mp.id === item.materia_prima_id) && (() => {
+                        const mp = materiasPrimas.find((m) => m.id === item.materia_prima_id)
+                        return mp ? <option key={mp.id} value={mp.id}>{mp.codigo} — {mp.nome}</option> : null
+                      })()}
+                    </select>
+
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="0.001"
+                      placeholder="Qtd"
+                      value={item.quantidade}
+                      onChange={(e) => atualizarBomItem(idx, 'quantidade', e.target.value)}
+                      className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none transition-all"
+                      style={{
+                        background: 'var(--ac-card)',
+                        border: '1px solid var(--ac-border)',
+                        color: 'var(--ac-text)',
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removerBomItem(idx)}
+                      className="p-1.5 rounded-lg transition-colors flex-shrink-0"
+                      style={{ color: 'var(--ac-muted)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
+                      title="Remover"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Foto (opcional) */}
@@ -391,7 +551,7 @@ export function FacaModal({ open, onClose, editando, categorias, onSaved }: Prop
             ) : null}
           </div>
           <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-            Clique fora ou use “Fechar” para voltar.
+            Clique fora ou use &quot;Fechar&quot; para voltar.
           </p>
           <div className="flex justify-end">
             <Button type="button" variant="secondary" onClick={closeFotoLightbox}>Fechar</Button>

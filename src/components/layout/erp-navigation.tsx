@@ -135,7 +135,9 @@ export function normalizePath(pathname: string) {
 
 export function getRouteLabel(pathname: string) {
   const normalized = normalizePath(pathname)
-  return routeLabelMap[normalized] ?? 'Página'
+  if (routeLabelMap[normalized]) return routeLabelMap[normalized]
+  if (normalized.startsWith('/facas/')) return 'Faca'
+  return 'Página'
 }
 
 const extraRouteIcons: Record<string, ReactNode> = {
@@ -152,5 +154,7 @@ const routeIconMap = sections.reduce<Record<string, ReactNode>>((acc, section) =
 export function getRouteIcon(hrefOrPathname: string) {
   const [pathOnly] = hrefOrPathname.split('?')
   const normalized = normalizePath(pathOnly || '/')
-  return routeIconMap[normalized] ?? null
+  if (routeIconMap[normalized]) return routeIconMap[normalized]
+  if (normalized.startsWith('/facas/')) return routeIconMap['/facas']
+  return null
 }

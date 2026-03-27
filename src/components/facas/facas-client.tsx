@@ -7,15 +7,15 @@ import { FacaModal } from './faca-modal'
 import { deletarFaca, type DeletarFacaModo } from '@/lib/actions/facas'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { statusEstoqueFaca } from '@/types'
-import type { Faca, CategoriaFacaDB } from '@/types'
+import type { Faca, CategoriaFacaDB, MateriaPrima } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
-type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; perm: Perm }
+type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; materiasPrimas: MateriaPrima[]; perm: Perm }
 
-export function FacasClient({ facas, categorias, perm }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) {
+  const { refreshActiveTab, openTab } = useErpTabs()
   const badgeCategoria = useMemo(() => {
     const map: Record<string, React.CSSProperties> = {}
     for (const cat of categorias) {
@@ -93,6 +93,10 @@ export function FacasClient({ facas, categorias, perm }: Props) {
     } finally {
       setLoadingDelete(false)
     }
+  }
+
+  function navegarDetalhe(faca: Faca) {
+    openTab(`/facas/${faca.id}`)
   }
 
   return (
@@ -183,9 +187,13 @@ export function FacasClient({ facas, categorias, perm }: Props) {
                 return (
                   <tr
                     key={faca.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
+                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)', cursor: 'pointer' }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button')) return
+                      navegarDetalhe(faca)
+                    }}
                   >
                     <td className="px-4 py-3">
                       {(() => {
@@ -313,6 +321,7 @@ export function FacasClient({ facas, categorias, perm }: Props) {
         onClose={() => setModalAberto(false)}
         editando={editando}
         categorias={categorias}
+        materiasPrimas={materiasPrimas}
         onSaved={refreshActiveTab}
       />
 

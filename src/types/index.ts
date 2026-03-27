@@ -55,6 +55,37 @@ export type FacaMateriaPrima = {
 }
 
 // ============================================================
+// Movimentações de Estoque
+// ============================================================
+export type TipoMovimentacao = 'entrada' | 'saida_producao' | 'saida_venda' | 'ajuste'
+
+export type MovimentacaoEstoque = {
+  id: string
+  tipo: TipoMovimentacao
+  materia_prima_id: string | null
+  faca_id: string | null
+  pedido_id: string | null
+  quantidade: number
+  observacao: string | null
+  usuario_id: string | null
+  created_at: string
+  materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'> | null
+}
+
+export type MaterialInsuficiente = {
+  materia_prima_id: string
+  nome: string
+  codigo: string
+  necessario: number
+  disponivel: number
+  falta: number
+}
+
+export type PedidoItemComPedido = PedidoItem & {
+  pedido?: Pick<Pedido, 'id' | 'codigo' | 'status' | 'data_pedido'> | null
+}
+
+// ============================================================
 // Módulos do sistema
 // ============================================================
 export const MODULOS = [

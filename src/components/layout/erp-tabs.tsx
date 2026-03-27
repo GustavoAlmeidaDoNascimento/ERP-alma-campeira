@@ -11,6 +11,7 @@ import { getErpTabData, type ErpTabData } from '@/lib/actions/erp-tab-data'
 
 import { MPClient } from '@/components/materias-primas/mp-client'
 import { FacasClient } from '@/components/facas/facas-client'
+import { FacaDetalheClient } from '@/components/facas/faca-detalhe-client'
 import { FornecedoresClient } from '@/components/fornecedores/fornecedores-client'
 import { OcClient } from '@/components/ordens-compra/oc-client'
 import { VendasClient } from '@/components/vendas/vendas-client'
@@ -154,6 +155,29 @@ function TabSkeleton({ href }: { href: string }) {
     )
   }
 
+  if (path.startsWith('/facas/')) {
+    return (
+      <div className="p-6 sm:p-8 space-y-5 animate-pulse">
+        <div className="flex items-start gap-6">
+          <div className="w-[120px] h-[120px] rounded-2xl" style={{ background: 'var(--ac-border)' }} />
+          <div className="flex-1 space-y-3">
+            <div className="h-4 w-32 rounded" style={{ background: 'var(--ac-border)' }} />
+            <div className="h-7 w-64 rounded-lg" style={{ background: 'var(--ac-border)' }} />
+            <div className="flex gap-3">
+              <div className="h-5 w-20 rounded" style={{ background: 'var(--ac-border)' }} />
+              <div className="h-5 w-24 rounded" style={{ background: 'var(--ac-border)' }} />
+              <div className="h-5 w-16 rounded" style={{ background: 'var(--ac-border)' }} />
+            </div>
+          </div>
+        </div>
+        <div className="h-5 w-48 rounded" style={{ background: 'var(--ac-border)' }} />
+        <SkeletonTable cols={5} rows={4} />
+        <div className="h-5 w-48 rounded" style={{ background: 'var(--ac-border)' }} />
+        <SkeletonTable cols={5} rows={3} />
+      </div>
+    )
+  }
+
   if (path === '/facas') {
     return (
       <div className="p-6 sm:p-8 space-y-5 animate-pulse">
@@ -279,7 +303,9 @@ function TabPane({
     case 'materias-primas':
       return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} perm={data.perm} />
     case 'facas':
-      return <FacasClient facas={data.facas} categorias={data.categorias} perm={data.perm} />
+      return <FacasClient facas={data.facas} categorias={data.categorias} materiasPrimas={data.materiasPrimas} perm={data.perm} />
+    case 'faca-detalhe':
+      return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} />
     case 'fornecedores':
       return <FornecedoresClient fornecedores={data.fornecedores} perm={data.perm} />
     case 'ordens-compra':

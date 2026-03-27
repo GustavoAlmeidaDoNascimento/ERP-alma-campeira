@@ -3,7 +3,7 @@
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getFornecedores } from '@/lib/actions/fornecedores'
-import { getFacas } from '@/lib/actions/facas'
+import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
@@ -25,6 +25,14 @@ export type ErpTabData =
   | {
       kind: 'facas'
       facas: Faca[]
+      categorias: CategoriaFacaDB[]
+      materiasPrimas: MateriaPrima[]
+      perm: Perm
+    }
+  | {
+      kind: 'faca-detalhe'
+      detalhe: FacaDetalheData
+      materiasPrimas: MateriaPrima[]
       categorias: CategoriaFacaDB[]
       perm: Perm
     }
@@ -91,14 +99,30 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/facas') {
-    const [perms, facas, categorias] = await Promise.all([
+    const [perms, facas, categorias, materiasPrimas] = await Promise.all([
       getPermissoesEfetivas(),
       getFacas(120),
+      getCategoriasFaca(),
+      getMatériasPrimas(200),
+    ])
+    const perm = perms.facas as Perm
+    assertAllowed(perm, 'facas')
+    return { kind: 'facas', facas, categorias, materiasPrimas, perm }
+  }
+
+  // Detalhe de faca: /facas/{uuid}
+  const facaDetalheMatch = path.match(/^\/facas\/([a-f0-9-]+)$/)
+  if (facaDetalheMatch) {
+    const facaId = facaDetalheMatch[1]
+    const [perms, detalhe, materiasPrimas, categorias] = await Promise.all([
+      getPermissoesEfetivas(),
+      getFacaDetalhe(facaId),
+      getMatériasPrimas(200),
       getCategoriasFaca(),
     ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
-    return { kind: 'facas', facas, categorias, perm }
+    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm }
   }
 
   if (path === '/fornecedores') {
