@@ -200,7 +200,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
       <div className="px-8 py-6 space-y-8">
         {/* ========== BOM ========== */}
         <section>
-          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>Lista de Materiais (BOM)</h3>
+          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>Lista de Materiais</h3>
           {bom.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma matéria-prima cadastrada para esta faca.</p>
           ) : (
