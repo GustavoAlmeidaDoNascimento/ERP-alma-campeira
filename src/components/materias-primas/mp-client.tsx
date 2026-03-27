@@ -9,6 +9,7 @@ import { deletarMateriaPrima } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
 import type { MateriaPrima, Fornecedor } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -26,6 +27,8 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
   const [erroDelete, setErroDelete] = useState('')
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [busca, setBusca] = useState('')
+  const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
+  const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>('')
 
   const filtrados = useMemo(() => {
     if (!busca.trim()) return materiasPrimas
@@ -38,6 +41,22 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
     )
   }, [materiasPrimas, busca])
 
+  const fotoUrlByMPId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const mp of materiasPrimas) {
+      if (!mp.foto_url) continue
+      map.set(
+        mp.id,
+        getOptimizedSupabaseImageUrl(mp.foto_url, {
+          width: 64,
+          height: 64,
+          quality: 65,
+        })
+      )
+    }
+    return map
+  }, [materiasPrimas])
+
   function abrirNovo() {
     setEditando(null)
     setModalAberto(true)
@@ -46,6 +65,18 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
   function abrirEditar(mp: MateriaPrima) {
     setEditando(mp)
     setModalAberto(true)
+  }
+
+  function abrirFotoLightbox(mp: MateriaPrima, thumbFallback: string) {
+    if (!mp.foto_url) return
+    const srcGrande = getOptimizedSupabaseImageUrl(mp.foto_url, {
+      width: 520,
+      height: 520,
+      quality: 80,
+      resize: 'contain',
+    })
+    setFotoLightboxSrc(srcGrande || thumbFallback)
+    setFotoLightboxAlt(mp.nome)
   }
 
   async function confirmarDelete() {
@@ -124,6 +155,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)', width: 80 }}>Foto</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Fornecedor</th>
@@ -136,7 +168,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma matéria-prima cadastrada ainda.'}
                   </td>
                 </tr>
@@ -153,6 +185,66 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const thumbUrl = fotoUrlByMPId.get(mp.id)
+                        if (thumbUrl) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => abrirFotoLightbox(mp, thumbUrl)}
+                              aria-label={`Expandir foto de ${mp.nome}`}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                                cursor: 'zoom-in',
+                                display: 'block',
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <img
+                                src={thumbUrl}
+                                alt={mp.nome}
+                                width={64}
+                                height={64}
+                                loading="lazy"
+                                style={{
+                                  objectFit: 'cover',
+                                  borderRadius: 8,
+                                  display: 'block',
+                                  border: '1px solid var(--ac-border)',
+                                }}
+                              />
+                            </button>
+                          )
+                        }
+                        return (
+                          <div
+                            aria-label={`Sem foto para ${mp.nome}`}
+                            style={{
+                              width: 64,
+                              height: 64,
+                              borderRadius: 8,
+                              border: '1px solid var(--ac-border)',
+                              background: 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.06))',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <img
+                              src="/images/favicon-yellow.png"
+                              alt="Sem foto"
+                              width={28}
+                              height={28}
+                              style={{ objectFit: 'contain' }}
+                            />
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
                       {mp.codigo}
                     </td>
@@ -256,6 +348,25 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
               Excluir
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Lightbox de foto */}
+      <Modal
+        open={!!fotoLightboxSrc}
+        onClose={() => {
+          setFotoLightboxSrc('')
+          setFotoLightboxAlt('')
+        }}
+        title={`Foto — ${fotoLightboxAlt}`}
+        width="520px"
+      >
+        <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
+          <img
+            src={fotoLightboxSrc}
+            alt={`Foto de ${fotoLightboxAlt}`}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
         </div>
       </Modal>
     </>

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { criarMateriaPrima, atualizarMateriaPrima } from '@/lib/actions/materias-primas'
+import { salvarMPComFoto } from '@/lib/actions/materias-primas'
 import type { MateriaPrima, Fornecedor } from '@/types'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
   open: boolean
@@ -36,6 +37,17 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
   const [form, setForm] = useState<Form>(formVazio)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [fotoPreview, setFotoPreview] = useState<string>('')
+  const [fotoDragActive, setFotoDragActive] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const [fotoLightboxOpen, setFotoLightboxOpen] = useState(false)
+  const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
+
+  const fotoPreviewAtual = editando?.foto_url
+    ? getOptimizedSupabaseImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
+    : ''
 
   useEffect(() => {
     if (editando) {
@@ -50,7 +62,31 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
       setForm(formVazio)
     }
     setErro('')
+    setFotoFile(null)
+    setFotoPreview('')
   }, [editando, open])
+
+  useEffect(() => {
+    return () => {
+      if (fotoPreview) URL.revokeObjectURL(fotoPreview)
+    }
+  }, [fotoPreview])
+
+  function setFotoFromFile(file: File | null) {
+    setFotoFile(file)
+    if (file) setFotoPreview(URL.createObjectURL(file))
+    else setFotoPreview('')
+  }
+
+  function openFotoLightbox(src: string) {
+    setFotoLightboxSrc(src)
+    setFotoLightboxOpen(true)
+  }
+
+  function closeFotoLightbox() {
+    setFotoLightboxOpen(false)
+    setFotoLightboxSrc('')
+  }
 
   function set(field: keyof Form, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -65,19 +101,16 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
 
     setLoading(true)
     try {
-      const payload = {
-        nome: form.nome,
-        fornecedor_id: form.fornecedor_id || null,
-        preco_custo: parseFloat(form.preco_custo),
-        estoque_atual: parseFloat(form.estoque_atual) || 0,
-        estoque_minimo: parseFloat(form.estoque_minimo) || 0,
-      }
+      const fd = new FormData()
+      if (editando?.id) fd.append('id', editando.id)
+      fd.append('nome', form.nome)
+      fd.append('fornecedor_id', form.fornecedor_id)
+      fd.append('preco_custo', String(parseFloat(form.preco_custo)))
+      fd.append('estoque_atual', String(parseFloat(form.estoque_atual) || 0))
+      fd.append('estoque_minimo', String(parseFloat(form.estoque_minimo) || 0))
+      if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
 
-      if (editando) {
-        await atualizarMateriaPrima(editando.id, payload)
-      } else {
-        await criarMateriaPrima(payload)
-      }
+      await salvarMPComFoto(fd)
       onClose()
       onSaved?.()
     } catch (e: unknown) {
@@ -145,6 +178,157 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
           />
         </div>
 
+        {/* Foto (opcional) */}
+        <div className="flex items-start gap-3">
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 12,
+              border: '1px solid var(--ac-border)',
+              background: (fotoPreview || fotoPreviewAtual)
+                ? 'transparent'
+                : 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.06))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {(() => {
+              const src = fotoPreview || fotoPreviewAtual
+              if (src) {
+                return (
+                  <button
+                    type="button"
+                    onClick={() => openFotoLightbox(src)}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      padding: 0,
+                      borderRadius: 12,
+                      background: 'transparent',
+                      cursor: 'zoom-in',
+                    }}
+                    aria-label="Expandir foto da matéria-prima"
+                  >
+                    <img
+                      src={src}
+                      alt="Foto da matéria-prima"
+                      width={64}
+                      height={64}
+                      style={{ objectFit: 'cover', borderRadius: 12 }}
+                    />
+                  </button>
+                )
+              }
+
+              return (
+                <img
+                  src="/images/favicon-yellow.png"
+                  alt="Sem foto"
+                  width={28}
+                  height={28}
+                  style={{ objectFit: 'contain' }}
+                />
+              )
+            })()}
+          </div>
+
+          <div className="flex flex-col gap-1.5" style={{ flex: 1 }}>
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              Foto (opcional)
+            </label>
+
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Arraste e solte uma imagem ou clique para selecionar"
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click()
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setFotoDragActive(true)
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setFotoDragActive(true)
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setFotoDragActive(false)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setFotoDragActive(false)
+                const file = e.dataTransfer.files?.[0] ?? null
+                setFotoFromFile(file)
+              }}
+              style={{
+                borderRadius: 14,
+                border: `2px dashed ${fotoDragActive ? 'var(--ac-accent)' : 'var(--ac-border)'}`,
+                background: fotoDragActive
+                  ? 'color-mix(in srgb, var(--ac-accent) 14%, transparent)'
+                  : 'var(--ac-card)',
+                padding: '14px 12px',
+                cursor: 'pointer',
+                transition: 'transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease',
+                transform: fotoDragActive ? 'scale(1.01)' : 'scale(1)',
+                boxShadow: fotoDragActive
+                  ? '0 0 0 3px color-mix(in srgb, var(--ac-accent) 18%, transparent)'
+                  : 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                gap: 8,
+                userSelect: 'none',
+              }}
+              className="hover:scale-[1.01]"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null
+                  setFotoFromFile(file)
+                }}
+              />
+
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                className="size-5"
+                style={{ color: fotoDragActive ? 'var(--ac-accent)' : 'var(--ac-muted)' }}
+              >
+                <path d="M12 16V4" strokeLinecap="round" />
+                <path d="M7 9l5-5 5 5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M20 16v4H4v-4" strokeLinecap="round" />
+              </svg>
+
+              <div className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                {fotoDragActive ? 'Solte a imagem aqui' : 'Arraste uma imagem aqui ou clique para selecionar'}
+              </div>
+
+              <div className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                PNG, JPG ou WEBP. A imagem substitui a anterior.
+              </div>
+            </div>
+          </div>
+        </div>
+
         {erro && (
           <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
             {erro}
@@ -160,6 +344,34 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
           </Button>
         </div>
       </form>
+
+      <Modal open={fotoLightboxOpen} onClose={closeFotoLightbox} title="Foto da matéria-prima" width="520px">
+        <div className="flex flex-col gap-3">
+          <div
+            style={{
+              width: '100%',
+              border: '1px solid var(--ac-border)',
+              borderRadius: 14,
+              overflow: 'hidden',
+              background: 'var(--ac-card)',
+            }}
+          >
+            {fotoLightboxSrc ? (
+              <img
+                src={fotoLightboxSrc}
+                alt="Foto da matéria-prima"
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            ) : null}
+          </div>
+          <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+            Clique fora ou use "Fechar" para voltar.
+          </p>
+          <div className="flex justify-end">
+            <Button type="button" variant="secondary" onClick={closeFotoLightbox}>Fechar</Button>
+          </div>
+        </div>
+      </Modal>
     </Modal>
   )
 }
