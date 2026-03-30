@@ -76,6 +76,7 @@ export type ErpTabData =
     }
   | {
       kind: 'metricas'
+      tab: 'vendas' | 'estoque'
     }
 
 function assertAllowed(perm: Perm | undefined, label: string): void {
@@ -197,8 +198,12 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     return { kind: 'configuracoes', categorias }
   }
 
-  if (path === '/metricas') {
-    return { kind: 'metricas' }
+  if (path === '/metricas' || path === '/metricas/vendas') {
+    return { kind: 'metricas', tab: 'vendas' }
+  }
+
+  if (path === '/metricas/estoque') {
+    return { kind: 'metricas', tab: 'estoque' }
   }
 
   throw new Error(`Rota de aba não suportada: ${path}`)

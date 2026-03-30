@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-type MetricaTabId = 'vendas' | 'estoque' | 'integracao' | 'ordens-compra'
+type MetricaTabId = 'vendas' | 'estoque'
 
 type MetricaTab = {
   id: MetricaTabId
@@ -28,34 +28,20 @@ const METRICA_TABS: MetricaTab[] = [
     hint: 'Movimentacao e saude do estoque ao longo do tempo.',
     notes: [
       'Entradas e saidas por periodo para materias-primas e facas.',
+      'Interligacao materias-primas -> facas (consumo de insumos por produto final).',
       'Estoque medio, cobertura de dias e rupturas por item.',
+      'Indicadores de compras: lead time, atraso e aderencia das ordens de compra.',
       'Alertas de variacao anomala e giro por SKU.',
-    ],
-  },
-  {
-    id: 'integracao',
-    label: 'Mat.-Primas x Facas',
-    hint: 'Interligacao entre consumo de materias-primas e producao de facas.',
-    notes: [
-      'Consumo real vs previsto de insumos por modelo de faca.',
-      'Rastreabilidade: de quais materias-primas cada faca foi composta.',
-      'Rendimento e perdas no processo de transformacao.',
-    ],
-  },
-  {
-    id: 'ordens-compra',
-    label: 'Ordens de Compra',
-    hint: 'Eficiencia de compras e abastecimento.',
-    notes: [
-      'Lead time medio por fornecedor e taxa de atraso.',
-      'Evolucao de custos de compra por insumo e variacao mensal.',
-      'Aderencia entre necessidades de estoque e ordens efetivamente emitidas.',
     ],
   },
 ]
 
-export function MetricasClient() {
-  const [activeTab, setActiveTab] = useState<MetricaTabId>('vendas')
+type MetricasClientProps = {
+  initialTab?: MetricaTabId
+}
+
+export function MetricasClient({ initialTab = 'vendas' }: MetricasClientProps) {
+  const [activeTab, setActiveTab] = useState<MetricaTabId>(initialTab)
 
   const currentTab = useMemo(
     () => METRICA_TABS.find((tab) => tab.id === activeTab) ?? METRICA_TABS[0],

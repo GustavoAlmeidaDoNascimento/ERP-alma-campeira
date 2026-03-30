@@ -323,7 +323,7 @@ function TabPane({
     case 'configuracoes':
       return <ConfiguracoesClient categorias={data.categorias} />
     case 'metricas':
-      return <MetricasClient />
+      return <MetricasClient initialTab={data.tab} />
     default:
       return null
   }

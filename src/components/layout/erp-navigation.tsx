@@ -99,7 +99,8 @@ export const sections: NavSection[] = [
   {
     label: 'Métricas',
     items: [
-      { href: '/metricas', label: 'Métricas', available: true, icon: iconMetricas },
+      { href: '/metricas/vendas', label: 'Vendas', available: true, icon: iconMetricas },
+      { href: '/metricas/estoque', label: 'Estoque', available: true, icon: iconMetricas },
     ],
   },
   {
