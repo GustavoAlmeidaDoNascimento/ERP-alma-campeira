@@ -44,6 +44,19 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
     }, 0)
   }, [bom])
 
+  const mpFotoThumbById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const item of bom) {
+      const mp = item.materia_prima
+      if (!mp?.id || !mp?.foto_url) continue
+      map.set(
+        mp.id,
+        getOptimizedSupabaseImageUrl(mp.foto_url, { width: 36, height: 36, quality: 80, resize: 'cover' }),
+      )
+    }
+    return map
+  }, [bom])
+
   // Preview de consumo de MPs para entrada de estoque
   const qtdProduzir = Number(quantidadeProduzir) || 0
   const previewConsumo = useMemo(() => {
@@ -208,6 +221,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Foto</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd/unidade</th>
@@ -220,8 +234,30 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
                   {bom.map((item, i) => {
                     const mp = item.materia_prima
                     const subtotal = (mp?.preco_custo ?? 0) * item.quantidade
+                    const mpThumbUrl = mp?.id ? mpFotoThumbById.get(mp.id) : undefined
                     return (
                       <tr key={item.id} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
+                        <td className="px-4 py-2.5 text-center">
+                          {mpThumbUrl ? (
+                            <img
+                              src={mpThumbUrl}
+                              alt={mp?.nome ? `Foto de ${mp.nome}` : 'Foto da matéria-prima'}
+                              width={32}
+                              height={32}
+                              loading="lazy"
+                              style={{ objectFit: 'cover', borderRadius: 10, border: '1px solid var(--ac-border)' }}
+                            />
+                          ) : (
+                            <img
+                              src="/images/favicon-yellow.png"
+                              alt="Sem foto"
+                              width={18}
+                              height={18}
+                              loading="lazy"
+                              style={{ objectFit: 'contain', opacity: 0.9 }}
+                            />
+                          )}
+                        </td>
                         <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{mp?.codigo ?? '—'}</td>
                         <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>{mp?.nome ?? '—'}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>{item.quantidade}</td>
@@ -240,7 +276,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
-                    <td colSpan={4} className="px-4 py-2.5 text-right text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
+                    <td colSpan={5} className="px-4 py-2.5 text-right text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
                       Custo total por faca
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-bold" style={{ color: 'var(--ac-text)' }}>
