@@ -65,6 +65,7 @@ export async function criarMateriaPrima(input: MPInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
   revalidateTag('materias-primas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }
 
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
@@ -85,6 +86,7 @@ export async function atualizarMateriaPrima(id: string, input: MPInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
   revalidateTag('materias-primas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }
 
 const FOTO_BUCKET_MP = 'materias-primas-fotos'
@@ -191,6 +193,7 @@ export async function salvarMPComFoto(formData: FormData) {
 
   revalidatePath('/materias-primas')
   revalidateTag('materias-primas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }
 
 export async function deletarMateriaPrima(id: string) {
@@ -211,4 +214,5 @@ export async function deletarMateriaPrima(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
   revalidateTag('materias-primas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }

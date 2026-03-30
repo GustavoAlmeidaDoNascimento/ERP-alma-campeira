@@ -322,8 +322,10 @@ function TabPane({
       return <CargosClient cargos={data.cargos} perm={data.perm} />
     case 'configuracoes':
       return <ConfiguracoesClient categorias={data.categorias} />
-    case 'metricas':
-      return <MetricasClient initialTab={data.tab} />
+    case 'metricas-vendas':
+      return <MetricasClient initialTab="vendas" vendasData={data.data} />
+    case 'metricas-estoque':
+      return <MetricasClient initialTab="estoque" estoqueData={data.data} />
     default:
       return null
   }

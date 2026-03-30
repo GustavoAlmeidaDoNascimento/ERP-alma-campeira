@@ -122,6 +122,7 @@ export async function criarVenda(input: VendaInput) {
 
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
 }
 
 export async function atualizarVenda(id: string, input: VendaInput) {
@@ -167,6 +168,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
 
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
 }
 
 export async function avancarStatus(id: string, novoStatus: 'em_producao') {
@@ -181,6 +183,7 @@ export async function avancarStatus(id: string, novoStatus: 'em_producao') {
   if (error) throw new Error(error.message)
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
 }
 
 export async function marcarEntregue(id: string) {
@@ -270,7 +273,9 @@ export async function marcarEntregue(id: string) {
   revalidatePath('/facas')
   revalidatePath('/ordens-compra')
   revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
   revalidateTag('facas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
   revalidateTag('ordens-compra-historico', 'max')
   revalidateTag('ordens-compra-fila', 'max')
 }
@@ -293,4 +298,5 @@ export async function deletarVenda(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
 }

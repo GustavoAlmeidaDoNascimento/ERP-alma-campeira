@@ -94,6 +94,7 @@ export async function atualizarFaca(id: string, input: FacaInput) {
   if (error) throw new Error(error.message)
   revalidatePath('/facas')
   revalidateTag('facas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }
 
 export type DeletarFacaModo = 'desmontar' | 'apagar_materias_primas'

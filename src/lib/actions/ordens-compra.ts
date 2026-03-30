@@ -447,6 +447,7 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
   revalidateTag('ordens-compra-historico', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }
 
 export async function deletarOC(id: string) {
