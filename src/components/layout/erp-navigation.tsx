@@ -97,6 +97,12 @@ const iconMetricas = (
 
 export const sections: NavSection[] = [
   {
+    label: 'Métricas',
+    items: [
+      { href: '/metricas', label: 'Métricas', available: true, icon: iconMetricas },
+    ],
+  },
+  {
     label: 'Estoque',
     items: [
       { href: '/materias-primas', label: 'Matérias-Primas', available: true, icon: iconMP },
@@ -122,12 +128,6 @@ export const sections: NavSection[] = [
     items: [
       { href: '/usuarios', label: 'Usuários', available: true, icon: iconUsuarios },
       { href: '/cargos', label: 'Cargos', available: true, icon: iconCargos },
-    ],
-  },
-  {
-    label: 'Métricas',
-    items: [
-      { href: '/metricas', label: 'Métricas', available: true, icon: iconMetricas },
     ],
   },
 ]
