@@ -19,6 +19,7 @@ import { ClientesClient } from '@/components/clientes/clientes-client'
 import { UsuariosClient } from '@/components/usuarios/usuarios-client'
 import { CargosClient } from '@/components/cargos/cargos-client'
 import { ConfiguracoesClient } from '@/components/configuracoes/configuracoes-client'
+import { MetricasClient } from '@/components/metricas/metricas-client'
 
 type OpenTab = {
   href: string
@@ -321,6 +322,8 @@ function TabPane({
       return <CargosClient cargos={data.cargos} perm={data.perm} />
     case 'configuracoes':
       return <ConfiguracoesClient categorias={data.categorias} />
+    case 'metricas':
+      return <MetricasClient />
     default:
       return null
   }
