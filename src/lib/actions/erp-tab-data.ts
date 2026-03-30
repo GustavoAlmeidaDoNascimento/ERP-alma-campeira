@@ -74,6 +74,9 @@ export type ErpTabData =
       kind: 'configuracoes'
       categorias: CategoriaFacaDB[]
     }
+  | {
+      kind: 'metricas'
+    }
 
 function assertAllowed(perm: Perm | undefined, label: string): void {
   if (!perm || !perm.ver) throw new Error(`Acesso negado: ${label}.`)
@@ -192,6 +195,10 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   if (path === '/configuracoes') {
     const categorias = await getCategoriasFaca()
     return { kind: 'configuracoes', categorias }
+  }
+
+  if (path === '/metricas') {
+    return { kind: 'metricas' }
   }
 
   throw new Error(`Rota de aba não suportada: ${path}`)

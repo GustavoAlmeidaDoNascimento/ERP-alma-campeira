@@ -86,6 +86,15 @@ const iconConfiguracoes = (
   </svg>
 )
 
+const iconMetricas = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-[18px]">
+    <path d="M3 3v18h18" />
+    <rect x="7" y="12" width="3" height="6" rx="0.8" />
+    <rect x="12" y="9" width="3" height="9" rx="0.8" />
+    <rect x="17" y="6" width="3" height="12" rx="0.8" />
+  </svg>
+)
+
 export const sections: NavSection[] = [
   {
     label: 'Estoque',
@@ -113,6 +122,12 @@ export const sections: NavSection[] = [
     items: [
       { href: '/usuarios', label: 'Usuários', available: true, icon: iconUsuarios },
       { href: '/cargos', label: 'Cargos', available: true, icon: iconCargos },
+    ],
+  },
+  {
+    label: 'Métricas',
+    items: [
+      { href: '/metricas', label: 'Métricas', available: true, icon: iconMetricas },
     ],
   },
 ]
