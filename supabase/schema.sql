@@ -32,8 +32,11 @@ CREATE TABLE IF NOT EXISTS facas (
   nome           text NOT NULL,
   categoria      text NOT NULL,
   foto_url       text,
+  taxa_producao  numeric(10,2) NOT NULL DEFAULT 0,
+  taxa_venda     numeric(10,2) NOT NULL DEFAULT 0,
   preco_venda    numeric(10,2) NOT NULL DEFAULT 0,
   estoque_atual  integer NOT NULL DEFAULT 0,
+  estoque_minimo integer NOT NULL DEFAULT 0,
   created_at     timestamptz DEFAULT now()
 );
 

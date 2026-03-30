@@ -34,6 +34,9 @@ export type Faca = {
   nome: string
   categoria: string
   foto_url: string | null
+  taxa_producao: number
+  taxa_venda: number
+  preco_custo?: number
   preco_venda: number
   estoque_atual: number
   estoque_minimo: number

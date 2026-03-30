@@ -16,7 +16,9 @@ const getFacasCached = unstable_cache(
       .order('codigo')
       .limit(limit)
     if (error) throw new Error(error.message)
-    return data as Faca[]
+    const facas = data as Faca[]
+    const custoByFaca = await calcularPrecoCustoPorFaca(supabase, facas)
+    return facas.map((f) => ({ ...f, preco_custo: custoByFaca.get(f.id) ?? 0 }))
   },
   ['facas-list'],
   { revalidate: 60, tags: ['facas-list'] }
@@ -44,6 +46,8 @@ export async function gerarCodigoFaca(): Promise<string> {
 type FacaInput = {
   nome: string
   categoria: string
+  taxa_producao: number
+  taxa_venda: number
   preco_venda: number
   estoque_atual: number
   estoque_minimo: number
@@ -58,6 +62,8 @@ export async function criarFaca(input: FacaInput) {
     codigo,
     nome: input.nome.trim(),
     categoria: input.categoria,
+    taxa_producao: input.taxa_producao,
+    taxa_venda: input.taxa_venda,
     preco_venda: input.preco_venda,
     estoque_atual: input.estoque_atual,
     estoque_minimo: input.estoque_minimo,
@@ -77,6 +83,8 @@ export async function atualizarFaca(id: string, input: FacaInput) {
     .update({
       nome: input.nome.trim(),
       categoria: input.categoria,
+      taxa_producao: input.taxa_producao,
+      taxa_venda: input.taxa_venda,
       preco_venda: input.preco_venda,
       estoque_atual: input.estoque_atual,
       estoque_minimo: input.estoque_minimo,
@@ -110,6 +118,8 @@ export async function salvarFacaComFoto(formData: FormData) {
   const id = formData.get('id')
   const nome = String(formData.get('nome') ?? '').trim()
   const categoria = String(formData.get('categoria') ?? '').trim()
+  const taxa_producao = Number(formData.get('taxa_producao'))
+  const taxa_venda = Number(formData.get('taxa_venda'))
   const preco_venda = Number(formData.get('preco_venda'))
   const estoque_atual = Number(formData.get('estoque_atual'))
   const estoque_minimo = Number(formData.get('estoque_minimo'))
@@ -118,6 +128,8 @@ export async function salvarFacaComFoto(formData: FormData) {
 
   if (!nome) throw new Error('Nome é obrigatório.')
   if (!categoria) throw new Error('Categoria é obrigatória.')
+  if (!Number.isFinite(taxa_producao) || taxa_producao < 0) throw new Error('Taxa de produção inválida.')
+  if (!Number.isFinite(taxa_venda) || taxa_venda < 0) throw new Error('Taxa de venda inválida.')
   if (!Number.isFinite(preco_venda)) throw new Error('Preço de venda inválido.')
   if (!Number.isFinite(estoque_atual)) throw new Error('Estoque atual inválido.')
   if (!Number.isFinite(estoque_minimo)) throw new Error('Estoque mínimo inválido.')
@@ -146,6 +158,8 @@ export async function salvarFacaComFoto(formData: FormData) {
     const { error } = await supabase.from('facas').update({
       nome,
       categoria,
+      taxa_producao,
+      taxa_venda,
       preco_venda,
       estoque_atual,
       estoque_minimo,
@@ -159,6 +173,8 @@ export async function salvarFacaComFoto(formData: FormData) {
         codigo,
         nome,
         categoria,
+        taxa_producao,
+        taxa_venda,
         preco_venda,
         estoque_atual,
         estoque_minimo,
@@ -410,6 +426,39 @@ const getFacaDetalheCached = unstable_cache(
 export async function getFacaDetalhe(facaId: string): Promise<FacaDetalheData> {
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getFacaDetalheCached(userId, facaId))
+}
+
+async function calcularPrecoCustoPorFaca(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  facas: Faca[]
+): Promise<Map<string, number>> {
+  const facaIds = facas.map((f) => f.id)
+  if (facaIds.length === 0) return new Map()
+
+  const { data: boms, error } = await supabase
+    .from('faca_materias_primas')
+    .select('faca_id, quantidade, materia_prima:materias_primas(preco_custo)')
+    .in('faca_id', facaIds)
+
+  if (error) throw new Error(error.message)
+
+  const baseByFaca = new Map<string, number>()
+  for (const bom of boms ?? []) {
+    const mp = (Array.isArray(bom.materia_prima) ? bom.materia_prima[0] : bom.materia_prima) as { preco_custo: number } | null
+    const custoMp = Number(mp?.preco_custo ?? 0)
+    const qtd = Number(bom.quantidade ?? 0)
+    const atual = baseByFaca.get(bom.faca_id) ?? 0
+    baseByFaca.set(bom.faca_id, atual + (custoMp * qtd))
+  }
+
+  const custoByFaca = new Map<string, number>()
+  for (const faca of facas) {
+    const base = baseByFaca.get(faca.id) ?? 0
+    const taxaProducao = Number(faca.taxa_producao ?? 0)
+    const custo = base * (1 + (taxaProducao / 100))
+    custoByFaca.set(faca.id, Math.round(custo * 100) / 100)
+  }
+  return custoByFaca
 }
 
 // ============================================================

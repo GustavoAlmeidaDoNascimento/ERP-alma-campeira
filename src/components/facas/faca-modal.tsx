@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,8 @@ type Props = {
 type Form = {
   nome: string
   categoria: string
-  preco_venda: string
+  taxa_producao: string
+  taxa_venda: string
   estoque_atual: string
   estoque_minimo: string
 }
@@ -33,7 +34,14 @@ type BomItem = {
 
 export function FacaModal({ open, onClose, editando, categorias, materiasPrimas, onSaved }: Props) {
   const defaultCategoria = categorias[0]?.nome ?? ''
-  const [form, setForm] = useState<Form>({ nome: '', categoria: defaultCategoria, preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
+  const [form, setForm] = useState<Form>({
+    nome: '',
+    categoria: defaultCategoria,
+    taxa_producao: '0',
+    taxa_venda: '0',
+    estoque_atual: '0',
+    estoque_minimo: '0',
+  })
   const [bomItens, setBomItens] = useState<BomItem[]>([])
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
@@ -71,13 +79,21 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       setForm({
         nome: editando.nome,
         categoria: editando.categoria,
-        preco_venda: String(editando.preco_venda),
+        taxa_producao: String(editando.taxa_producao ?? 0),
+        taxa_venda: String(editando.taxa_venda ?? 0),
         estoque_atual: String(editando.estoque_atual),
         estoque_minimo: String(editando.estoque_minimo),
       })
       carregarBOM(editando.id)
     } else {
-      setForm({ nome: '', categoria: categorias[0]?.nome ?? '', preco_venda: '', estoque_atual: '0', estoque_minimo: '0' })
+      setForm({
+        nome: '',
+        categoria: categorias[0]?.nome ?? '',
+        taxa_producao: '0',
+        taxa_venda: '0',
+        estoque_atual: '0',
+        estoque_minimo: '0',
+      })
       setBomItens([])
     }
     setErro('')
@@ -133,12 +149,43 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
     return set
   }
 
+  const materiasById = useMemo(() => {
+    const map = new Map<string, MateriaPrima>()
+    for (const mp of materiasPrimas) map.set(mp.id, mp)
+    return map
+  }, [materiasPrimas])
+
+  const custos = useMemo(() => {
+    const baseMaterias = bomItens.reduce((acc, item) => {
+      const mp = materiasById.get(item.materia_prima_id)
+      const qtd = Number(item.quantidade) || 0
+      const preco = Number(mp?.preco_custo ?? 0)
+      return acc + (preco * qtd)
+    }, 0)
+    const taxaProducao = Math.max(0, Number(form.taxa_producao) || 0)
+    const taxaVenda = Math.max(0, Number(form.taxa_venda) || 0)
+    const precoCusto = baseMaterias * (1 + (taxaProducao / 100))
+    const precoVenda = precoCusto * (1 + (taxaVenda / 100))
+    return {
+      baseMaterias,
+      precoCusto,
+      precoVenda,
+    }
+  }, [bomItens, form.taxa_producao, form.taxa_venda, materiasById])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
 
     if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
-    if (!form.preco_venda || isNaN(Number(form.preco_venda))) { setErro('Preço de venda inválido.'); return }
+    if (isNaN(Number(form.taxa_producao)) || Number(form.taxa_producao) < 0) {
+      setErro('Taxa de produção inválida.')
+      return
+    }
+    if (isNaN(Number(form.taxa_venda)) || Number(form.taxa_venda) < 0) {
+      setErro('Taxa de venda inválida.')
+      return
+    }
 
     // Validar BOM
     if (bomItens.length === 0) { setErro('Adicione pelo menos 1 matéria-prima.'); return }
@@ -155,7 +202,9 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       if (editando?.id) fd.append('id', editando.id)
       fd.append('nome', form.nome)
       fd.append('categoria', form.categoria)
-      fd.append('preco_venda', String(parseFloat(form.preco_venda)))
+      fd.append('taxa_producao', String(parseFloat(form.taxa_producao) || 0))
+      fd.append('taxa_venda', String(parseFloat(form.taxa_venda) || 0))
+      fd.append('preco_venda', String(custos.precoVenda))
       fd.append('estoque_atual', String(parseInt(form.estoque_atual) || 0))
       fd.append('estoque_minimo', String(parseInt(form.estoque_minimo) || 0))
       if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
@@ -232,16 +281,26 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           </select>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Input
-            id="preco_venda"
-            label="Preço de Venda (R$) *"
+            id="taxa_producao"
+            label="Taxa de Produção (%)"
             type="number"
             min="0"
             step="0.01"
-            placeholder="0,00"
-            value={form.preco_venda}
-            onChange={(e) => set('preco_venda', e.target.value)}
+            placeholder="0"
+            value={form.taxa_producao}
+            onChange={(e) => set('taxa_producao', e.target.value)}
+          />
+          <Input
+            id="taxa_venda"
+            label="Taxa de Venda (%)"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0"
+            value={form.taxa_venda}
+            onChange={(e) => set('taxa_venda', e.target.value)}
           />
           <Input
             id="estoque_atual"
@@ -259,6 +318,30 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
             value={form.estoque_minimo}
             onChange={(e) => set('estoque_minimo', e.target.value)}
           />
+        </div>
+
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl p-3"
+          style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Base matérias-primas</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+              {custos.baseMaterias.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Preço de custo</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+              {custos.precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Preço de venda calculado</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+              {custos.precoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          </div>
         </div>
 
         {/* ========== SEÇÃO BOM (Matérias-Primas) ========== */}

@@ -43,6 +43,9 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
       return acc + preco * item.quantidade
     }, 0)
   }, [bom])
+  const taxaProducao = Number(faca.taxa_producao ?? 0)
+  const taxaVenda = Number(faca.taxa_venda ?? 0)
+  const precoCusto = custoTotal * (1 + (taxaProducao / 100))
 
   const mpFotoThumbById = useMemo(() => {
     const map = new Map<string, string>()
@@ -181,9 +184,17 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
               </div>
               {custoTotal > 0 && (
                 <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                  Custo MP: {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  Custo base MP: {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               )}
+              {precoCusto > 0 && (
+                <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                  Preço de custo: {precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              )}
+              <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                Taxas: produção {taxaProducao.toFixed(2)}% | venda {taxaVenda.toFixed(2)}%
+                </span>
             </div>
           </div>
 
@@ -217,7 +228,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
           {bom.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma matéria-prima cadastrada para esta faca.</p>
           ) : (
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+            <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
@@ -296,7 +307,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
           {vendas.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma venda registrada para esta faca.</p>
           ) : (
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+            <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
@@ -354,7 +365,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
           {movimentacoes.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentação registrada.</p>
           ) : (
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+            <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
@@ -435,7 +446,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
 
           {/* Preview de consumo */}
           {qtdProduzir > 0 && bom.length > 0 && (
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+            <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>

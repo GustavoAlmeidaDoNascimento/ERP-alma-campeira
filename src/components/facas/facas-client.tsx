@@ -159,7 +159,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
 
       {/* Tabela */}
       <div className="px-8 pb-8">
-        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+        <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
@@ -167,6 +167,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Venda</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
                 <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
@@ -176,7 +177,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
             <tbody>
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={9} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca || filtroCategoria ? 'Nenhum resultado para esse filtro.' : 'Nenhuma faca cadastrada ainda.'}
                   </td>
                 </tr>
@@ -263,6 +264,9 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold" style={catStyle}>
                         {faca.categoria}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
+                      {(faca.preco_custo ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
