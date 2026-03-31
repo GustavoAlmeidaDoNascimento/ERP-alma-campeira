@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { unstable_cache } from 'next/cache'
+import { unstable_cache, cacheTag } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
 import type { PermMap } from '@/lib/permissoes'
@@ -69,7 +69,7 @@ const getPermissoesEfetivasCached = unstable_cache(
     return permissoesFromArray(cargo.permissoes)
   },
   ['user-permissions'],
-  { revalidate: 30, tags: ['user-permissions', `user-permissions-${'' /* userId não disponível aqui — ver nota */}`] }
+  { revalidate: 30, tags: ['user-permissions'] }
 )
 
 /**
