@@ -1,9 +1,33 @@
 'use server'
 
-import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { requireAuthenticatedUserId } from '@/lib/auth'
 import type { StatusPedido, StatusOC } from '@/types'
+import type { PeriodoId } from '@/lib/metricas-periodos'
+
+function calcularDatasPerido(periodo: PeriodoId): { desde: string | null; ate: string | null } {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth()
+  const d = now.getDate()
+
+  switch (periodo) {
+    case 'este_mes':
+      return { desde: new Date(y, m, 1).toISOString(), ate: null }
+    case 'mes_passado':
+      return { desde: new Date(y, m - 1, 1).toISOString(), ate: new Date(y, m, 1).toISOString() }
+    case '30d':
+      return { desde: new Date(y, m, d - 30).toISOString(), ate: null }
+    case '60d':
+      return { desde: new Date(y, m, d - 60).toISOString(), ate: null }
+    case '90d':
+      return { desde: new Date(y, m, d - 90).toISOString(), ate: null }
+    case '1ano':
+      return { desde: new Date(y - 1, m, d).toISOString(), ate: null }
+    case 'tudo':
+      return { desde: null, ate: null }
+  }
+}
 
 // ── Vendas Types ──────────────────────────────────────────────────────────────
 
@@ -62,6 +86,7 @@ export type MetricasVendasData = {
   rankingProdutos: ProdutoRanking[]
   pipeline: StatusPipeline[]
   vendasPorTipo: VendasPorTipoCliente[]
+  periodo: PeriodoId
 }
 
 // ── Estoque Types ─────────────────────────────────────────────────────────────
@@ -142,6 +167,7 @@ export type MetricasEstoqueData = {
   consumoBom: ConsumoBom[]
   resumoOC: ResumoOC[]
   alertas: AlertaEstoque[]
+  periodo: PeriodoId
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -162,14 +188,22 @@ function mesLabel(yyyymm: string): string {
 
 // ── Vendas Queries ────────────────────────────────────────────────────────────
 
-const getMetricasVendasCached = unstable_cache(
-  async (_userId: string): Promise<MetricasVendasData> => {
+export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<MetricasVendasData> {
+  await requireAuthenticatedUserId()
+
+  return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
+    const { desde, ate } = calcularDatasPerido(periodo)
+
+    let pedidosQuery = supabase
+      .from('pedidos')
+      .select('id, codigo, cliente_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo)')
+
+    if (desde) pedidosQuery = pedidosQuery.gte('data_pedido', desde.split('T')[0])
+    if (ate) pedidosQuery = pedidosQuery.lt('data_pedido', ate.split('T')[0])
 
     const [pedidosRes, itensRes] = await Promise.all([
-      supabase
-        .from('pedidos')
-        .select('id, codigo, cliente_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo)'),
+      pedidosQuery,
       supabase
         .from('pedido_itens')
         .select('id, pedido_id, faca_id, quantidade, preco_unitario, subtotal, faca:facas(id, codigo, nome)'),
@@ -179,7 +213,11 @@ const getMetricasVendasCached = unstable_cache(
     if (itensRes.error) throw new Error(itensRes.error.message)
 
     const pedidos = pedidosRes.data ?? []
-    const itens = itensRes.data ?? []
+    const allItens = itensRes.data ?? []
+
+    // Filter itens to only those belonging to fetched pedidos
+    const pedidoIds = new Set(pedidos.map((p) => p.id))
+    const itens = allItens.filter((i) => pedidoIds.has(i.pedido_id))
 
     // ── KPIs ──
     const faturamentoTotal = pedidos.reduce((s, p) => s + Number(p.valor_total ?? 0), 0)
@@ -190,14 +228,11 @@ const getMetricasVendasCached = unstable_cache(
 
     const kpi: KpiVendas = { faturamentoTotal, totalPedidos, ticketMedio, taxaEntrega, pedidosEntregues }
 
-    // ── Vendas por Mês (últimos 12 meses) ──
-    const now = new Date()
-    const cutoff = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+    // ── Vendas por Mês ──
     const mesMap = new Map<string, { totalValor: number; totalPedidos: number; totalItens: number }>()
 
     for (const p of pedidos) {
       const d = new Date(p.data_pedido)
-      if (d < cutoff) continue
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const entry = mesMap.get(key) ?? { totalValor: 0, totalPedidos: 0, totalItens: 0 }
       entry.totalValor += Number(p.valor_total ?? 0)
@@ -306,33 +341,42 @@ const getMetricasVendasCached = unstable_cache(
       }))
       .sort((a, b) => b.totalValor - a.totalValor)
 
-    return { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo }
-  },
-  ['metricas-vendas'],
-  { revalidate: 60, tags: ['metricas-vendas'] },
-)
-
-export async function getMetricasVendas(): Promise<MetricasVendasData> {
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getMetricasVendasCached(userId))
+    return { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, periodo }
+  })
 }
 
 // ── Estoque Queries ───────────────────────────────────────────────────────────
 
-const getMetricasEstoqueCached = unstable_cache(
-  async (_userId: string): Promise<MetricasEstoqueData> => {
+export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<MetricasEstoqueData> {
+  await requireAuthenticatedUserId()
+
+  return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
+    const { desde, ate } = calcularDatasPerido(periodo)
+
+    // Movimentações filtradas por período
+    let movQuery = supabase
+      .from('movimentacoes_estoque')
+      .select('id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)')
+      .order('created_at', { ascending: false })
+
+    if (desde) movQuery = movQuery.gte('created_at', desde)
+    if (ate) movQuery = movQuery.lt('created_at', ate)
+
+    // OCs filtradas por período
+    let ocQuery = supabase
+      .from('ordens_compra')
+      .select('id, status, created_at, itens:ordem_compra_itens(quantidade, preco_unitario)')
+
+    if (desde) ocQuery = ocQuery.gte('created_at', desde)
+    if (ate) ocQuery = ocQuery.lt('created_at', ate)
 
     const [facasRes, mpRes, movRes, bomRes, ocRes] = await Promise.all([
       supabase.from('facas').select('id, codigo, nome, estoque_atual, estoque_minimo, taxa_venda, preco_venda'),
       supabase.from('materias_primas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_custo, fornecedor:fornecedores(nome)'),
-      supabase
-        .from('movimentacoes_estoque')
-        .select('id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)')
-        .order('created_at', { ascending: false })
-        .limit(30),
+      movQuery.limit(50),
       supabase.from('faca_materias_primas').select('faca_id, materia_prima_id, quantidade, faca:facas(id, codigo, nome), mp:materias_primas(id, codigo, nome, preco_custo)'),
-      supabase.from('ordens_compra').select('id, status, itens:ordem_compra_itens(quantidade, preco_unitario)'),
+      ocQuery,
     ])
 
     if (facasRes.error) throw new Error(facasRes.error.message)
@@ -347,7 +391,7 @@ const getMetricasEstoqueCached = unstable_cache(
     const boms = bomRes.data ?? []
     const ocs = ocRes.data ?? []
 
-    // ── KPIs ──
+    // ── KPIs (estoque atual é sempre snapshot, não depende de período) ──
     const facasCriticas = facas.filter((f) => f.estoque_atual === 0).length
     const facasAtencao = facas.filter((f) => f.estoque_atual > 0 && f.estoque_atual <= f.estoque_minimo).length
     const mpCriticas = mps.filter((m) => m.estoque_atual === 0).length
@@ -394,7 +438,7 @@ const getMetricasEstoqueCached = unstable_cache(
       })
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
 
-    // ── Movimentações Recentes ──
+    // ── Movimentações (já filtradas pelo período na query) ──
     const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m) => {
       const mp = Array.isArray(m.materia_prima) ? m.materia_prima[0] : m.materia_prima
       const faca = Array.isArray(m.faca) ? m.faca[0] : m.faca
@@ -442,7 +486,7 @@ const getMetricasEstoqueCached = unstable_cache(
 
     const consumoBom = Array.from(bomMap.values()).sort((a, b) => a.facaNome.localeCompare(b.facaNome))
 
-    // ── Resumo OC ──
+    // ── Resumo OC (já filtradas pelo período na query) ──
     const ocMap = new Map<StatusOC, { quantidade: number; valorTotal: number }>()
     for (const oc of ocs) {
       const st = oc.status as StatusOC
@@ -478,13 +522,6 @@ const getMetricasEstoqueCached = unstable_cache(
       }
     }
 
-    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, consumoBom, resumoOC, alertas }
-  },
-  ['metricas-estoque'],
-  { revalidate: 60, tags: ['metricas-estoque'] },
-)
-
-export async function getMetricasEstoque(): Promise<MetricasEstoqueData> {
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getMetricasEstoqueCached(userId))
+    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, consumoBom, resumoOC, alertas, periodo }
+  })
 }

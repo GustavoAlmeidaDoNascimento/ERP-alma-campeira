@@ -1,9 +1,16 @@
 'use client'
 
+import { useState, useTransition } from 'react'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { VendasMetricsView } from './vendas-metrics'
 import { EstoqueMetricsView } from './estoque-metrics'
-import type { MetricasVendasData, MetricasEstoqueData } from '@/lib/actions/metricas'
+import {
+  getMetricasVendas,
+  getMetricasEstoque,
+  type MetricasVendasData,
+  type MetricasEstoqueData,
+} from '@/lib/actions/metricas'
+import { PERIODOS, type PeriodoId } from '@/lib/metricas-periodos'
 
 type MetricaTabId = 'vendas' | 'estoque'
 
@@ -20,6 +27,24 @@ type MetricasClientProps = {
 
 export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData }: MetricasClientProps) {
   const { openTab } = useErpTabs()
+  const [periodo, setPeriodo] = useState<PeriodoId>(vendasData?.periodo ?? estoqueData?.periodo ?? 'tudo')
+  const [vData, setVData] = useState(vendasData)
+  const [eData, setEData] = useState(estoqueData)
+  const [isPending, startTransition] = useTransition()
+
+  function handlePeriodoChange(novoPeriodo: PeriodoId) {
+    if (novoPeriodo === periodo) return
+    setPeriodo(novoPeriodo)
+    startTransition(async () => {
+      if (initialTab === 'vendas') {
+        const data = await getMetricasVendas(novoPeriodo)
+        setVData(data)
+      } else {
+        const data = await getMetricasEstoque(novoPeriodo)
+        setEData(data)
+      }
+    })
+  }
 
   return (
     <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 space-y-5">
@@ -32,11 +57,12 @@ export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData 
         </p>
       </header>
 
-      {/* Tab Switcher */}
+      {/* Controls: Tabs + Período */}
       <div
-        className="rounded-xl border p-2 sm:p-3"
+        className="rounded-xl border p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
         style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
       >
+        {/* Tab Switcher */}
         <div className="flex flex-wrap gap-2">
           {METRICA_TABS.map((tab) => {
             const isActive = tab.id === initialTab
@@ -45,7 +71,7 @@ export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData 
                 key={tab.id}
                 type="button"
                 onClick={() => { if (!isActive) openTab(tab.href) }}
-                className="w-full sm:w-auto px-3 py-2 rounded-lg text-sm transition-colors"
+                className="px-3 py-2 rounded-lg text-sm transition-colors"
                 style={{
                   color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)',
                   background: isActive
@@ -59,11 +85,47 @@ export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData 
             )
           })}
         </div>
+
+        {/* Período Selector */}
+        <div className="flex flex-wrap gap-1.5">
+          {PERIODOS.map((p) => {
+            const isActive = p.id === periodo
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handlePeriodoChange(p.id)}
+                disabled={isPending}
+                className="px-2.5 py-1.5 rounded-md text-xs transition-colors disabled:opacity-60"
+                style={{
+                  color: isActive ? 'var(--ac-card)' : 'var(--ac-muted)',
+                  background: isActive ? 'var(--ac-accent)' : 'transparent',
+                  fontWeight: isActive ? 600 : 400,
+                }}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
+      {/* Loading indicator */}
+      {isPending && (
+        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--ac-muted)' }}>
+          <span
+            className="inline-block w-4 h-4 border-2 rounded-full animate-spin"
+            style={{ borderColor: 'var(--ac-border)', borderTopColor: 'var(--ac-accent)' }}
+          />
+          Atualizando métricas...
+        </div>
+      )}
+
       {/* Content */}
-      {initialTab === 'vendas' && vendasData && <VendasMetricsView data={vendasData} />}
-      {initialTab === 'estoque' && estoqueData && <EstoqueMetricsView data={estoqueData} />}
+      <div style={{ opacity: isPending ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+        {initialTab === 'vendas' && vData && <VendasMetricsView data={vData} />}
+        {initialTab === 'estoque' && eData && <EstoqueMetricsView data={eData} />}
+      </div>
     </div>
   )
 }
