@@ -22,6 +22,9 @@ export async function requireAuthenticatedUserId(): Promise<string> {
 
 const getPermissoesEfetivasCached = unstable_cache(
   async (userId: string): Promise<PermMap> => {
+    // Tag por usuário — permite invalidar só o cache deste usuário específico
+    cacheTag(`user-permissions-${userId}`)
+
     const supabase = await createClient()
 
     // Permissões customizadas têm prioridade
