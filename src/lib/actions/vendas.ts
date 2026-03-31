@@ -91,6 +91,9 @@ export async function criarVenda(input: VendaInput) {
   const supabase = await createClient()
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
+  if (input.status === 'entregue') {
+    throw new Error('Crie a venda como "Em Espera" ou "Em Produção". Para concluir, use "Marcar como entregue".')
+  }
 
   const codigo = await gerarCodigoPedido()
   const valor_total = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
@@ -130,6 +133,9 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   const supabase = await createClient()
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
+  if (input.status === 'entregue') {
+    throw new Error('Para entregar a venda, use a ação "Marcar como entregue" na tela de detalhes.')
+  }
 
   const { data: pedido } = await supabase
     .from('pedidos')

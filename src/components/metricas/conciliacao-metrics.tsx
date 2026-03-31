@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
+import { corrigirDivergenciaVenda, getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
 
 type Props = {
   data: ResultadoConciliacao
@@ -62,11 +62,30 @@ function SectionHeader({ title, ok, count }: { title: string; ok: boolean; count
 export function ConciliacaoMetricsView({ data: initialData }: Props) {
   const [data, setData] = useState(initialData)
   const [isPending, startTransition] = useTransition()
+  const [corrigindoKey, setCorrigindoKey] = useState<string | null>(null)
+  const [erroCorrecao, setErroCorrecao] = useState('')
 
   function refresh() {
     startTransition(async () => {
       const fresh = await getConciliacao()
       setData(fresh)
+    })
+  }
+
+  function corrigirVenda(venda: { pedidoId: string; facaId: string }) {
+    const key = `${venda.pedidoId}-${venda.facaId}`
+    setErroCorrecao('')
+    setCorrigindoKey(key)
+    startTransition(async () => {
+      try {
+        await corrigirDivergenciaVenda(venda.pedidoId, venda.facaId)
+        const fresh = await getConciliacao()
+        setData(fresh)
+      } catch (e) {
+        setErroCorrecao(e instanceof Error ? e.message : 'Erro ao corrigir divergência.')
+      } finally {
+        setCorrigindoKey(null)
+      }
     })
   }
 
@@ -329,7 +348,7 @@ export function ConciliacaoMetricsView({ data: initialData }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
-                  {['Pedido', 'Faca', 'Qtd. Pedido', 'Qtd. Movimento', 'Diferença', 'Detalhe'].map((h) => (
+                  {['Pedido', 'Faca', 'Qtd. Pedido', 'Qtd. Movimento', 'Diferença', 'Detalhe', 'Ação'].map((h) => (
                     <th key={h} className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                       {h}
                     </th>
@@ -352,10 +371,30 @@ export function ConciliacaoMetricsView({ data: initialData }: Props) {
                       {v.divergencia > 0 ? '+' : ''}{fmt(v.divergencia)}
                     </td>
                     <td className="px-4 py-3 text-xs max-w-xs" style={{ color: '#b91c1c' }}>{v.detalhe}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => corrigirVenda(v)}
+                        disabled={isPending || corrigindoKey === `${v.pedidoId}-${v.facaId}`}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-60"
+                        style={{
+                          color: '#065f46',
+                          background: '#d1fae5',
+                          border: '1px solid #6ee7b7',
+                        }}
+                      >
+                        {corrigindoKey === `${v.pedidoId}-${v.facaId}` ? 'Corrigindo...' : 'Corrigir'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {erroCorrecao && (
+          <div className="px-4 py-3 text-sm" style={{ color: '#b91c1c', borderTop: '1px solid var(--ac-border)', background: '#fff5f5' }}>
+            {erroCorrecao}
           </div>
         )}
       </div>
@@ -367,7 +406,7 @@ export function ConciliacaoMetricsView({ data: initialData }: Props) {
       >
         <p className="font-semibold" style={{ color: 'var(--ac-text)' }}>Como interpretar</p>
         <p><strong>Estoque de Facas:</strong> verifica se estoque atual bate com produção registrada menos vendas. Diferença negativa indica unidades que saíram sem registro — possível extravio.</p>
-        <p><strong>Consumo de MP:</strong> verifica se cada faca produzida consumiu exatamente o que o BOM especifica. Diferença negativa indica MP que sumiu antes ou depois da produção.</p>
+        <p><strong>Consumo de MP:</strong> verifica se cada faca produzida consumiu exatamente o que a ficha tecnica especifica. Diferença negativa indica MP que sumiu antes ou depois da produção.</p>
         <p><strong>Vendas:</strong> verifica se todo pedido entregue gerou movimentação de saída no estoque. Diferença indica entrega sem baixa no sistema.</p>
       </div>
 

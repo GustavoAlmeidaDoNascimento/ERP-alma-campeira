@@ -197,7 +197,6 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
             >
               <option value="em_espera">{STATUS_PEDIDO.em_espera.label}</option>
               <option value="em_producao">{STATUS_PEDIDO.em_producao.label}</option>
-              <option value="entregue">{STATUS_PEDIDO.entregue.label}</option>
             </select>
           </div>
         </div>

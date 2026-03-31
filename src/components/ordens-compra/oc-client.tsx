@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import {
+  getFilaReposicao,
   getOrdensCompra,
   gerarOC,
   atualizarUnidadesAdicionaisItem,
@@ -594,6 +595,7 @@ function OcDetalheModal({
 export function OcClient({ fila, ordens, perm }: Props) {
   const { refreshActiveTab } = useErpTabs()
   const [aba, setAba] = useState<'fila' | 'historico'>('fila')
+  const [filaState, setFilaState] = useState<FilaFornecedor[]>(fila)
   const [ordensState, setOrdensState] = useState<OrdemCompra[]>(ordens)
   const [loadingHistorico, setLoadingHistorico] = useState(false)
   const [gerandoFornecedor, setGerandoFornecedor] = useState<string | null>(null)
@@ -635,8 +637,12 @@ export function OcClient({ fila, ordens, perm }: Props) {
     refreshActiveTab()
     setLoadingHistorico(true)
     try {
-      const data = await getOrdensCompra()
-      setOrdensState(data)
+      const [filaAtualizada, ordensAtualizadas] = await Promise.all([
+        getFilaReposicao(),
+        getOrdensCompra(),
+      ])
+      setFilaState(filaAtualizada)
+      setOrdensState(ordensAtualizadas)
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao atualizar histórico.')
     } finally {
@@ -666,6 +672,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
     try {
       const codigo = await gerarOC(fornecedor_id, adicionaisPorMateriaPrima)
       flash(`OC ${codigo} gerada com sucesso.`)
+      setFilaState((prev) => prev.filter((grupo) => (grupo.fornecedor_id ?? '__sem_fornecedor__') !== chave))
       setAdicionaisFila({})
       refresh()
       setAba('historico')
@@ -683,7 +690,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
     setGerandoTodas(true); setErro('')
     try {
       let criadas = 0
-      for (const grupo of fila) {
+      for (const grupo of filaState) {
         const adicionaisPorMateriaPrima: Record<string, number> = {}
         for (const it of grupo.itens) {
           adicionaisPorMateriaPrima[it.materia_prima_id] = parseNumero(
@@ -695,6 +702,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       }
 
       flash(`${criadas} ${criadas === 1 ? 'OC gerada' : 'OCs geradas'} com sucesso.`)
+      setFilaState([])
       setAdicionaisFila({})
       refresh()
       setAba('historico')
@@ -742,12 +750,12 @@ export function OcClient({ fila, ordens, perm }: Props) {
         <div>
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Ordens de Compra</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-            {fila.length > 0
-              ? `${fila.length} ${fila.length === 1 ? 'fornecedor' : 'fornecedores'} com itens pendentes`
+            {filaState.length > 0
+              ? `${filaState.length} ${filaState.length === 1 ? 'fornecedor' : 'fornecedores'} com itens pendentes`
               : 'Fila de reposição vazia'}
           </p>
         </div>
-        {perm.criar && fila.length > 0 && (
+        {perm.criar && filaState.length > 0 && (
           <Button
             variant="primary"
             loading={gerandoTodas}
@@ -779,7 +787,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       <div className="px-8 pt-5">
         <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
           {[
-            { key: 'fila' as const, label: 'Fila de Reposição', count: fila.length },
+            { key: 'fila' as const, label: 'Fila de Reposição', count: filaState.length },
             { key: 'historico' as const, label: 'Ordens de Compra', count: ordensState.length },
           ].map((tab) => (
             <button
@@ -812,7 +820,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       {/* ── Aba: Fila ── */}
       {aba === 'fila' && (
         <div className="px-8 py-6">
-          {fila.length === 0 ? (
+          {filaState.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-20 rounded-xl text-center"
               style={{ border: '2px dashed var(--ac-border)' }}
@@ -828,7 +836,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4" style={{ maxWidth: 880 }}>
-              {fila.map((grupo) => {
+              {filaState.map((grupo) => {
                 const chave = grupo.fornecedor_id ?? '__sem_fornecedor__'
                 const isGerando = gerandoFornecedor === chave
                 const totalValor = grupo.itens.reduce((s, i) => {

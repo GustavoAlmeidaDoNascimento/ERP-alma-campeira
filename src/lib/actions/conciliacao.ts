@@ -1,7 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { requireAuthenticatedUserId } from '@/lib/auth'
+import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -254,4 +255,75 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
     vendas: resultVendas,
     resumo: { facasDivergentes, producaoDivergente, vendasDivergentes },
   }
+}
+
+export async function corrigirDivergenciaVenda(pedidoId: string, facaId: string): Promise<{ corrigido: number }> {
+  await assertPermissao('vendas', 'editar')
+  const supabase = await createClient()
+
+  const [{ data: pedido }, { data: item }, { data: movs }] = await Promise.all([
+    supabase.from('pedidos').select('id, status').eq('id', pedidoId).maybeSingle(),
+    supabase
+      .from('pedido_itens')
+      .select('pedido_id, faca_id, quantidade')
+      .eq('pedido_id', pedidoId)
+      .eq('faca_id', facaId)
+      .maybeSingle(),
+    supabase
+      .from('movimentacoes_estoque')
+      .select('quantidade')
+      .eq('pedido_id', pedidoId)
+      .eq('faca_id', facaId)
+      .eq('tipo', 'saida_venda'),
+  ])
+
+  if (!pedido) throw new Error('Pedido não encontrado.')
+  if (pedido.status !== 'entregue') throw new Error('Somente pedidos entregues podem ser conciliados.')
+  if (!item) throw new Error('Item do pedido não encontrado para esta faca.')
+
+  const quantidadeMovimentoAtual = (movs ?? []).reduce((s, m) => s + Number(m.quantidade ?? 0), 0)
+  const faltante = Number(item.quantidade) - quantidadeMovimentoAtual
+
+  if (faltante <= 0) {
+    throw new Error('Não há baixa faltante para este item.')
+  }
+
+  const { data: faca } = await supabase
+    .from('facas')
+    .select('id, nome, estoque_atual')
+    .eq('id', facaId)
+    .maybeSingle()
+
+  if (!faca) throw new Error('Faca não encontrada.')
+  if (faca.estoque_atual < faltante) {
+    throw new Error(`Estoque insuficiente para corrigir (${faca.nome}): precisa ${faltante}, tem ${faca.estoque_atual}.`)
+  }
+
+  const user = await getAuthenticatedUser()
+
+  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+    tipo: 'saida_venda',
+    faca_id: facaId,
+    pedido_id: pedidoId,
+    quantidade: faltante,
+    usuario_id: user?.id ?? null,
+  })
+  if (movErr) throw new Error(`Erro ao registrar baixa: ${movErr.message}`)
+
+  const { error: estoqueErr } = await supabase
+    .from('facas')
+    .update({ estoque_atual: faca.estoque_atual - faltante })
+    .eq('id', facaId)
+  if (estoqueErr) throw new Error(`Erro ao atualizar estoque: ${estoqueErr.message}`)
+
+  revalidatePath('/metricas/conciliacao')
+  revalidatePath('/vendas')
+  revalidatePath('/facas')
+  revalidateTag('metricas-conciliacao', 'max')
+  revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
+  revalidateTag('facas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
+
+  return { corrigido: faltante }
 }
