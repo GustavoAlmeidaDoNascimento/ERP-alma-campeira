@@ -136,7 +136,8 @@ export async function atualizarPerfil(
     if (permError) throw new Error(permError.message)
   }
 
-  updateTag('user-permissions')
+  // Invalida apenas o cache de permissões deste usuário específico
+  revalidateTag(`user-permissions-${id}`)
   revalidatePath('/usuarios')
   revalidateTag('usuarios-list', 'max')
 }
