@@ -86,7 +86,7 @@ export async function atualizarCargo(id: string, input: CargoInput) {
   if (permError) throw new Error(permError.message)
 
   // Invalida o cache de permissões de todos os usuários (cargo alterado afeta todos os membros)
-  revalidateTag('user-permissions')
+  revalidateTag('user-permissions', 'max')
   revalidatePath('/cargos')
   revalidatePath('/usuarios')
   revalidateTag('cargos-list', 'max')
