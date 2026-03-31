@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import { getErpTabData, type ErpTabData } from '@/lib/actions/erp-tab-data'
 
 import { MPClient } from '@/components/materias-primas/mp-client'
+import { MPDetalheClient } from '@/components/materias-primas/mp-detalhe-client'
 import { FacasClient } from '@/components/facas/facas-client'
 import { FacaDetalheClient } from '@/components/facas/faca-detalhe-client'
 import { FornecedoresClient } from '@/components/fornecedores/fornecedores-client'
@@ -329,6 +330,8 @@ function TabPane({
 
   // Permite renderizar componente e manter state interno enquanto a aba estiver aberta.
   switch (data.kind) {
+    case 'mp-detalhe':
+      return <MPDetalheClient detalhe={data.detalhe} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'materias-primas':
       return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'facas':

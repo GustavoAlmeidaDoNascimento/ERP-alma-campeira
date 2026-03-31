@@ -1,7 +1,7 @@
 'use server'
 
 import { getPermissoesEfetivas } from '@/lib/auth'
-import { getMatériasPrimas } from '@/lib/actions/materias-primas'
+import { getMatériasPrimas, getMPDetalhe, type MPDetalheData } from '@/lib/actions/materias-primas'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
@@ -21,6 +21,13 @@ import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaP
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 export type ErpTabData =
+  | {
+      kind: 'mp-detalhe'
+      detalhe: MPDetalheData
+      fornecedores: Fornecedor[]
+      categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+      perm: Perm
+    }
   | {
       kind: 'materias-primas'
       materiasPrimas: MateriaPrima[]
@@ -115,6 +122,21 @@ function normalizePathOnly(href: string) {
 
 export async function getErpTabData(href: string): Promise<ErpTabData> {
   const path = normalizePathOnly(href)
+
+  // Detalhe de matéria-prima: /materias-primas/{uuid}
+  const mpDetalheMatch = path.match(/^\/materias-primas\/([a-f0-9-]+)$/)
+  if (mpDetalheMatch) {
+    const mpId = mpDetalheMatch[1]
+    const [perms, detalhe, fornecedores, categoriasMateriaPrima] = await Promise.all([
+      getPermissoesEfetivas(),
+      getMPDetalhe(mpId),
+      getFornecedores(80),
+      getCategoriasMateriaPrima(),
+    ])
+    const perm = perms.materias_primas as Perm
+    assertAllowed(perm, 'materias_primas')
+    return { kind: 'mp-detalhe', detalhe, fornecedores, categoriasMateriaPrima, perm }
+  }
 
   if (path === '/materias-primas') {
     const [perms, materiasPrimas, fornecedores, categoriasMateriaPrima] = await Promise.all([

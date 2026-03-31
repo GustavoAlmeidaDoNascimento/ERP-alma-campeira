@@ -21,7 +21,7 @@ type Props = {
 }
 
 export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima, perm }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+  const { refreshActiveTab, openTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<MateriaPrima | null>(null)
   const [deletando, setDeletando] = useState<MateriaPrima | null>(null)
@@ -251,8 +251,17 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                     <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
                       {mp.codigo}
                     </td>
-                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
-                      {mp.nome}
+                    <td className="px-4 py-3 font-medium">
+                      <button
+                        type="button"
+                        onClick={() => openTab(`/materias-primas/${mp.id}`)}
+                        className="font-medium text-left transition-colors"
+                        style={{ color: 'var(--ac-text)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ac-accent)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ac-text)')}
+                      >
+                        {mp.nome}
+                      </button>
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
                       {mp.categoria}

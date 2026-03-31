@@ -187,6 +187,7 @@ export function getRouteLabel(pathname: string) {
   const normalized = normalizePath(pathname)
   if (routeLabelMap[normalized]) return routeLabelMap[normalized]
   if (normalized.startsWith('/facas/')) return 'Faca'
+  if (normalized.startsWith('/materias-primas/')) return 'Matéria-Prima'
   return 'Página'
 }
 
@@ -206,5 +207,6 @@ export function getRouteIcon(hrefOrPathname: string) {
   const normalized = normalizePath(pathOnly || '/')
   if (routeIconMap[normalized]) return routeIconMap[normalized]
   if (normalized.startsWith('/facas/')) return routeIconMap['/facas']
+  if (normalized.startsWith('/materias-primas/')) return routeIconMap['/materias-primas']
   return null
 }

@@ -74,6 +74,7 @@ export type MovimentacaoEstoque = {
   usuario_id: string | null
   created_at: string
   materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'> | null
+  faca?: Pick<Faca, 'id' | 'codigo' | 'nome'> | null
 }
 
 export type MaterialInsuficiente = {
