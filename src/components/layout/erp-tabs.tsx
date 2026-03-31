@@ -326,6 +326,8 @@ function TabPane({
       return <MetricasClient initialTab="vendas" vendasData={data.data} />
     case 'metricas-estoque':
       return <MetricasClient initialTab="estoque" estoqueData={data.data} />
+    case 'metricas-conciliacao':
+      return <MetricasClient initialTab="conciliacao" conciliacaoData={data.data} />
     default:
       return null
   }

@@ -4,36 +4,43 @@ import { useState, useTransition } from 'react'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { VendasMetricsView } from './vendas-metrics'
 import { EstoqueMetricsView } from './estoque-metrics'
+import { ConciliacaoMetricsView } from './conciliacao-metrics'
 import {
   getMetricasVendas,
   getMetricasEstoque,
   type MetricasVendasData,
   type MetricasEstoqueData,
 } from '@/lib/actions/metricas'
+import { type ResultadoConciliacao } from '@/lib/actions/conciliacao'
 import { PERIODOS, type PeriodoId } from '@/lib/metricas-periodos'
 
-type MetricaTabId = 'vendas' | 'estoque'
+type MetricaTabId = 'vendas' | 'estoque' | 'conciliacao'
 
-const METRICA_TABS: { id: MetricaTabId; label: string; href: string }[] = [
+const METRICA_TABS: { id: MetricaTabId; label: string; href: string; alerta?: boolean }[] = [
   { id: 'vendas', label: 'Vendas', href: '/metricas/vendas' },
   { id: 'estoque', label: 'Estoque', href: '/metricas/estoque' },
+  { id: 'conciliacao', label: 'Conciliação', href: '/metricas/conciliacao' },
 ]
 
 type MetricasClientProps = {
   initialTab?: MetricaTabId
   vendasData?: MetricasVendasData
   estoqueData?: MetricasEstoqueData
+  conciliacaoData?: ResultadoConciliacao
 }
 
-export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData }: MetricasClientProps) {
+export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData, conciliacaoData }: MetricasClientProps) {
   const { openTab } = useErpTabs()
   const [periodo, setPeriodo] = useState<PeriodoId>(vendasData?.periodo ?? estoqueData?.periodo ?? 'tudo')
   const [vData, setVData] = useState(vendasData)
   const [eData, setEData] = useState(estoqueData)
   const [isPending, startTransition] = useTransition()
 
+  const isConciliacao = initialTab === 'conciliacao'
+  const temDivergencias = conciliacaoData && !conciliacaoData.tudoOk
+
   function handlePeriodoChange(novoPeriodo: PeriodoId) {
-    if (novoPeriodo === periodo) return
+    if (novoPeriodo === periodo || isConciliacao) return
     setPeriodo(novoPeriodo)
     startTransition(async () => {
       if (initialTab === 'vendas') {
@@ -66,12 +73,13 @@ export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData 
         <div className="flex flex-wrap gap-2">
           {METRICA_TABS.map((tab) => {
             const isActive = tab.id === initialTab
+            const showAlerta = tab.id === 'conciliacao' && temDivergencias && !isActive
             return (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => { if (!isActive) openTab(tab.href) }}
-                className="px-3 py-2 rounded-lg text-sm transition-colors"
+                className="relative px-3 py-2 rounded-lg text-sm transition-colors"
                 style={{
                   color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)',
                   background: isActive
@@ -81,33 +89,43 @@ export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData 
                 }}
               >
                 {tab.label}
+                {showAlerta && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 flex size-3.5 items-center justify-center rounded-full text-[9px] font-bold"
+                    style={{ background: '#dc2626', color: '#fff' }}
+                  >
+                    !
+                  </span>
+                )}
               </button>
             )
           })}
         </div>
 
-        {/* Período Selector */}
-        <div className="flex flex-wrap gap-1.5">
-          {PERIODOS.map((p) => {
-            const isActive = p.id === periodo
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handlePeriodoChange(p.id)}
-                disabled={isPending}
-                className="px-2.5 py-1.5 rounded-md text-xs transition-colors disabled:opacity-60"
-                style={{
-                  color: isActive ? 'var(--ac-card)' : 'var(--ac-muted)',
-                  background: isActive ? 'var(--ac-accent)' : 'transparent',
-                  fontWeight: isActive ? 600 : 400,
-                }}
-              >
-                {p.label}
-              </button>
-            )
-          })}
-        </div>
+        {/* Período Selector — oculto na aba de conciliação */}
+        {!isConciliacao && (
+          <div className="flex flex-wrap gap-1.5">
+            {PERIODOS.map((p) => {
+              const isActive = p.id === periodo
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handlePeriodoChange(p.id)}
+                  disabled={isPending}
+                  className="px-2.5 py-1.5 rounded-md text-xs transition-colors disabled:opacity-60"
+                  style={{
+                    color: isActive ? 'var(--ac-card)' : 'var(--ac-muted)',
+                    background: isActive ? 'var(--ac-accent)' : 'transparent',
+                    fontWeight: isActive ? 600 : 400,
+                  }}
+                >
+                  {p.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Loading indicator */}
@@ -125,6 +143,7 @@ export function MetricasClient({ initialTab = 'vendas', vendasData, estoqueData 
       <div style={{ opacity: isPending ? 0.5 : 1, transition: 'opacity 0.2s' }}>
         {initialTab === 'vendas' && vData && <VendasMetricsView data={vData} />}
         {initialTab === 'estoque' && eData && <EstoqueMetricsView data={eData} />}
+        {initialTab === 'conciliacao' && conciliacaoData && <ConciliacaoMetricsView data={conciliacaoData} />}
       </div>
     </div>
   )

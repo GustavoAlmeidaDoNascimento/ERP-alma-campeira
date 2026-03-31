@@ -12,6 +12,7 @@ import { getCargos } from '@/lib/actions/cargos'
 import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
+import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
 import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, Pedido, Cliente, Usuario, Cargo } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -84,6 +85,10 @@ export type ErpTabData =
   | {
       kind: 'metricas-estoque'
       data: MetricasEstoqueData
+    }
+  | {
+      kind: 'metricas-conciliacao'
+      data: ResultadoConciliacao
     }
 
 function assertAllowed(perm: Perm | undefined, label: string): void {
@@ -213,6 +218,11 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   if (path === '/metricas/estoque') {
     const data = await getMetricasEstoque()
     return { kind: 'metricas-estoque', data }
+  }
+
+  if (path === '/metricas/conciliacao') {
+    const data = await getConciliacao()
+    return { kind: 'metricas-conciliacao', data }
   }
 
   throw new Error(`Rota de aba não suportada: ${path}`)
