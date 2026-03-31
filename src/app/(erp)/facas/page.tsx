@@ -26,7 +26,7 @@ async function FacasPageData() {
   const [facas, categorias, materiasPrimas] = await Promise.all([getFacas(120), getCategoriasFaca(), getMatériasPrimas(200)])
   return (
     <div data-nav-content-ready="Facas">
-      <FacasClient facas={facas} categorias={categorias} materiasPrimas={materiasPrimas} perm={perms.facas} />
+      <FacasClient facas={facas} categorias={categorias} materiasPrimas={materiasPrimas} perm={perms.facas} verPrecoVenda={perms.preco_venda.ver} />
     </div>
   )
 }

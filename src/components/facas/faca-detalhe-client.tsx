@@ -20,9 +20,10 @@ type Props = {
   materiasPrimas: MateriaPrima[]
   categorias: CategoriaFacaDB[]
   perm: Perm
+  verPrecoVenda: boolean
 }
 
-export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }: Props) {
+export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda }: Props) {
   const { faca, bom, vendas, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
@@ -93,6 +94,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
         .join(', ')
       setEntradaSucesso(`${qtdProduzir}x ${faca.codigo} produzidas. Consumo: ${resumo}`)
       setQuantidadeProduzir('1')
+      setEntradaModalOpen(false)
       refreshActiveTab()
     } catch (e: unknown) {
       setEntradaErro(e instanceof Error ? e.message : 'Erro ao registrar entrada.')
@@ -172,9 +174,11 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
               >
                 {faca.categoria}
               </span>
-              <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </span>
+              {verPrecoVenda && (
+                <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                  {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-sm" style={{ color: 'var(--ac-text)' }}>
                   Estoque: <strong>{faca.estoque_atual}</strong>
@@ -192,9 +196,11 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm }:
                   Preço de custo: {precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               )}
-              <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                Taxas: produção {taxaProducao.toFixed(2)}% | venda {taxaVenda.toFixed(2)}%
+              {verPrecoVenda && (
+                <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                  Taxas: produção {taxaProducao.toFixed(2)}% | venda {taxaVenda.toFixed(2)}%
                 </span>
+              )}
             </div>
           </div>
 

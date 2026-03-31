@@ -96,6 +96,7 @@ export const MODULOS = [
   { key: 'materias_primas', label: 'Matérias-Primas' },
   { key: 'fornecedores',    label: 'Fornecedores' },
   { key: 'facas',           label: 'Facas' },
+  { key: 'preco_venda',     label: 'Preço de Venda' },
   { key: 'estoque',         label: 'Estoque / Produção' },
   { key: 'vendas',          label: 'Vendas' },
   { key: 'clientes',        label: 'Clientes' },

@@ -29,6 +29,7 @@ export type ErpTabData =
       categorias: CategoriaFacaDB[]
       materiasPrimas: MateriaPrima[]
       perm: Perm
+      verPrecoVenda: boolean
     }
   | {
       kind: 'faca-detalhe'
@@ -36,6 +37,7 @@ export type ErpTabData =
       materiasPrimas: MateriaPrima[]
       categorias: CategoriaFacaDB[]
       perm: Perm
+      verPrecoVenda: boolean
     }
   | {
       kind: 'fornecedores'
@@ -116,7 +118,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
-    return { kind: 'facas', facas, categorias, materiasPrimas, perm }
+    return { kind: 'facas', facas, categorias, materiasPrimas, perm, verPrecoVenda: perms.preco_venda.ver }
   }
 
   // Detalhe de faca: /facas/{uuid}
@@ -131,7 +133,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
-    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm }
+    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm, verPrecoVenda: perms.preco_venda.ver }
   }
 
   if (path === '/fornecedores') {

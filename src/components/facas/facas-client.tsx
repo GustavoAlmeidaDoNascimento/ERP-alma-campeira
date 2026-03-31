@@ -12,9 +12,9 @@ import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
-type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; materiasPrimas: MateriaPrima[]; perm: Perm }
+type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; materiasPrimas: MateriaPrima[]; perm: Perm; verPrecoVenda: boolean }
 
-export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) {
+export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoVenda }: Props) {
   const { refreshActiveTab, openTab } = useErpTabs()
   const badgeCategoria = useMemo(() => {
     const map: Record<string, React.CSSProperties> = {}
@@ -168,7 +168,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Venda</th>
+                {verPrecoVenda && <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Venda</th>}
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
                 <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                 <th className="px-4 py-3"></th>
@@ -177,7 +177,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
             <tbody>
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={verPrecoVenda ? 9 : 8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca || filtroCategoria ? 'Nenhum resultado para esse filtro.' : 'Nenhuma faca cadastrada ainda.'}
                   </td>
                 </tr>
@@ -268,9 +268,11 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm }: Props) 
                     <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {(faca.preco_custo ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
-                      {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </td>
+                    {verPrecoVenda && (
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
+                        {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
                       <span className="font-semibold">{faca.estoque_atual}</span>
                       <span className="text-xs ml-1" style={{ color: 'var(--ac-muted)' }}>

@@ -305,9 +305,9 @@ function TabPane({
     case 'materias-primas':
       return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} perm={data.perm} />
     case 'facas':
-      return <FacasClient facas={data.facas} categorias={data.categorias} materiasPrimas={data.materiasPrimas} perm={data.perm} />
+      return <FacasClient facas={data.facas} categorias={data.categorias} materiasPrimas={data.materiasPrimas} perm={data.perm} verPrecoVenda={data.verPrecoVenda} />
     case 'faca-detalhe':
-      return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} />
+      return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} verPrecoVenda={data.verPrecoVenda} />
     case 'fornecedores':
       return <FornecedoresClient fornecedores={data.fornecedores} perm={data.perm} />
     case 'ordens-compra':
