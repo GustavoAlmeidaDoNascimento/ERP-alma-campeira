@@ -236,18 +236,21 @@ export async function marcarEntregue(id: string) {
 
   for (const item of itens) {
     const faca = facaMap.get(item.faca_id)!
-    await supabase
-      .from('facas')
-      .update({ estoque_atual: faca.estoque_atual - item.quantidade })
-      .eq('id', item.faca_id)
 
-    await supabase.from('movimentacoes_estoque').insert({
+    const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
       tipo: 'saida_venda',
       faca_id: item.faca_id,
       pedido_id: id,
       quantidade: item.quantidade,
       usuario_id: user?.id ?? null,
     })
+    if (movErr) throw new Error(`Erro ao registrar movimentação para ${faca.nome}: ${movErr.message}`)
+
+    const { error: estoqueErr } = await supabase
+      .from('facas')
+      .update({ estoque_atual: faca.estoque_atual - item.quantidade })
+      .eq('id', item.faca_id)
+    if (estoqueErr) throw new Error(`Erro ao atualizar estoque de ${faca.nome}: ${estoqueErr.message}`)
   }
 
   const { data: boms } = await supabase
