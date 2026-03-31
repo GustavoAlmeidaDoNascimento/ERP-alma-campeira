@@ -98,6 +98,7 @@ export const MODULOS = [
   { key: 'materias_primas', label: 'Matérias-Primas' },
   { key: 'fornecedores',    label: 'Fornecedores' },
   { key: 'facas',           label: 'Facas' },
+  { key: 'consumiveis',     label: 'Consumíveis' },
   { key: 'preco_venda',     label: 'Preço de Venda' },
   { key: 'estoque',         label: 'Estoque / Produção' },
   { key: 'vendas',          label: 'Vendas' },
@@ -291,4 +292,32 @@ export type CategoriaMateriaPrimaDB = {
   nome: string
   ordem: number
   created_at: string
+}
+
+export type Consumivel = {
+  id: string
+  codigo: string
+  nome: string
+  categoria: string
+  fornecedor_id: string | null
+  foto_url: string | null
+  preco_custo: number
+  estoque_atual: number
+  estoque_minimo: number
+  created_at: string
+  // join
+  fornecedor?: Fornecedor | null
+}
+
+export type CategoriaConsumivelDB = {
+  id: string
+  nome: string
+  ordem: number
+  created_at: string
+}
+
+export function statusEstoqueConsumivel(c: Consumivel): StatusEstoque {
+  if (c.estoque_atual === 0) return 'critico'
+  if (c.estoque_atual <= c.estoque_minimo) return 'atencao'
+  return 'ok'
 }
