@@ -6,6 +6,8 @@ import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
+import { getConsumiveis } from '@/lib/actions/consumiveis'
+import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
 import { getUsuarios } from '@/lib/actions/usuarios'
@@ -14,7 +16,7 @@ import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
 import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
-import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo } from '@/types'
+import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -77,9 +79,17 @@ export type ErpTabData =
       perm: Perm
     }
   | {
+      kind: 'consumiveis'
+      consumiveis: Consumivel[]
+      fornecedores: Fornecedor[]
+      categoriasConsumivel: CategoriaConsumivelDB[]
+      perm: Perm
+    }
+  | {
       kind: 'configuracoes'
       categorias: CategoriaFacaDB[]
       categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+      categoriasConsumivel: CategoriaConsumivelDB[]
     }
   | {
       kind: 'metricas-vendas'
@@ -209,12 +219,25 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     return { kind: 'cargos', cargos, perm }
   }
 
+  if (path === '/consumiveis') {
+    const [perms, consumiveis, fornecedores, categoriasConsumivel] = await Promise.all([
+      getPermissoesEfetivas(),
+      getConsumiveis(120),
+      getFornecedores(80),
+      getCategoriasConsumivel(),
+    ])
+    const perm = perms.consumiveis as Perm
+    assertAllowed(perm, 'consumiveis')
+    return { kind: 'consumiveis', consumiveis, fornecedores, categoriasConsumivel, perm }
+  }
+
   if (path === '/configuracoes') {
-    const [categorias, categoriasMateriaPrima] = await Promise.all([
+    const [categorias, categoriasMateriaPrima, categoriasConsumivel] = await Promise.all([
       getCategoriasFaca(),
       getCategoriasMateriaPrima(),
+      getCategoriasConsumivel(),
     ])
-    return { kind: 'configuracoes', categorias, categoriasMateriaPrima }
+    return { kind: 'configuracoes', categorias, categoriasMateriaPrima, categoriasConsumivel }
   }
 
   if (path === '/metricas' || path === '/metricas/vendas') {
