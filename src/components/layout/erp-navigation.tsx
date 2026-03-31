@@ -5,6 +5,8 @@ export type NavItem = {
   label: string
   available: boolean
   icon: ReactNode
+  /** Chave do módulo em MODULOS — se definida, o item é ocultado quando o usuário não tem ver=true nesse módulo */
+  moduloKey?: string
 }
 
 export type NavSection = {
@@ -95,6 +97,13 @@ const iconMetricas = (
   </svg>
 )
 
+const iconMetricasConciliacao = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+)
+
 const iconMetricasVendas = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
     <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
@@ -114,36 +123,37 @@ export const sections: NavSection[] = [
   {
     label: 'Métricas',
     items: [
-      { href: '/metricas/vendas', label: 'Vendas', available: true, icon: iconMetricasVendas },
-      { href: '/metricas/estoque', label: 'Estoque', available: true, icon: iconMetricasEstoque },
+      { href: '/metricas/vendas',       label: 'Vendas',       available: true, icon: iconMetricasVendas,       moduloKey: 'vendas'   },
+      { href: '/metricas/estoque',      label: 'Estoque',      available: true, icon: iconMetricasEstoque,      moduloKey: 'estoque'  },
+      { href: '/metricas/conciliacao',  label: 'Conciliação',  available: true, icon: iconMetricasConciliacao,  moduloKey: 'facas'    },
     ],
   },
   {
     label: 'Estoque',
     items: [
-      { href: '/materias-primas', label: 'Matérias-Primas', available: true, icon: iconMP },
-      { href: '/facas', label: 'Facas', available: true, icon: iconFaca },
+      { href: '/materias-primas', label: 'Matérias-Primas', available: true, icon: iconMP,    moduloKey: 'materias_primas' },
+      { href: '/facas',           label: 'Facas',           available: true, icon: iconFaca,  moduloKey: 'facas'           },
     ],
   },
   {
     label: 'Compras',
     items: [
-      { href: '/fornecedores', label: 'Fornecedores', available: true, icon: iconFornecedor },
-      { href: '/ordens-compra', label: 'Ordens de Compra', available: true, icon: iconOC },
+      { href: '/fornecedores',  label: 'Fornecedores',    available: true, icon: iconFornecedor, moduloKey: 'fornecedores'  },
+      { href: '/ordens-compra', label: 'Ordens de Compra',available: true, icon: iconOC,         moduloKey: 'ordens_compra' },
     ],
   },
   {
     label: 'Vendas',
     items: [
-      { href: '/vendas', label: 'Vendas', available: true, icon: iconVendas },
-      { href: '/clientes', label: 'Clientes', available: true, icon: iconClientes },
+      { href: '/vendas',    label: 'Vendas',    available: true, icon: iconVendas,   moduloKey: 'vendas'   },
+      { href: '/clientes',  label: 'Clientes',  available: true, icon: iconClientes, moduloKey: 'clientes' },
     ],
   },
   {
     label: 'Sistema',
     items: [
-      { href: '/usuarios', label: 'Usuários', available: true, icon: iconUsuarios },
-      { href: '/cargos', label: 'Cargos', available: true, icon: iconCargos },
+      { href: '/usuarios', label: 'Usuários', available: true, icon: iconUsuarios, moduloKey: 'usuarios' },
+      { href: '/cargos',   label: 'Cargos',   available: true, icon: iconCargos,   moduloKey: 'cargos'   },
     ],
   },
 ]
