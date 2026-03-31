@@ -137,7 +137,7 @@ export async function atualizarPerfil(
   }
 
   // Invalida apenas o cache de permissões deste usuário específico
-  revalidateTag(`user-permissions-${id}`)
+  revalidateTag(`user-permissions-${id}`, 'max')
   revalidatePath('/usuarios')
   revalidateTag('usuarios-list', 'max')
 }

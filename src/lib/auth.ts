@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { unstable_cache } from 'next/cache'
+import { unstable_cache, cacheTag } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
 import type { PermMap } from '@/lib/permissoes'
@@ -22,6 +22,9 @@ export async function requireAuthenticatedUserId(): Promise<string> {
 
 const getPermissoesEfetivasCached = unstable_cache(
   async (userId: string): Promise<PermMap> => {
+    // Tag por usuário — permite invalidar só este usuário sem afetar os demais
+    cacheTag(`user-permissions-${userId}`)
+
     const supabase = await createClient()
 
     // Permissões customizadas têm prioridade
