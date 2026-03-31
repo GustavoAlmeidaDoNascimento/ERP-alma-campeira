@@ -35,15 +35,29 @@ const getPermissoesEfetivasCached = unstable_cache(
     }
 
     // Cargo do usuário
-    const { data: perfil } = await supabase
+    const { data: perfil, error: perfilError } = await supabase
       .from('usuarios_perfis')
       .select('cargo_id, cargo:cargos(permissoes:cargo_permissoes(*))')
       .eq('id', userId)
       .single()
 
-    // Sem perfil = bootstrap (primeiro admin) → acesso total
+    // Se a query falhou por um motivo que não seja "nenhuma linha encontrada",
+    // bloqueamos o acesso em vez de conceder acesso total.
+    // PGRST116 = "The result contains 0 rows" (sem perfil = pode ser bootstrap).
+    if (perfilError && perfilError.code !== 'PGRST116') {
+      return permissoesVazias()
+    }
+
     if (!perfil) {
-      return acesso_total()
+      // Verifica se realmente não existe nenhum perfil no sistema (bootstrap do primeiro admin).
+      // Qualquer outro caso (usuário sem perfil mas sistema já populado) = sem acesso.
+      const { count } = await supabase
+        .from('usuarios_perfis')
+        .select('id', { count: 'exact', head: true })
+      if ((count ?? 1) === 0) {
+        return acesso_total()
+      }
+      return permissoesVazias()
     }
 
     if (!perfil.cargo_id || !perfil.cargo) {
@@ -55,7 +69,7 @@ const getPermissoesEfetivasCached = unstable_cache(
     return permissoesFromArray(cargo.permissoes)
   },
   ['user-permissions'],
-  { revalidate: 30, tags: ['user-permissions'] }
+  { revalidate: 30, tags: ['user-permissions', `user-permissions-${'' /* userId não disponível aqui — ver nota */}`] }
 )
 
 /**
