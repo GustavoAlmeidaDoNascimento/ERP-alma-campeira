@@ -4,8 +4,9 @@ import { useState, useMemo } from 'react'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { Input } from '@/components/ui/input'
 import { ConsumivelModal } from './consumivel-modal'
-import { deletarConsumivel } from '@/lib/actions/consumiveis'
+import { baixaEstoqueConsumivel, deletarConsumivel, entradaEstoqueConsumivel } from '@/lib/actions/consumiveis'
 import { statusEstoqueConsumivel } from '@/types'
 import type { Consumivel, Fornecedor, CategoriaConsumivelDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
@@ -30,6 +31,12 @@ export function ConsumivelClient({ consumiveis, fornecedores, categoriasConsumiv
   const [busca, setBusca] = useState('')
   const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
   const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>('')
+
+  const [movModal, setMovModal] = useState<null | { tipo: 'entrada' | 'baixa'; item: Consumivel }>(null)
+  const [movQtd, setMovQtd] = useState('1')
+  const [movObs, setMovObs] = useState('')
+  const [movErro, setMovErro] = useState('')
+  const [movLoading, setMovLoading] = useState(false)
 
   const filtrados = useMemo(() => {
     if (!busca.trim()) return consumiveis
@@ -79,6 +86,38 @@ export function ConsumivelClient({ consumiveis, fornecedores, categoriasConsumiv
     })
     setFotoLightboxSrc(srcGrande || thumbFallback)
     setFotoLightboxAlt(c.nome)
+  }
+
+  function abrirMovimento(tipo: 'entrada' | 'baixa', item: Consumivel) {
+    setMovModal({ tipo, item })
+    setMovQtd('1')
+    setMovObs('')
+    setMovErro('')
+  }
+
+  const movQtdNum = Number(movQtd.replace(',', '.')) || 0
+
+  async function confirmarMovimento() {
+    if (!movModal) return
+    if (movQtdNum <= 0) {
+      setMovErro('Informe uma quantidade maior que zero.')
+      return
+    }
+    setMovErro('')
+    setMovLoading(true)
+    try {
+      if (movModal.tipo === 'entrada') {
+        await entradaEstoqueConsumivel(movModal.item.id, movQtdNum, movObs)
+      } else {
+        await baixaEstoqueConsumivel(movModal.item.id, movQtdNum, movObs)
+      }
+      setMovModal(null)
+      refreshActiveTab()
+    } catch (e: unknown) {
+      setMovErro(e instanceof Error ? e.message : 'Erro ao registrar movimentação.')
+    } finally {
+      setMovLoading(false)
+    }
   }
 
   async function confirmarDelete() {
@@ -272,9 +311,48 @@ export function ConsumivelClient({ consumiveis, fornecedores, categoriasConsumiv
                       <BadgeEstoque status={status} />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5">
+                        {perm.editar && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => abrirMovimento('entrada', c)}
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors shrink-0"
+                              style={{
+                                color: '#15803d',
+                                background: 'color-mix(in srgb, #15803d 12%, transparent)',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'color-mix(in srgb, #15803d 20%, transparent)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'color-mix(in srgb, #15803d 12%, transparent)'
+                              }}
+                            >
+                              Registrar entrada
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => abrirMovimento('baixa', c)}
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors shrink-0"
+                              style={{
+                                color: '#c2410c',
+                                background: 'color-mix(in srgb, #c2410c 12%, transparent)',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'color-mix(in srgb, #c2410c 20%, transparent)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'color-mix(in srgb, #c2410c 12%, transparent)'
+                              }}
+                            >
+                              Baixa
+                            </button>
+                          </>
+                        )}
                         {perm.editar && (
                           <button
+                            type="button"
                             onClick={() => abrirEditar(c)}
                             className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
@@ -296,6 +374,7 @@ export function ConsumivelClient({ consumiveis, fornecedores, categoriasConsumiv
                         )}
                         {perm.deletar && (
                           <button
+                            type="button"
                             onClick={() => { setDeletando(c); setErroDelete('') }}
                             className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
@@ -336,6 +415,122 @@ export function ConsumivelClient({ consumiveis, fornecedores, categoriasConsumiv
         editando={editando}
         onSaved={refreshActiveTab}
       />
+
+      {/* Modal entrada / baixa de estoque */}
+      <Modal
+        open={!!movModal}
+        onClose={() => setMovModal(null)}
+        title={
+          movModal
+            ? movModal.tipo === 'entrada'
+              ? `Entrada de estoque — ${movModal.item.codigo}`
+              : `Baixa — ${movModal.item.codigo}`
+            : ''
+        }
+        width="440px"
+      >
+        {movModal && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
+              {movModal.tipo === 'entrada' ? (
+                <>
+                  Informe a quantidade recebida de{' '}
+                  <strong style={{ color: 'var(--ac-text)' }}>{movModal.item.nome}</strong>.
+                  O estoque será atualizado e o registro entra no histórico de movimentações.
+                </>
+              ) : (
+                <>
+                  Registre a quantidade retirada de{' '}
+                  <strong style={{ color: 'var(--ac-text)' }}>{movModal.item.nome}</strong>.
+                  Não é permitido baixar mais do que o estoque atual.
+                </>
+              )}
+            </p>
+
+            <div
+              className="rounded-lg px-4 py-3 text-sm flex flex-wrap items-center gap-2"
+              style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+            >
+              <span style={{ color: 'var(--ac-muted)' }}>Estoque atual:</span>
+              <strong style={{ color: 'var(--ac-text)' }}>
+                {Number(movModal.item.estoque_atual).toLocaleString('pt-BR')}
+              </strong>
+              {movQtdNum > 0 && (
+                <>
+                  <span style={{ color: 'var(--ac-muted)' }}>→</span>
+                  <strong
+                    style={{
+                      color:
+                        movModal.tipo === 'entrada'
+                          ? '#15803d'
+                          : Math.round((Number(movModal.item.estoque_atual) - movQtdNum) * 1000) / 1000 < 0
+                            ? '#dc2626'
+                            : '#c2410c',
+                    }}
+                  >
+                    {(
+                      movModal.tipo === 'entrada'
+                        ? Number(movModal.item.estoque_atual) + movQtdNum
+                        : Number(movModal.item.estoque_atual) - movQtdNum
+                    ).toLocaleString('pt-BR')}
+                  </strong>
+                </>
+              )}
+            </div>
+
+            <Input
+              id="mov-qtd-consumivel"
+              label={movModal.tipo === 'entrada' ? 'Quantidade recebida *' : 'Quantidade da baixa *'}
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={movQtd}
+              onChange={(e) => {
+                setMovQtd(e.target.value)
+                setMovErro('')
+              }}
+            />
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+                Observação (opcional)
+              </label>
+              <input
+                type="text"
+                value={movObs}
+                onChange={(e) => setMovObs(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-all"
+                style={{
+                  background: 'var(--ac-card)',
+                  border: '1px solid var(--ac-border)',
+                  color: 'var(--ac-text)',
+                }}
+                placeholder="Ex.: Uso no escritório, reposição..."
+              />
+            </div>
+
+            {movErro && (
+              <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
+                {movErro}
+              </p>
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+              <Button variant="secondary" onClick={() => setMovModal(null)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmarMovimento}
+                loading={movLoading}
+                disabled={movQtdNum <= 0}
+                variant={movModal.tipo === 'baixa' ? 'danger' : 'primary'}
+              >
+                {movModal.tipo === 'entrada' ? 'Confirmar entrada' : 'Confirmar baixa'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Modal de confirmação de delete */}
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir consumível">

@@ -253,7 +253,13 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                     const subtotal = (mp?.preco_custo ?? 0) * item.quantidade
                     const mpThumbUrl = mp?.id ? mpFotoThumbById.get(mp.id) : undefined
                     return (
-                      <tr key={item.id} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
+                      <tr
+                        key={item.id}
+                        style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)', cursor: mp?.id ? 'pointer' : undefined }}
+                        onClick={() => mp?.id && openTab(`/materias-primas/${mp.id}`)}
+                        onMouseEnter={(e) => { if (mp?.id) e.currentTarget.style.background = 'var(--ac-bg)' }}
+                        onMouseLeave={(e) => { if (mp?.id) e.currentTarget.style.background = 'var(--ac-card)' }}
+                      >
                         <td className="px-4 py-2.5 text-center">
                           {mpThumbUrl ? (
                             <img

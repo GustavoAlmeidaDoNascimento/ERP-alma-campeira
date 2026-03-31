@@ -158,3 +158,100 @@ export async function deletarConsumivel(id: string) {
   revalidatePath('/consumiveis')
   revalidateTag('consumiveis-list', 'max')
 }
+
+// ============================================================
+// Entrada / baixa de estoque — Consumíveis
+// ============================================================
+
+export async function entradaEstoqueConsumivel(
+  consumivelId: string,
+  quantidade: number,
+  observacao?: string
+): Promise<void> {
+  await assertPermissao('consumiveis', 'editar')
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    throw new Error('Quantidade deve ser maior que zero.')
+  }
+
+  const supabase = await createClient()
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('consumiveis')
+    .select('id, estoque_atual')
+    .eq('id', consumivelId)
+    .single()
+  if (fetchErr) throw new Error(fetchErr.message)
+  if (!row) throw new Error('Consumível não encontrado.')
+
+  const novoEstoque = Math.round((Number(row.estoque_atual) + quantidade) * 1000) / 1000
+  const userId = await requireAuthenticatedUserId()
+
+  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+    tipo: 'entrada',
+    consumivel_id: consumivelId,
+    quantidade,
+    observacao: observacao?.trim() || null,
+    usuario_id: userId,
+  })
+  if (movErr) throw new Error(movErr.message)
+
+  const { error: updErr } = await supabase
+    .from('consumiveis')
+    .update({ estoque_atual: novoEstoque })
+    .eq('id', consumivelId)
+  if (updErr) throw new Error(updErr.message)
+
+  revalidatePath('/consumiveis')
+  revalidateTag('consumiveis-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
+}
+
+export async function baixaEstoqueConsumivel(
+  consumivelId: string,
+  quantidade: number,
+  observacao?: string
+): Promise<void> {
+  await assertPermissao('consumiveis', 'editar')
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    throw new Error('Quantidade deve ser maior que zero.')
+  }
+
+  const supabase = await createClient()
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('consumiveis')
+    .select('id, estoque_atual')
+    .eq('id', consumivelId)
+    .single()
+  if (fetchErr) throw new Error(fetchErr.message)
+  if (!row) throw new Error('Consumível não encontrado.')
+
+  const atual = Number(row.estoque_atual)
+  if (quantidade > atual) {
+    throw new Error('Quantidade maior que o estoque disponível.')
+  }
+
+  const novoEstoque = Math.round((atual - quantidade) * 1000) / 1000
+  const userId = await requireAuthenticatedUserId()
+
+  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+    tipo: 'saida_consumivel',
+    consumivel_id: consumivelId,
+    quantidade,
+    observacao: observacao?.trim() || null,
+    usuario_id: userId,
+  })
+  if (movErr) throw new Error(movErr.message)
+
+  const { error: updErr } = await supabase
+    .from('consumiveis')
+    .update({ estoque_atual: novoEstoque })
+    .eq('id', consumivelId)
+  if (updErr) throw new Error(updErr.message)
+
+  revalidatePath('/consumiveis')
+  revalidateTag('consumiveis-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
+}

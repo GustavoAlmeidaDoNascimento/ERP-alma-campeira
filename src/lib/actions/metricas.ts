@@ -359,7 +359,9 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     // Movimentações filtradas por período
     let movQuery = supabase
       .from('movimentacoes_estoque')
-      .select('id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)')
+      .select(
+        'id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome), consumivel:consumiveis(codigo, nome)',
+      )
       .order('created_at', { ascending: false })
 
     if (desde) movQuery = movQuery.gte('created_at', desde)
@@ -444,7 +446,12 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m) => {
       const mp = Array.isArray(m.materia_prima) ? m.materia_prima[0] : m.materia_prima
       const faca = Array.isArray(m.faca) ? m.faca[0] : m.faca
-      const item = (mp as any) ?? (faca as any)
+      const consRaw = (m as { consumivel?: { codigo: string; nome: string } | { codigo: string; nome: string }[] })
+        .consumivel
+      const cons = Array.isArray(consRaw) ? consRaw[0] : consRaw
+      const item = (mp as { nome?: string; codigo?: string } | null) ??
+        (faca as { nome?: string; codigo?: string } | null) ??
+        cons
       return {
         id: m.id,
         tipo: m.tipo,

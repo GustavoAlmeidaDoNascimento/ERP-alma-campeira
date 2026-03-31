@@ -184,7 +184,9 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                     style={{
                       borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined,
                       background: 'var(--ac-card)',
+                      cursor: 'pointer',
                     }}
+                    onClick={() => openTab(`/materias-primas/${mp.id}`)}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
@@ -195,7 +197,7 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                           return (
                             <button
                               type="button"
-                              onClick={() => abrirFotoLightbox(mp, thumbUrl)}
+                              onClick={(e) => { e.stopPropagation(); abrirFotoLightbox(mp, thumbUrl) }}
                               aria-label={`Expandir foto de ${mp.nome}`}
                               style={{
                                 background: 'transparent',
@@ -251,17 +253,8 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                     <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
                       {mp.codigo}
                     </td>
-                    <td className="px-4 py-3 font-medium">
-                      <button
-                        type="button"
-                        onClick={() => openTab(`/materias-primas/${mp.id}`)}
-                        className="font-medium text-left transition-colors"
-                        style={{ color: 'var(--ac-text)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ac-accent)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ac-text)')}
-                      >
-                        {mp.nome}
-                      </button>
+                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
+                      {mp.nome}
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
                       {mp.categoria}
@@ -284,7 +277,7 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                       <div className="flex items-center justify-end gap-1">
                         {perm.editar && (
                           <button
-                            onClick={() => abrirEditar(mp)}
+                            onClick={(e) => { e.stopPropagation(); abrirEditar(mp) }}
                             className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
                             onMouseEnter={(e) => {
@@ -305,7 +298,7 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                         )}
                         {perm.deletar && (
                           <button
-                            onClick={() => { setDeletando(mp); setErroDelete('') }}
+                            onClick={(e) => { e.stopPropagation(); setDeletando(mp); setErroDelete('') }}
                             className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
                             onMouseEnter={(e) => {

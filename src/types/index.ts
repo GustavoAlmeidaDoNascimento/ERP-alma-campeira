@@ -61,13 +61,19 @@ export type FacaMateriaPrima = {
 // ============================================================
 // Movimentações de Estoque
 // ============================================================
-export type TipoMovimentacao = 'entrada' | 'saida_producao' | 'saida_venda' | 'ajuste'
+export type TipoMovimentacao =
+  | 'entrada'
+  | 'saida_producao'
+  | 'saida_venda'
+  | 'saida_consumivel'
+  | 'ajuste'
 
 export type MovimentacaoEstoque = {
   id: string
   tipo: TipoMovimentacao
   materia_prima_id: string | null
   faca_id: string | null
+  consumivel_id: string | null
   pedido_id: string | null
   quantidade: number
   observacao: string | null
@@ -75,6 +81,7 @@ export type MovimentacaoEstoque = {
   created_at: string
   materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'> | null
   faca?: Pick<Faca, 'id' | 'codigo' | 'nome'> | null
+  consumivel?: Pick<Consumivel, 'id' | 'codigo' | 'nome'> | null
 }
 
 export type MaterialInsuficiente = {
