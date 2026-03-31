@@ -10,6 +10,7 @@ export type MateriaPrima = {
   id: string
   codigo: string
   nome: string
+  categoria: string
   fornecedor_id: string | null
   foto_url: string | null
   preco_custo: number
@@ -280,6 +281,13 @@ export type CategoriaFacaDB = {
   cor_texto: string
   cor_fundo: string
   cor_borda: string
+  ordem: number
+  created_at: string
+}
+
+export type CategoriaMateriaPrimaDB = {
+  id: string
+  nome: string
   ordem: number
   created_at: string
 }

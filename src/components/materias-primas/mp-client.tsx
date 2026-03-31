@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/modal'
 import { MPModal } from './mp-modal'
 import { deletarMateriaPrima } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
-import type { MateriaPrima, Fornecedor } from '@/types'
+import type { MateriaPrima, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
@@ -16,10 +16,11 @@ type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type Props = {
   materiasPrimas: MateriaPrima[]
   fornecedores: Fornecedor[]
+  categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
   perm: Perm
 }
 
-export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
+export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima, perm }: Props) {
   const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<MateriaPrima | null>(null)
@@ -37,6 +38,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
       (mp) =>
         mp.nome.toLowerCase().includes(q) ||
         mp.codigo.toLowerCase().includes(q) ||
+        mp.categoria.toLowerCase().includes(q) ||
         mp.fornecedor?.nome?.toLowerCase().includes(q)
     )
   }, [materiasPrimas, busca])
@@ -128,7 +130,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome, código ou fornecedor..."
+            placeholder="Buscar por nome, código, categoria ou fornecedor..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -158,6 +160,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)', width: 80 }}>Foto</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Fornecedor</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
@@ -168,7 +171,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={9} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma matéria-prima cadastrada ainda.'}
                   </td>
                 </tr>
@@ -252,6 +255,9 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
                       {mp.nome}
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
+                      {mp.categoria}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
                       {mp.fornecedor?.nome ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
@@ -326,6 +332,7 @@ export function MPClient({ materiasPrimas, fornecedores, perm }: Props) {
         open={modalAberto}
         onClose={() => setModalAberto(false)}
         fornecedores={fornecedores}
+        categoriasMateriaPrima={categoriasMateriaPrima}
         editando={editando}
         onSaved={refreshActiveTab}
       />

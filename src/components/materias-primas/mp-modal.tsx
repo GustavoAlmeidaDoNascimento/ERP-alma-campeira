@@ -6,19 +6,22 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { salvarMPComFoto } from '@/lib/actions/materias-primas'
-import type { MateriaPrima, Fornecedor } from '@/types'
+import Link from 'next/link'
+import type { MateriaPrima, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
   open: boolean
   onClose: () => void
   fornecedores: Fornecedor[]
+  categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
   editando?: MateriaPrima | null
   onSaved?: () => void
 }
 
 type Form = {
   nome: string
+  categoria: string
   fornecedor_id: string
   preco_custo: string
   estoque_atual: string
@@ -27,13 +30,14 @@ type Form = {
 
 const formVazio: Form = {
   nome: '',
+  categoria: '',
   fornecedor_id: '',
   preco_custo: '',
   estoque_atual: '0',
   estoque_minimo: '0',
 }
 
-export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Props) {
+export function MPModal({ open, onClose, fornecedores, categoriasMateriaPrima, editando, onSaved }: Props) {
   const [form, setForm] = useState<Form>(formVazio)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
@@ -53,18 +57,22 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
     if (editando) {
       setForm({
         nome: editando.nome,
+        categoria: editando.categoria,
         fornecedor_id: editando.fornecedor_id ?? '',
         preco_custo: String(editando.preco_custo),
         estoque_atual: String(editando.estoque_atual),
         estoque_minimo: String(editando.estoque_minimo),
       })
     } else {
-      setForm(formVazio)
+      setForm({
+        ...formVazio,
+        categoria: categoriasMateriaPrima[0]?.nome ?? 'Bainha',
+      })
     }
     setErro('')
     setFotoFile(null)
     setFotoPreview('')
-  }, [editando, open])
+  }, [editando, open, categoriasMateriaPrima])
 
   useEffect(() => {
     return () => {
@@ -97,6 +105,7 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
     setErro('')
 
     if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
+    if (!form.categoria.trim()) { setErro('Categoria é obrigatória.'); return }
     if (!form.preco_custo || isNaN(Number(form.preco_custo))) { setErro('Preço de custo inválido.'); return }
 
     setLoading(true)
@@ -104,6 +113,7 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
       const fd = new FormData()
       if (editando?.id) fd.append('id', editando.id)
       fd.append('nome', form.nome)
+      fd.append('categoria', form.categoria)
       fd.append('fornecedor_id', form.fornecedor_id)
       fd.append('preco_custo', String(parseFloat(form.preco_custo)))
       fd.append('estoque_atual', String(parseFloat(form.estoque_atual) || 0))
@@ -134,6 +144,31 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
           value={form.nome}
           onChange={(e) => set('nome', e.target.value)}
         />
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="categoria" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              Categoria *
+            </label>
+            <Link
+              href="/configuracoes#categorias-materia-prima"
+              onClick={onClose}
+              className="text-xs font-medium transition-colors"
+              style={{ color: 'var(--ac-muted)' }}
+            >
+              Gerenciar categorias
+            </Link>
+          </div>
+          <Select
+            id="categoria"
+            value={form.categoria}
+            onChange={(e) => set('categoria', e.target.value)}
+          >
+            {categoriasMateriaPrima.map((cat) => (
+              <option key={cat.id} value={cat.nome}>{cat.nome}</option>
+            ))}
+          </Select>
+        </div>
 
         <Select
           id="fornecedor"
@@ -365,7 +400,7 @@ export function MPModal({ open, onClose, fornecedores, editando, onSaved }: Prop
             ) : null}
           </div>
           <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-            Clique fora ou use "Fechar" para voltar.
+            Clique fora ou use &quot;Fechar&quot; para voltar.
           </p>
           <div className="flex justify-end">
             <Button type="button" variant="secondary" onClick={closeFotoLightbox}>Fechar</Button>

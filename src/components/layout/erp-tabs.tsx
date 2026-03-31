@@ -329,7 +329,7 @@ function TabPane({
   // Permite renderizar componente e manter state interno enquanto a aba estiver aberta.
   switch (data.kind) {
     case 'materias-primas':
-      return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} perm={data.perm} />
+      return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'facas':
       return <FacasClient facas={data.facas} categorias={data.categorias} materiasPrimas={data.materiasPrimas} perm={data.perm} verPrecoVenda={data.verPrecoVenda} />
     case 'faca-detalhe':
@@ -347,7 +347,7 @@ function TabPane({
     case 'cargos':
       return <CargosClient cargos={data.cargos} perm={data.perm} />
     case 'configuracoes':
-      return <ConfiguracoesClient categorias={data.categorias} />
+      return <ConfiguracoesClient categorias={data.categorias} categoriasMateriaPrima={data.categoriasMateriaPrima} />
     case 'metricas-vendas':
       return <MetricasClient initialTab="vendas" vendasData={data.data} />
     case 'metricas-estoque':

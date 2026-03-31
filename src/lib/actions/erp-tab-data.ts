@@ -5,6 +5,7 @@ import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
+import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
 import { getUsuarios } from '@/lib/actions/usuarios'
@@ -13,7 +14,7 @@ import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
 import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
-import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, Pedido, Cliente, Usuario, Cargo } from '@/types'
+import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -22,6 +23,7 @@ export type ErpTabData =
       kind: 'materias-primas'
       materiasPrimas: MateriaPrima[]
       fornecedores: Fornecedor[]
+      categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
       perm: Perm
     }
   | {
@@ -77,6 +79,7 @@ export type ErpTabData =
   | {
       kind: 'configuracoes'
       categorias: CategoriaFacaDB[]
+      categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
     }
   | {
       kind: 'metricas-vendas'
@@ -104,14 +107,15 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   const path = normalizePathOnly(href)
 
   if (path === '/materias-primas') {
-    const [perms, materiasPrimas, fornecedores] = await Promise.all([
+    const [perms, materiasPrimas, fornecedores, categoriasMateriaPrima] = await Promise.all([
       getPermissoesEfetivas(),
       getMatériasPrimas(120),
       getFornecedores(80),
+      getCategoriasMateriaPrima(),
     ])
     const perm = perms.materias_primas as Perm
     assertAllowed(perm, 'materias_primas')
-    return { kind: 'materias-primas', materiasPrimas, fornecedores, perm }
+    return { kind: 'materias-primas', materiasPrimas, fornecedores, categoriasMateriaPrima, perm }
   }
 
   if (path === '/facas') {
@@ -206,8 +210,11 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/configuracoes') {
-    const categorias = await getCategoriasFaca()
-    return { kind: 'configuracoes', categorias }
+    const [categorias, categoriasMateriaPrima] = await Promise.all([
+      getCategoriasFaca(),
+      getCategoriasMateriaPrima(),
+    ])
+    return { kind: 'configuracoes', categorias, categoriasMateriaPrima }
   }
 
   if (path === '/metricas' || path === '/metricas/vendas') {

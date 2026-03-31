@@ -42,6 +42,7 @@ export async function gerarCodigoMP(): Promise<string> {
 
 type MPInput = {
   nome: string
+  categoria: string
   fornecedor_id: string | null
   preco_custo: number
   estoque_atual: number
@@ -56,6 +57,7 @@ export async function criarMateriaPrima(input: MPInput) {
   const { error } = await supabase.from('materias_primas').insert({
     codigo,
     nome: input.nome.trim(),
+    categoria: input.categoria.trim(),
     fornecedor_id: input.fornecedor_id || null,
     preco_custo: input.preco_custo,
     estoque_atual: input.estoque_atual,
@@ -76,6 +78,7 @@ export async function atualizarMateriaPrima(id: string, input: MPInput) {
     .from('materias_primas')
     .update({
       nome: input.nome.trim(),
+      categoria: input.categoria.trim(),
       fornecedor_id: input.fornecedor_id || null,
       preco_custo: input.preco_custo,
       estoque_atual: input.estoque_atual,
@@ -108,6 +111,7 @@ function isFileLike(v: unknown): v is Blob & { type?: string; name?: string } {
 export async function salvarMPComFoto(formData: FormData) {
   const id = formData.get('id')
   const nome = String(formData.get('nome') ?? '').trim()
+  const categoria = String(formData.get('categoria') ?? '').trim()
   const fornecedor_id = formData.get('fornecedor_id')
   const preco_custo = Number(formData.get('preco_custo'))
   const estoque_atual = Number(formData.get('estoque_atual'))
@@ -115,6 +119,7 @@ export async function salvarMPComFoto(formData: FormData) {
   const foto = formData.get('foto')
 
   if (!nome) throw new Error('Nome é obrigatório.')
+  if (!categoria) throw new Error('Categoria é obrigatória.')
   if (!Number.isFinite(preco_custo)) throw new Error('Preço de custo inválido.')
 
   const supabase = await createClient()
@@ -128,6 +133,7 @@ export async function salvarMPComFoto(formData: FormData) {
     mpId = id as string
     const { error } = await supabase.from('materias_primas').update({
       nome,
+      categoria,
       fornecedor_id: fornecedor_id ? String(fornecedor_id) : null,
       preco_custo,
       estoque_atual: estoque_atual || 0,
@@ -141,6 +147,7 @@ export async function salvarMPComFoto(formData: FormData) {
       .insert({
         codigo,
         nome,
+        categoria,
         fornecedor_id: fornecedor_id ? String(fornecedor_id) : null,
         preco_custo,
         estoque_atual: estoque_atual || 0,
