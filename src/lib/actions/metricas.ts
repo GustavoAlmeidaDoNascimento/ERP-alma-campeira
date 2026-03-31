@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { requireAuthenticatedUserId } from '@/lib/auth'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { StatusPedido, StatusOC } from '@/types'
 import type { PeriodoId } from '@/lib/metricas-periodos'
 
@@ -190,6 +190,7 @@ function mesLabel(yyyymm: string): string {
 
 export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<MetricasVendasData> {
   await requireAuthenticatedUserId()
+  await assertPermissao('metricas', 'ver')
 
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
@@ -349,6 +350,7 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
 
 export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<MetricasEstoqueData> {
   await requireAuthenticatedUserId()
+  await assertPermissao('metricas', 'ver')
 
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()

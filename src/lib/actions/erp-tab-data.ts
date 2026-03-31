@@ -218,16 +218,25 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/metricas' || path === '/metricas/vendas') {
+    const perms = await getPermissoesEfetivas()
+    const perm = perms.metricas as Perm
+    assertAllowed(perm, 'metricas')
     const data = await getMetricasVendas()
     return { kind: 'metricas-vendas', data }
   }
 
   if (path === '/metricas/estoque') {
+    const perms = await getPermissoesEfetivas()
+    const perm = perms.metricas as Perm
+    assertAllowed(perm, 'metricas')
     const data = await getMetricasEstoque()
     return { kind: 'metricas-estoque', data }
   }
 
   if (path === '/metricas/conciliacao') {
+    const perms = await getPermissoesEfetivas()
+    const perm = perms.metricas as Perm
+    assertAllowed(perm, 'metricas')
     const data = await getConciliacao()
     return { kind: 'metricas-conciliacao', data }
   }

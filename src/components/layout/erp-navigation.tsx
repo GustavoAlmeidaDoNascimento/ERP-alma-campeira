@@ -123,9 +123,9 @@ export const sections: NavSection[] = [
   {
     label: 'Métricas',
     items: [
-      { href: '/metricas/vendas',       label: 'Vendas',       available: true, icon: iconMetricasVendas,       moduloKey: 'vendas'   },
-      { href: '/metricas/estoque',      label: 'Estoque',      available: true, icon: iconMetricasEstoque,      moduloKey: 'estoque'  },
-      { href: '/metricas/conciliacao',  label: 'Conciliação',  available: true, icon: iconMetricasConciliacao,  moduloKey: 'facas'    },
+      { href: '/metricas/vendas',       label: 'Vendas',       available: true, icon: iconMetricasVendas,       moduloKey: 'metricas' },
+      { href: '/metricas/estoque',      label: 'Estoque',      available: true, icon: iconMetricasEstoque,      moduloKey: 'metricas' },
+      { href: '/metricas/conciliacao',  label: 'Conciliação',  available: true, icon: iconMetricasConciliacao,  moduloKey: 'metricas' },
     ],
   },
   {
