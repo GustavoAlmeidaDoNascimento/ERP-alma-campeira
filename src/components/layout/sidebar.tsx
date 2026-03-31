@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { sections } from '@/components/layout/erp-navigation'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { getMinhasPermissoesVer } from '@/lib/actions/permissoes-client'
 
 const iconGear = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-[16px] flex-shrink-0">
@@ -22,6 +23,7 @@ function getInitials(email: string) {
 export function Sidebar() {
   const { openTab, activeHref } = useErpTabs()
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [permVer, setPermVer] = useState<Record<string, boolean> | null>(null)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
     sections.reduce<Record<string, boolean>>((acc, section) => {
       acc[section.label] = true
@@ -34,7 +36,16 @@ export function Sidebar() {
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? null)
     })
+    getMinhasPermissoesVer().then(setPermVer)
   }, [])
+
+  function isItemVisible(moduloKey?: string): boolean {
+    // Sem mapeamento de módulo = sempre visível (ex: configurações, dashboard)
+    if (!moduloKey) return true
+    // Enquanto carrega as permissões, mostra tudo para evitar flash
+    if (permVer === null) return true
+    return permVer[moduloKey] === true
+  }
 
   return (
     <aside
@@ -63,72 +74,76 @@ export function Sidebar() {
 
       {/* Nav com seções */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {sections.map((section) => (
-          <div key={section.label} className="mb-1">
-            {/* Label da seção */}
-            <button
-              type="button"
-              onClick={() => {
-                setExpandedSections((prev) => ({
-                  ...prev,
-                  [section.label]: !prev[section.label],
-                }))
-              }}
-              aria-expanded={expandedSections[section.label]}
-              className="w-full px-4 pt-3 pb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest transition-opacity hover:opacity-90"
-              style={{ color: 'var(--ac-muted)', opacity: 0.7 }}
-            >
-              <span>{section.label}</span>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                className={[
-                  'size-3.5 transition-transform duration-200',
-                  expandedSections[section.label] ? 'rotate-180' : '',
-                ].join(' ')}
-                aria-hidden
+        {sections.map((section) => {
+          const visibleItems = section.items.filter((item) => isItemVisible(item.moduloKey))
+          if (visibleItems.length === 0) return null
+          return (
+            <div key={section.label} className="mb-1">
+              {/* Label da seção */}
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedSections((prev) => ({
+                    ...prev,
+                    [section.label]: !prev[section.label],
+                  }))
+                }}
+                aria-expanded={expandedSections[section.label]}
+                className="w-full px-4 pt-3 pb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest transition-opacity hover:opacity-90"
+                style={{ color: 'var(--ac-muted)', opacity: 0.7 }}
               >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-            {/* Itens */}
-            {expandedSections[section.label] && section.items.map((item) => {
-              const isActive = activeHref === item.href || activeHref.startsWith(item.href + '/')
-              return (
-                <button
-                  key={item.href}
-                  type="button"
-                  onClick={() => {
-                    if (!item.available) return
-                    openTab(item.href)
-                  }}
+                <span>{section.label}</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
                   className={[
-                    'flex w-[calc(100%-1rem)] items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors',
-                    item.available && !isActive
-                      ? 'hover:bg-[color-mix(in_srgb,var(--ac-accent)_8%,transparent)]'
-                      : '',
-                    isActive
-                      ? 'bg-[color-mix(in_srgb,var(--ac-accent)_10%,transparent)]'
-                      : '',
-                    isActive
-                      ? 'font-semibold'
-                      : item.available
-                      ? 'font-normal'
-                      : 'opacity-35 cursor-not-allowed pointer-events-none',
+                    'size-3.5 transition-transform duration-200',
+                    expandedSections[section.label] ? 'rotate-180' : '',
                   ].join(' ')}
-                  style={{
-                    color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)',
-                  }}
+                  aria-hidden
                 >
-                  <span style={{ color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)' }}>{item.icon}</span>
-                  <span>{item.label}</span>
-                </button>
-              )
-            })}
-          </div>
-        ))}
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              {/* Itens */}
+              {expandedSections[section.label] && visibleItems.map((item) => {
+                const isActive = activeHref === item.href || activeHref.startsWith(item.href + '/')
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={() => {
+                      if (!item.available) return
+                      openTab(item.href)
+                    }}
+                    className={[
+                      'flex w-[calc(100%-1rem)] items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors',
+                      item.available && !isActive
+                        ? 'hover:bg-[color-mix(in_srgb,var(--ac-accent)_8%,transparent)]'
+                        : '',
+                      isActive
+                        ? 'bg-[color-mix(in_srgb,var(--ac-accent)_10%,transparent)]'
+                        : '',
+                      isActive
+                        ? 'font-semibold'
+                        : item.available
+                        ? 'font-normal'
+                        : 'opacity-35 cursor-not-allowed pointer-events-none',
+                    ].join(' ')}
+                    style={{
+                      color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)',
+                    }}
+                  >
+                    <span style={{ color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)' }}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
       </nav>
 
       {/* Rodapé — usuário logado */}
