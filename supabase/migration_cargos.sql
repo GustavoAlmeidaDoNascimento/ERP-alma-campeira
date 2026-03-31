@@ -73,7 +73,7 @@ INSERT INTO cargo_permissoes (cargo_id, modulo, ver, criar, editar, deletar)
 SELECT c.id, m.modulo, true, true, true, true
 FROM c,
   (VALUES
-    ('dashboard'),('metricas'),('materias_primas'),('fornecedores'),('facas'),
+    ('dashboard'),('metricas'),('materias_primas'),('fornecedores'),('facas'),('consumiveis'),
     ('estoque'),('vendas'),('clientes'),('ordens_compra'),('usuarios'),('cargos')
   ) AS m(modulo)
 ON CONFLICT (cargo_id, modulo) DO NOTHING;
@@ -94,6 +94,7 @@ FROM c,
     ('materias_primas', true,  true,  true,  true),
     ('fornecedores',    true,  true,  true,  true),
     ('facas',           true,  true,  true,  true),
+    ('consumiveis',     true,  true,  true,  true),
     ('estoque',         true,  true,  true,  false),
     ('vendas',          true,  true,  true,  false),
     ('clientes',        true,  true,  true,  true),
@@ -119,6 +120,7 @@ FROM c,
     ('materias_primas', true,  false, false, false),
     ('fornecedores',    false, false, false, false),
     ('facas',           true,  false, false, false),
+    ('consumiveis',     true,  false, false, false),
     ('estoque',         true,  true,  true,  false),
     ('vendas',          false, false, false, false),
     ('clientes',        false, false, false, false),
@@ -144,6 +146,7 @@ FROM c,
     ('materias_primas', false, false, false, false),
     ('fornecedores',    false, false, false, false),
     ('facas',           true,  false, false, false),
+    ('consumiveis',     false, false, false, false),
     ('estoque',         false, false, false, false),
     ('vendas',          true,  true,  true,  false),
     ('clientes',        true,  true,  true,  false),
