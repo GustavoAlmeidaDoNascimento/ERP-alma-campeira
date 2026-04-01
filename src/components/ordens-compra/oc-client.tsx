@@ -172,11 +172,14 @@ function OcDetalheModal({
   perm,
   onClose,
   onRefresh,
+  onRequestExcluir,
 }: {
   oc: OrdemCompra
   perm: Perm
   onClose: () => void
   onRefresh: () => void
+  /** Abre o modal de confirmação de exclusão (OC pendente + permissão). */
+  onRequestExcluir?: () => void
 }) {
   const [editandoAdicional, setEditandoAdicional] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState<string | null>(null)
@@ -533,7 +536,10 @@ function OcDetalheModal({
         )}
 
         {/* Ações de status + PDF */}
-        <div className="flex items-center gap-2 pt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
+        <div
+          className="flex flex-wrap items-center gap-2 pt-1"
+          style={{ borderTop: '1px solid var(--ac-border)' }}
+        >
           <Button
             variant="secondary"
             onClick={() => exportarPDF(oc)}
@@ -547,7 +553,13 @@ function OcDetalheModal({
             Exportar PDF
           </Button>
 
-          <div className="flex-1" />
+          {perm.deletar && oc.status === 'pendente' && onRequestExcluir && (
+            <Button variant="danger" onClick={onRequestExcluir}>
+              Excluir OC
+            </Button>
+          )}
+
+          <div className="flex-1 min-w-[0.5rem]" />
 
           {perm.editar && oc.status === 'pendente' && (
             <Button
@@ -1096,6 +1108,11 @@ export function OcClient({ fila, ordens, perm }: Props) {
           perm={perm}
           onClose={() => setOcAberta(null)}
           onRefresh={() => { refresh(); setOcAberta(null) }}
+          onRequestExcluir={() => {
+            setDeletando(ocAberta)
+            setOcAberta(null)
+            setErroDelete('')
+          }}
         />
       )}
 

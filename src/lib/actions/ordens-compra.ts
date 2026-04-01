@@ -56,75 +56,6 @@ async function carregarFilaReposicao(supabase: Awaited<ReturnType<typeof createC
   return Array.from(mapa.values()).sort((a, b) => a.fornecedor_nome.localeCompare(b.fornecedor_nome))
 }
 
-async function backfillFilaReposicaoFromEntregues(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<boolean> {
-  // Para evitar trabalho desnecessário, só backfill quando não há nada em fila.
-  const { count, error: countErr } = await supabase
-    .from('fila_reposicao')
-    .select('id', { count: 'exact', head: true })
-  if (countErr) throw new Error(countErr.message)
-  if (count != null && count > 0) return false
-
-  const { data: entregues, error: entreguesErr } = await supabase
-    .from('pedidos')
-    .select('id')
-    .eq('status', 'entregue')
-
-  if (entreguesErr) throw new Error(entreguesErr.message)
-  if (!entregues || entregues.length === 0) return false
-
-  let insertedAny = false
-
-  for (const p of entregues) {
-    const { data: exists } = await supabase
-      .from('fila_reposicao')
-      .select('id')
-      .eq('pedido_id', p.id)
-      .limit(1)
-
-    if (exists && exists.length > 0) continue
-
-    const { data: itens, error: itensErr } = await supabase
-      .from('pedido_itens')
-      .select('faca_id, quantidade')
-      .eq('pedido_id', p.id)
-
-    if (itensErr) throw new Error(itensErr.message)
-    if (!itens || itens.length === 0) continue
-
-    const facaIds = [...new Set(itens.map((i) => i.faca_id))]
-
-    const { data: boms, error: bomsErr } = await supabase
-      .from('faca_materias_primas')
-      .select('faca_id, materia_prima_id, quantidade, mp:materias_primas(id, fornecedor_id)')
-      .in('faca_id', facaIds)
-
-    if (bomsErr) throw new Error(bomsErr.message)
-    if (!boms || boms.length === 0) continue
-
-    for (const item of itens) {
-      const facaBom = (boms ?? []).filter((b) => b.faca_id === item.faca_id)
-      for (const bom of facaBom) {
-        const mp = (Array.isArray((bom as any).mp) ? (bom as any).mp[0] : (bom as any).mp) as
-          | { id: string; fornecedor_id: string | null }
-          | null
-        if (!mp) continue
-
-        await supabase.from('fila_reposicao').insert({
-          materia_prima_id: (bom as any).materia_prima_id,
-          fornecedor_id: mp.fornecedor_id,
-          quantidade_pendente: (bom as any).quantidade * item.quantidade,
-          pedido_id: p.id,
-        })
-        insertedAny = true
-      }
-    }
-  }
-
-  return insertedAny
-}
-
 const getFilaReposicaoCached = unstable_cache(
   async (): Promise<FilaFornecedor[]> => {
     const supabase = await createClient()
@@ -137,9 +68,8 @@ const getFilaReposicaoCached = unstable_cache(
 export async function getFilaReposicao(): Promise<FilaFornecedor[]> {
   await assertPermissao('ordens_compra', 'ver')
   return withSupabaseCookieContext(async () => {
-    const supabase = await createClient()
-    const didBackfill = await backfillFilaReposicaoFromEntregues(supabase)
-    if (didBackfill) return carregarFilaReposicao(supabase)
+    // Não chamar backfill aqui: quando a fila fica vazia após gerar OC, o backfill
+    // re-inseria todas as MPs de pedidos "entregue" e a fila voltaria a aparecer.
     return getFilaReposicaoCached()
   })
 }
@@ -229,9 +159,12 @@ export async function gerarOC(
   const { error: itensErr } = await supabase.from('ordem_compra_itens').insert(itens)
   if (itensErr) throw new Error(itensErr.message)
 
-  // Limpar fila
-  const idsParaDeletar = filaRows.map((r) => r.id)
-  await supabase.from('fila_reposicao').delete().in('id', idsParaDeletar)
+  // Limpar fila (mesmo critério do select acima)
+  const delRes =
+    fornecedor_id === null
+      ? await supabase.from('fila_reposicao').delete().is('fornecedor_id', null)
+      : await supabase.from('fila_reposicao').delete().eq('fornecedor_id', fornecedor_id)
+  if (delRes.error) throw new Error(delRes.error.message)
 
   revalidatePath('/ordens-compra')
   revalidateTag('ordens-compra-historico', 'max')
