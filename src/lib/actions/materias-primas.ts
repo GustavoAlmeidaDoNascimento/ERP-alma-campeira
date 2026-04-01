@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { MateriaPrima } from '@/types'
+import type { MateriaPrima, MovimentacaoEstoque, Faca } from '@/types'
 
 const getMateriasPrimasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<MateriaPrima[]> => {
@@ -221,5 +221,113 @@ export async function deletarMateriaPrima(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/materias-primas')
   revalidateTag('materias-primas-list', 'max')
+  revalidateTag('metricas-estoque', 'max')
+}
+
+// ============================================================
+// Detalhe de Matéria-Prima
+// ============================================================
+
+type FacaComQuantidade = Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'> & { quantidade: number }
+
+export type MPDetalheData = {
+  mp: MateriaPrima
+  facasQueUsam: FacaComQuantidade[]
+  movimentacoes: MovimentacaoEstoque[]
+}
+
+const getMPDetalheCached = unstable_cache(
+  async (_userId: string, mpId: string): Promise<MPDetalheData> => {
+    const supabase = await createClient()
+
+    const [mpRes, bomRes, movRes] = await Promise.all([
+      supabase
+        .from('materias_primas')
+        .select('*, fornecedor:fornecedores(id, nome, telefone, email, created_at)')
+        .eq('id', mpId)
+        .single(),
+      supabase
+        .from('faca_materias_primas')
+        .select('quantidade, faca:facas(id, codigo, nome, categoria, estoque_atual)')
+        .eq('materia_prima_id', mpId)
+        .order('faca_id'),
+      supabase
+        .from('movimentacoes_estoque')
+        .select('*, faca:facas(id, codigo, nome)')
+        .eq('materia_prima_id', mpId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+    ])
+
+    if (mpRes.error) throw new Error(mpRes.error.message)
+    if (!mpRes.data) throw new Error('Matéria-prima não encontrada.')
+
+    const facasQueUsam: FacaComQuantidade[] = (bomRes.data ?? []).map((row) => {
+      const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'>
+      return { ...faca, quantidade: Number(row.quantidade) || 0 }
+    })
+
+    return {
+      mp: mpRes.data as MateriaPrima,
+      facasQueUsam,
+      movimentacoes: (movRes.data ?? []) as MovimentacaoEstoque[],
+    }
+  },
+  ['mp-detalhe'],
+  { revalidate: 30, tags: ['mp-detalhe'] }
+)
+
+export async function getMPDetalhe(mpId: string): Promise<MPDetalheData> {
+  const userId = await requireAuthenticatedUserId()
+  return withSupabaseCookieContext(() => getMPDetalheCached(userId, mpId))
+}
+
+// ============================================================
+// Entrada de Estoque — Matéria-Prima
+// ============================================================
+
+export async function entradaEstoqueMP(
+  mpId: string,
+  quantidade: number,
+  observacao?: string
+): Promise<void> {
+  await assertPermissao('materias_primas', 'editar')
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    throw new Error('Quantidade deve ser maior que zero.')
+  }
+
+  const supabase = await createClient()
+
+  const { data: mp, error: mpErr } = await supabase
+    .from('materias_primas')
+    .select('id, estoque_atual')
+    .eq('id', mpId)
+    .single()
+  if (mpErr) throw new Error(mpErr.message)
+  if (!mp) throw new Error('Matéria-prima não encontrada.')
+
+  const novoEstoque = Math.round((Number(mp.estoque_atual) + quantidade) * 1000) / 1000
+
+  const userId = await requireAuthenticatedUserId()
+
+  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+    tipo: 'entrada',
+    materia_prima_id: mpId,
+    quantidade,
+    observacao: observacao?.trim() || null,
+    usuario_id: userId,
+  })
+  if (movErr) throw new Error(movErr.message)
+
+  const { error: updErr } = await supabase
+    .from('materias_primas')
+    .update({ estoque_atual: novoEstoque })
+    .eq('id', mpId)
+  if (updErr) throw new Error(updErr.message)
+
+  revalidatePath('/materias-primas')
+  revalidateTag('materias-primas-list', 'max')
+  revalidateTag('mp-detalhe', 'max')
   revalidateTag('metricas-estoque', 'max')
 }

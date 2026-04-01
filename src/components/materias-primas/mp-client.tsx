@@ -21,7 +21,7 @@ type Props = {
 }
 
 export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima, perm }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+  const { refreshActiveTab, openTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<MateriaPrima | null>(null)
   const [deletando, setDeletando] = useState<MateriaPrima | null>(null)
@@ -184,7 +184,9 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                     style={{
                       borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined,
                       background: 'var(--ac-card)',
+                      cursor: 'pointer',
                     }}
+                    onClick={() => openTab(`/materias-primas/${mp.id}`)}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
@@ -195,7 +197,7 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                           return (
                             <button
                               type="button"
-                              onClick={() => abrirFotoLightbox(mp, thumbUrl)}
+                              onClick={(e) => { e.stopPropagation(); abrirFotoLightbox(mp, thumbUrl) }}
                               aria-label={`Expandir foto de ${mp.nome}`}
                               style={{
                                 background: 'transparent',
@@ -275,7 +277,7 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                       <div className="flex items-center justify-end gap-1">
                         {perm.editar && (
                           <button
-                            onClick={() => abrirEditar(mp)}
+                            onClick={(e) => { e.stopPropagation(); abrirEditar(mp) }}
                             className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
                             onMouseEnter={(e) => {
@@ -296,7 +298,7 @@ export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima,
                         )}
                         {perm.deletar && (
                           <button
-                            onClick={() => { setDeletando(mp); setErroDelete('') }}
+                            onClick={(e) => { e.stopPropagation(); setDeletando(mp); setErroDelete('') }}
                             className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
                             onMouseEnter={(e) => {

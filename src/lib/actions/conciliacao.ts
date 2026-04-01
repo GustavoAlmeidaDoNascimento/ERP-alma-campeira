@@ -81,6 +81,7 @@ export type ResultadoConciliacao = {
 
 export async function getConciliacao(): Promise<ResultadoConciliacao> {
   await requireAuthenticatedUserId()
+  await assertPermissao('metricas', 'ver')
   const supabase = await createClient()
 
   // Busca tudo em paralelo

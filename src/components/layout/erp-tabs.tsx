@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import { getErpTabData, type ErpTabData } from '@/lib/actions/erp-tab-data'
 
 import { MPClient } from '@/components/materias-primas/mp-client'
+import { MPDetalheClient } from '@/components/materias-primas/mp-detalhe-client'
 import { FacasClient } from '@/components/facas/facas-client'
 import { FacaDetalheClient } from '@/components/facas/faca-detalhe-client'
 import { FornecedoresClient } from '@/components/fornecedores/fornecedores-client'
@@ -19,6 +20,7 @@ import { ClientesClient } from '@/components/clientes/clientes-client'
 import { UsuariosClient } from '@/components/usuarios/usuarios-client'
 import { CargosClient } from '@/components/cargos/cargos-client'
 import { ConfiguracoesClient } from '@/components/configuracoes/configuracoes-client'
+import { ConsumivelClient } from '@/components/consumiveis/consumivel-client'
 import { MetricasClient } from '@/components/metricas/metricas-client'
 
 type OpenTab = {
@@ -328,6 +330,8 @@ function TabPane({
 
   // Permite renderizar componente e manter state interno enquanto a aba estiver aberta.
   switch (data.kind) {
+    case 'mp-detalhe':
+      return <MPDetalheClient detalhe={data.detalhe} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'materias-primas':
       return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'facas':
@@ -346,8 +350,10 @@ function TabPane({
       return <UsuariosClient usuarios={data.usuarios} cargos={data.cargos} perm={data.perm} />
     case 'cargos':
       return <CargosClient cargos={data.cargos} perm={data.perm} />
+    case 'consumiveis':
+      return <ConsumivelClient consumiveis={data.consumiveis} fornecedores={data.fornecedores} categoriasConsumivel={data.categoriasConsumivel} perm={data.perm} />
     case 'configuracoes':
-      return <ConfiguracoesClient categorias={data.categorias} categoriasMateriaPrima={data.categoriasMateriaPrima} />
+      return <ConfiguracoesClient categorias={data.categorias} categoriasMateriaPrima={data.categoriasMateriaPrima} categoriasConsumivel={data.categoriasConsumivel} />
     case 'metricas-vendas':
       return <MetricasClient initialTab="vendas" vendasData={data.data} />
     case 'metricas-estoque':

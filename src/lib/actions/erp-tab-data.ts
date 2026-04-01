@@ -1,11 +1,13 @@
 'use server'
 
 import { getPermissoesEfetivas } from '@/lib/auth'
-import { getMatériasPrimas } from '@/lib/actions/materias-primas'
+import { getMatériasPrimas, getMPDetalhe, type MPDetalheData } from '@/lib/actions/materias-primas'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
+import { getConsumiveis } from '@/lib/actions/consumiveis'
+import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
 import { getUsuarios } from '@/lib/actions/usuarios'
@@ -14,11 +16,18 @@ import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
 import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
-import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo } from '@/types'
+import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 export type ErpTabData =
+  | {
+      kind: 'mp-detalhe'
+      detalhe: MPDetalheData
+      fornecedores: Fornecedor[]
+      categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+      perm: Perm
+    }
   | {
       kind: 'materias-primas'
       materiasPrimas: MateriaPrima[]
@@ -77,9 +86,17 @@ export type ErpTabData =
       perm: Perm
     }
   | {
+      kind: 'consumiveis'
+      consumiveis: Consumivel[]
+      fornecedores: Fornecedor[]
+      categoriasConsumivel: CategoriaConsumivelDB[]
+      perm: Perm
+    }
+  | {
       kind: 'configuracoes'
       categorias: CategoriaFacaDB[]
       categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+      categoriasConsumivel: CategoriaConsumivelDB[]
     }
   | {
       kind: 'metricas-vendas'
@@ -105,6 +122,21 @@ function normalizePathOnly(href: string) {
 
 export async function getErpTabData(href: string): Promise<ErpTabData> {
   const path = normalizePathOnly(href)
+
+  // Detalhe de matéria-prima: /materias-primas/{uuid}
+  const mpDetalheMatch = path.match(/^\/materias-primas\/([a-f0-9-]+)$/)
+  if (mpDetalheMatch) {
+    const mpId = mpDetalheMatch[1]
+    const [perms, detalhe, fornecedores, categoriasMateriaPrima] = await Promise.all([
+      getPermissoesEfetivas(),
+      getMPDetalhe(mpId),
+      getFornecedores(80),
+      getCategoriasMateriaPrima(),
+    ])
+    const perm = perms.materias_primas as Perm
+    assertAllowed(perm, 'materias_primas')
+    return { kind: 'mp-detalhe', detalhe, fornecedores, categoriasMateriaPrima, perm }
+  }
 
   if (path === '/materias-primas') {
     const [perms, materiasPrimas, fornecedores, categoriasMateriaPrima] = await Promise.all([
@@ -209,25 +241,47 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     return { kind: 'cargos', cargos, perm }
   }
 
+  if (path === '/consumiveis') {
+    const [perms, consumiveis, fornecedores, categoriasConsumivel] = await Promise.all([
+      getPermissoesEfetivas(),
+      getConsumiveis(120),
+      getFornecedores(80),
+      getCategoriasConsumivel(),
+    ])
+    const perm = perms.consumiveis as Perm
+    assertAllowed(perm, 'consumiveis')
+    return { kind: 'consumiveis', consumiveis, fornecedores, categoriasConsumivel, perm }
+  }
+
   if (path === '/configuracoes') {
-    const [categorias, categoriasMateriaPrima] = await Promise.all([
+    const [categorias, categoriasMateriaPrima, categoriasConsumivel] = await Promise.all([
       getCategoriasFaca(),
       getCategoriasMateriaPrima(),
+      getCategoriasConsumivel(),
     ])
-    return { kind: 'configuracoes', categorias, categoriasMateriaPrima }
+    return { kind: 'configuracoes', categorias, categoriasMateriaPrima, categoriasConsumivel }
   }
 
   if (path === '/metricas' || path === '/metricas/vendas') {
+    const perms = await getPermissoesEfetivas()
+    const perm = perms.metricas as Perm
+    assertAllowed(perm, 'metricas')
     const data = await getMetricasVendas()
     return { kind: 'metricas-vendas', data }
   }
 
   if (path === '/metricas/estoque') {
+    const perms = await getPermissoesEfetivas()
+    const perm = perms.metricas as Perm
+    assertAllowed(perm, 'metricas')
     const data = await getMetricasEstoque()
     return { kind: 'metricas-estoque', data }
   }
 
   if (path === '/metricas/conciliacao') {
+    const perms = await getPermissoesEfetivas()
+    const perm = perms.metricas as Perm
+    assertAllowed(perm, 'metricas')
     const data = await getConciliacao()
     return { kind: 'metricas-conciliacao', data }
   }

@@ -119,20 +119,29 @@ const iconMetricasEstoque = (
   </svg>
 )
 
+const iconConsumivel = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <path d="M16 10a4 4 0 0 1-8 0" />
+  </svg>
+)
+
 export const sections: NavSection[] = [
   {
     label: 'Métricas',
     items: [
-      { href: '/metricas/vendas',       label: 'Vendas',       available: true, icon: iconMetricasVendas,       moduloKey: 'vendas'   },
-      { href: '/metricas/estoque',      label: 'Estoque',      available: true, icon: iconMetricasEstoque,      moduloKey: 'estoque'  },
-      { href: '/metricas/conciliacao',  label: 'Conciliação',  available: true, icon: iconMetricasConciliacao,  moduloKey: 'facas'    },
+      { href: '/metricas/vendas',       label: 'Vendas',       available: true, icon: iconMetricasVendas,       moduloKey: 'metricas' },
+      { href: '/metricas/estoque',      label: 'Estoque',      available: true, icon: iconMetricasEstoque,      moduloKey: 'metricas' },
+      { href: '/metricas/conciliacao',  label: 'Conciliação',  available: true, icon: iconMetricasConciliacao,  moduloKey: 'metricas' },
     ],
   },
   {
     label: 'Estoque',
     items: [
-      { href: '/materias-primas', label: 'Matérias-Primas', available: true, icon: iconMP,    moduloKey: 'materias_primas' },
-      { href: '/facas',           label: 'Facas',           available: true, icon: iconFaca,  moduloKey: 'facas'           },
+      { href: '/materias-primas', label: 'Matérias-Primas', available: true, icon: iconMP,          moduloKey: 'materias_primas' },
+      { href: '/facas',           label: 'Facas',           available: true, icon: iconFaca,        moduloKey: 'facas'           },
+      { href: '/consumiveis',     label: 'Consumíveis',     available: true, icon: iconConsumivel,  moduloKey: 'consumiveis'     },
     ],
   },
   {
@@ -178,6 +187,7 @@ export function getRouteLabel(pathname: string) {
   const normalized = normalizePath(pathname)
   if (routeLabelMap[normalized]) return routeLabelMap[normalized]
   if (normalized.startsWith('/facas/')) return 'Faca'
+  if (normalized.startsWith('/materias-primas/')) return 'Matéria-Prima'
   return 'Página'
 }
 
@@ -197,5 +207,6 @@ export function getRouteIcon(hrefOrPathname: string) {
   const normalized = normalizePath(pathOnly || '/')
   if (routeIconMap[normalized]) return routeIconMap[normalized]
   if (normalized.startsWith('/facas/')) return routeIconMap['/facas']
+  if (normalized.startsWith('/materias-primas/')) return routeIconMap['/materias-primas']
   return null
 }

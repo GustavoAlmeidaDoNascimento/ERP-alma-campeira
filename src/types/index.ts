@@ -61,19 +61,27 @@ export type FacaMateriaPrima = {
 // ============================================================
 // Movimentações de Estoque
 // ============================================================
-export type TipoMovimentacao = 'entrada' | 'saida_producao' | 'saida_venda' | 'ajuste'
+export type TipoMovimentacao =
+  | 'entrada'
+  | 'saida_producao'
+  | 'saida_venda'
+  | 'saida_consumivel'
+  | 'ajuste'
 
 export type MovimentacaoEstoque = {
   id: string
   tipo: TipoMovimentacao
   materia_prima_id: string | null
   faca_id: string | null
+  consumivel_id: string | null
   pedido_id: string | null
   quantidade: number
   observacao: string | null
   usuario_id: string | null
   created_at: string
   materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'> | null
+  faca?: Pick<Faca, 'id' | 'codigo' | 'nome'> | null
+  consumivel?: Pick<Consumivel, 'id' | 'codigo' | 'nome'> | null
 }
 
 export type MaterialInsuficiente = {
@@ -94,9 +102,11 @@ export type PedidoItemComPedido = PedidoItem & {
 // ============================================================
 export const MODULOS = [
   { key: 'dashboard',       label: 'Dashboard' },
+  { key: 'metricas',        label: 'Métricas' },
   { key: 'materias_primas', label: 'Matérias-Primas' },
   { key: 'fornecedores',    label: 'Fornecedores' },
   { key: 'facas',           label: 'Facas' },
+  { key: 'consumiveis',     label: 'Consumíveis' },
   { key: 'preco_venda',     label: 'Preço de Venda' },
   { key: 'estoque',         label: 'Estoque / Produção' },
   { key: 'vendas',          label: 'Vendas' },
@@ -290,4 +300,32 @@ export type CategoriaMateriaPrimaDB = {
   nome: string
   ordem: number
   created_at: string
+}
+
+export type Consumivel = {
+  id: string
+  codigo: string
+  nome: string
+  categoria: string
+  fornecedor_id: string | null
+  foto_url: string | null
+  preco_custo: number
+  estoque_atual: number
+  estoque_minimo: number
+  created_at: string
+  // join
+  fornecedor?: Fornecedor | null
+}
+
+export type CategoriaConsumivelDB = {
+  id: string
+  nome: string
+  ordem: number
+  created_at: string
+}
+
+export function statusEstoqueConsumivel(c: Consumivel): StatusEstoque {
+  if (c.estoque_atual === 0) return 'critico'
+  if (c.estoque_atual <= c.estoque_minimo) return 'atencao'
+  return 'ok'
 }

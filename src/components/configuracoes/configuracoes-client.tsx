@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CategoriasFacaSection } from './categorias-faca-section'
 import { CategoriasMateriaPrimaSection } from './categorias-materia-prima-section'
-import type { CategoriaFacaDB, CategoriaMateriaPrimaDB } from '@/types'
+import { CategoriasConsumivelSection } from './categorias-consumivel-section'
+import type { CategoriaFacaDB, CategoriaMateriaPrimaDB, CategoriaConsumivelDB } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 function ThemeOption({
@@ -71,9 +72,10 @@ function ThemeOption({
 type Props = {
   categorias: CategoriaFacaDB[]
   categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+  categoriasConsumivel: CategoriaConsumivelDB[]
 }
 
-export function ConfiguracoesClient({ categorias, categoriasMateriaPrima }: Props) {
+export function ConfiguracoesClient({ categorias, categoriasMateriaPrima, categoriasConsumivel }: Props) {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
@@ -168,6 +170,7 @@ export function ConfiguracoesClient({ categorias, categoriasMateriaPrima }: Prop
         {/* Seção de categorias de facas */}
         <CategoriasFacaSection categorias={categorias} />
         <CategoriasMateriaPrimaSection categorias={categoriasMateriaPrima} />
+        <CategoriasConsumivelSection categorias={categoriasConsumivel} />
 
         {/* Seção da conta */}
         <div

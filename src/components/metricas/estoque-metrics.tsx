@@ -20,10 +20,11 @@ function fmtDate(iso: string) {
 }
 
 const TIPO_MOV_STYLE: Record<string, { label: string; color: string; bg: string }> = {
-  entrada:        { label: 'Entrada',     color: '#16a34a', bg: '#dcfce7' },
-  saida_producao: { label: 'Saída Prod.', color: '#b45309', bg: '#fef9c3' },
-  saida_venda:    { label: 'Saída Venda', color: '#1d4ed8', bg: '#dbeafe' },
-  ajuste:         { label: 'Ajuste',      color: '#6b7280', bg: '#f3f4f6' },
+  entrada:          { label: 'Entrada',       color: '#16a34a', bg: '#dcfce7' },
+  saida_producao:   { label: 'Saída Prod.',   color: '#b45309', bg: '#fef9c3' },
+  saida_venda:      { label: 'Saída Venda',   color: '#1d4ed8', bg: '#dbeafe' },
+  saida_consumivel: { label: 'Baixa cons.',   color: '#c2410c', bg: '#ffedd5' },
+  ajuste:           { label: 'Ajuste',        color: '#6b7280', bg: '#f3f4f6' },
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

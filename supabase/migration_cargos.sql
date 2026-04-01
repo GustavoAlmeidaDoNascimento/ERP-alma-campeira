@@ -32,21 +32,29 @@ ALTER TABLE usuarios_perfis
 ALTER TABLE cargos            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cargo_permissoes  ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Autenticados podem ler cargos" ON cargos;
 CREATE POLICY "Autenticados podem ler cargos"
   ON cargos FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Autenticados podem inserir cargos" ON cargos;
 CREATE POLICY "Autenticados podem inserir cargos"
   ON cargos FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Autenticados podem atualizar cargos" ON cargos;
 CREATE POLICY "Autenticados podem atualizar cargos"
   ON cargos FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Autenticados podem deletar cargos" ON cargos;
 CREATE POLICY "Autenticados podem deletar cargos"
   ON cargos FOR DELETE TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "Autenticados podem ler cargo_permissoes" ON cargo_permissoes;
 CREATE POLICY "Autenticados podem ler cargo_permissoes"
   ON cargo_permissoes FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Autenticados podem inserir cargo_permissoes" ON cargo_permissoes;
 CREATE POLICY "Autenticados podem inserir cargo_permissoes"
   ON cargo_permissoes FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Autenticados podem atualizar cargo_permissoes" ON cargo_permissoes;
 CREATE POLICY "Autenticados podem atualizar cargo_permissoes"
   ON cargo_permissoes FOR UPDATE TO authenticated USING (true);
+DROP POLICY IF EXISTS "Autenticados podem deletar cargo_permissoes" ON cargo_permissoes;
 CREATE POLICY "Autenticados podem deletar cargo_permissoes"
   ON cargo_permissoes FOR DELETE TO authenticated USING (true);
 
@@ -65,7 +73,7 @@ INSERT INTO cargo_permissoes (cargo_id, modulo, ver, criar, editar, deletar)
 SELECT c.id, m.modulo, true, true, true, true
 FROM c,
   (VALUES
-    ('dashboard'),('materias_primas'),('fornecedores'),('facas'),
+    ('dashboard'),('metricas'),('materias_primas'),('fornecedores'),('facas'),('consumiveis'),
     ('estoque'),('vendas'),('clientes'),('ordens_compra'),('usuarios'),('cargos')
   ) AS m(modulo)
 ON CONFLICT (cargo_id, modulo) DO NOTHING;
@@ -82,9 +90,11 @@ SELECT c.id, m.modulo, m.ver, m.criar, m.editar, m.deletar
 FROM c,
   (VALUES
     ('dashboard',       true,  false, false, false),
+    ('metricas',        true,  false, false, false),
     ('materias_primas', true,  true,  true,  true),
     ('fornecedores',    true,  true,  true,  true),
     ('facas',           true,  true,  true,  true),
+    ('consumiveis',     true,  true,  true,  true),
     ('estoque',         true,  true,  true,  false),
     ('vendas',          true,  true,  true,  false),
     ('clientes',        true,  true,  true,  true),
@@ -106,9 +116,11 @@ SELECT c.id, m.modulo, m.ver, m.criar, m.editar, m.deletar
 FROM c,
   (VALUES
     ('dashboard',       true,  false, false, false),
+    ('metricas',        true,  false, false, false),
     ('materias_primas', true,  false, false, false),
     ('fornecedores',    false, false, false, false),
     ('facas',           true,  false, false, false),
+    ('consumiveis',     true,  false, false, false),
     ('estoque',         true,  true,  true,  false),
     ('vendas',          false, false, false, false),
     ('clientes',        false, false, false, false),
@@ -130,9 +142,11 @@ SELECT c.id, m.modulo, m.ver, m.criar, m.editar, m.deletar
 FROM c,
   (VALUES
     ('dashboard',       true,  false, false, false),
+    ('metricas',        true,  false, false, false),
     ('materias_primas', false, false, false, false),
     ('fornecedores',    false, false, false, false),
     ('facas',           true,  false, false, false),
+    ('consumiveis',     false, false, false, false),
     ('estoque',         false, false, false, false),
     ('vendas',          true,  true,  true,  false),
     ('clientes',        true,  true,  true,  false),
