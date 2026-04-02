@@ -50,6 +50,16 @@ export function statusEstoqueFaca(faca: Faca): StatusEstoque {
   return 'ok'
 }
 
+/** Lucro unitário: preço venda − taxas globais (config.) − custo. */
+export function lucroUnitarioFaca(
+  faca: Pick<Faca, 'preco_venda' | 'preco_custo'>,
+  taxas: { taxa_producao: number; taxa_comissao: number }
+): number {
+  const custo = Number(faca.preco_custo ?? 0)
+  const venda = Number(faca.preco_venda ?? 0)
+  return venda - taxas.taxa_producao - taxas.taxa_comissao - custo
+}
+
 export type FacaMateriaPrima = {
   id: string
   faca_id: string
@@ -114,6 +124,8 @@ export const MODULOS = [
   { key: 'ordens_compra',   label: 'Ordens de Compra' },
   { key: 'usuarios',        label: 'Usuários' },
   { key: 'cargos',          label: 'Cargos' },
+  { key: 'lucro',           label: 'Lucro (facas)' },
+  { key: 'taxas_lucro',     label: 'Taxas de lucro (config.)' },
 ] as const
 
 export type ModuloKey = (typeof MODULOS)[number]['key']

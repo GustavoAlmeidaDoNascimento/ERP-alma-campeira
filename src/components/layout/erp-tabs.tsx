@@ -335,7 +335,17 @@ function TabPane({
     case 'materias-primas':
       return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'facas':
-      return <FacasClient facas={data.facas} categorias={data.categorias} materiasPrimas={data.materiasPrimas} perm={data.perm} verPrecoVenda={data.verPrecoVenda} />
+      return (
+        <FacasClient
+          facas={data.facas}
+          categorias={data.categorias}
+          materiasPrimas={data.materiasPrimas}
+          perm={data.perm}
+          verPrecoVenda={data.verPrecoVenda}
+          verLucro={data.verLucro}
+          taxasLucro={data.taxasLucro}
+        />
+      )
     case 'faca-detalhe':
       return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} verPrecoVenda={data.verPrecoVenda} />
     case 'fornecedores':
@@ -353,7 +363,15 @@ function TabPane({
     case 'consumiveis':
       return <ConsumivelClient consumiveis={data.consumiveis} fornecedores={data.fornecedores} categoriasConsumivel={data.categoriasConsumivel} perm={data.perm} />
     case 'configuracoes':
-      return <ConfiguracoesClient categorias={data.categorias} categoriasMateriaPrima={data.categoriasMateriaPrima} categoriasConsumivel={data.categoriasConsumivel} />
+      return (
+        <ConfiguracoesClient
+          categorias={data.categorias}
+          categoriasMateriaPrima={data.categoriasMateriaPrima}
+          categoriasConsumivel={data.categoriasConsumivel}
+          taxasLucro={data.taxasLucro}
+          permTaxasLucro={data.permTaxasLucro}
+        />
+      )
     case 'metricas-vendas':
       return <MetricasClient initialTab="vendas" vendasData={data.data} />
     case 'metricas-estoque':

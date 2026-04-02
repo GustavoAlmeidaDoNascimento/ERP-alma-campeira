@@ -16,6 +16,7 @@ import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
 import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
+import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -42,6 +43,8 @@ export type ErpTabData =
       materiasPrimas: MateriaPrima[]
       perm: Perm
       verPrecoVenda: boolean
+      verLucro: boolean
+      taxasLucro: TaxasLucroConfig
     }
   | {
       kind: 'faca-detalhe'
@@ -97,6 +100,8 @@ export type ErpTabData =
       categorias: CategoriaFacaDB[]
       categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
       categoriasConsumivel: CategoriaConsumivelDB[]
+      taxasLucro: TaxasLucroConfig
+      permTaxasLucro: Perm
     }
   | {
       kind: 'metricas-vendas'
@@ -159,7 +164,18 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
-    return { kind: 'facas', facas, categorias, materiasPrimas, perm, verPrecoVenda: perms.preco_venda.ver }
+    const verLucro = perms.lucro.ver
+    const taxasLucro = verLucro ? await getTaxasLucroConfig() : { taxa_producao: 0, taxa_comissao: 0 }
+    return {
+      kind: 'facas',
+      facas,
+      categorias,
+      materiasPrimas,
+      perm,
+      verPrecoVenda: perms.preco_venda.ver,
+      verLucro,
+      taxasLucro,
+    }
   }
 
   // Detalhe de faca: /facas/{uuid}
@@ -254,12 +270,21 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/configuracoes') {
-    const [categorias, categoriasMateriaPrima, categoriasConsumivel] = await Promise.all([
+    const [perms, categorias, categoriasMateriaPrima, categoriasConsumivel, taxasLucro] = await Promise.all([
+      getPermissoesEfetivas(),
       getCategoriasFaca(),
       getCategoriasMateriaPrima(),
       getCategoriasConsumivel(),
+      getTaxasLucroConfig(),
     ])
-    return { kind: 'configuracoes', categorias, categoriasMateriaPrima, categoriasConsumivel }
+    return {
+      kind: 'configuracoes',
+      categorias,
+      categoriasMateriaPrima,
+      categoriasConsumivel,
+      taxasLucro,
+      permTaxasLucro: perms.taxas_lucro as Perm,
+    }
   }
 
   if (path === '/metricas' || path === '/metricas/vendas') {

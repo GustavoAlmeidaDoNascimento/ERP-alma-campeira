@@ -8,13 +8,24 @@ import { deletarFaca, type DeletarFacaModo } from '@/lib/actions/facas'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { statusEstoqueFaca } from '@/types'
 import type { Faca, CategoriaFacaDB, MateriaPrima } from '@/types'
+import { lucroUnitarioFaca } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
-type Props = { facas: Faca[]; categorias: CategoriaFacaDB[]; materiasPrimas: MateriaPrima[]; perm: Perm; verPrecoVenda: boolean }
+type TaxasLucro = { taxa_producao: number; taxa_comissao: number }
 
-export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoVenda }: Props) {
+type Props = {
+  facas: Faca[]
+  categorias: CategoriaFacaDB[]
+  materiasPrimas: MateriaPrima[]
+  perm: Perm
+  verPrecoVenda: boolean
+  verLucro: boolean
+  taxasLucro: TaxasLucro
+}
+
+export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoVenda, verLucro, taxasLucro }: Props) {
   const { refreshActiveTab, openTab } = useErpTabs()
   const badgeCategoria = useMemo(() => {
     const map: Record<string, React.CSSProperties> = {}
@@ -169,6 +180,9 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
                 {verPrecoVenda && <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Venda</th>}
+                {verLucro && verPrecoVenda && (
+                  <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Lucro</th>
+                )}
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
                 <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                 <th className="px-4 py-3"></th>
@@ -177,7 +191,11 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
             <tbody>
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={verPrecoVenda ? 9 : 8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td
+                    colSpan={8 + (verPrecoVenda ? 1 : 0) + (verLucro && verPrecoVenda ? 1 : 0)}
+                    className="text-center py-12 text-sm"
+                    style={{ color: 'var(--ac-muted)' }}
+                  >
                     {busca || filtroCategoria ? 'Nenhum resultado para esse filtro.' : 'Nenhuma faca cadastrada ainda.'}
                   </td>
                 </tr>
@@ -271,6 +289,16 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
                     {verPrecoVenda && (
                       <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                         {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                    )}
+                    {verLucro && verPrecoVenda && (
+                      <td
+                        className="px-4 py-3 text-right tabular-nums font-semibold"
+                        style={{
+                          color: lucroUnitarioFaca(faca, taxasLucro) < 0 ? '#dc2626' : 'var(--ac-text)',
+                        }}
+                      >
+                        {lucroUnitarioFaca(faca, taxasLucro).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </td>
                     )}
                     <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>

@@ -8,14 +8,16 @@ import {
   getFilaReposicao,
   getOrdensCompra,
   gerarOC,
+  criarOrdemCompraManual,
   atualizarUnidadesAdicionaisItem,
   criarItemOrdemCompra,
   atualizarObservacaoOC,
   mudarStatusOC,
   deletarOC,
 } from '@/lib/actions/ordens-compra'
+import { getFornecedores } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
-import type { FilaFornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
+import type { FilaFornecedor, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
@@ -615,6 +617,327 @@ function OcDetalheModal({
   )
 }
 
+// ─── Modal: Nova OC manual ───────────────────────────────────────────────────
+
+type LinhaCriarOc = { key: string; materia_prima_id: string; quantidade: string; preco_unitario: string }
+
+function OcCriarModal({
+  open,
+  onClose,
+  onCriada,
+}: {
+  open: boolean
+  onClose: () => void
+  onCriada: (codigo: string) => void
+}) {
+  const [fornecedorId, setFornecedorId] = useState('')
+  const [observacao, setObservacao] = useState('')
+  const [linhas, setLinhas] = useState<LinhaCriarOc[]>(() => [
+    { key: `${Date.now()}-0`, materia_prima_id: '', quantidade: '1', preco_unitario: '' },
+  ])
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
+  const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([])
+  const [carregando, setCarregando] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const opcoesFornecedor = useMemo(
+    () => [
+      { value: '', label: 'Sem fornecedor' },
+      ...fornecedores.map((f) => ({ value: f.id, label: f.nome })),
+    ],
+    [fornecedores]
+  )
+
+  const mpById = useMemo(() => new Map(materiasPrimas.map((m) => [m.id, m])), [materiasPrimas])
+
+  const opcoesMateria = useMemo(
+    () =>
+      materiasPrimas.map((mp) => {
+        const imageUrl =
+          getOptimizedSupabaseImageUrl(mp.foto_url, {
+            width: 80,
+            height: 80,
+            quality: 72,
+            resize: 'cover',
+            fallbackUrl: '',
+          }) || null
+        return {
+          value: mp.id,
+          label: `${mp.codigo} — ${mp.nome}`,
+          imageUrl,
+        }
+      }),
+    [materiasPrimas]
+  )
+
+  useEffect(() => {
+    if (!open) return
+    setErro('')
+    setFornecedorId('')
+    setObservacao('')
+    setLinhas([{ key: `${Date.now()}-0`, materia_prima_id: '', quantidade: '1', preco_unitario: '' }])
+
+    let cancelled = false
+    async function load() {
+      setCarregando(true)
+      try {
+        const [f, m] = await Promise.all([getFornecedores(150), getMatériasPrimas(300)])
+        if (!cancelled) {
+          setFornecedores(f)
+          setMateriasPrimas(m)
+        }
+      } catch (e: unknown) {
+        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar dados.')
+      } finally {
+        if (!cancelled) setCarregando(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  function parseNumero(raw: string): number {
+    const v = raw.trim().replace(',', '.')
+    const n = Number(v)
+    return Number.isFinite(n) ? n : NaN
+  }
+
+  function addLinha() {
+    setLinhas((prev) => [...prev, { key: `${Date.now()}-${prev.length}`, materia_prima_id: '', quantidade: '1', preco_unitario: '' }])
+  }
+
+  function removeLinha(key: string) {
+    setLinhas((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.key !== key)))
+  }
+
+  function updateLinha(key: string, patch: Partial<LinhaCriarOc>) {
+    setLinhas((prev) =>
+      prev.map((l) => {
+        if (l.key !== key) return l
+        const next = { ...l, ...patch }
+        if (patch.materia_prima_id !== undefined && patch.materia_prima_id) {
+          const mp = mpById.get(patch.materia_prima_id)
+          if (mp) next.preco_unitario = String(mp.preco_custo ?? '')
+        }
+        return next
+      })
+    )
+  }
+
+  async function salvar() {
+    const itensValidos = linhas.filter((l) => l.materia_prima_id)
+    if (itensValidos.length === 0) {
+      setErro('Selecione ao menos uma matéria-prima.')
+      return
+    }
+    const payload: { materia_prima_id: string; quantidade: number; preco_unitario?: number | null }[] = []
+    for (const l of itensValidos) {
+      const q = parseNumero(l.quantidade)
+      if (!Number.isFinite(q) || q <= 0) {
+        setErro('Todas as quantidades devem ser maiores que zero.')
+        return
+      }
+      const precoRaw = l.preco_unitario.trim()
+      let preco_unitario: number | null = null
+      if (precoRaw !== '') {
+        const p = parseNumero(precoRaw)
+        if (!Number.isFinite(p) || p < 0) {
+          setErro('Preço unitário inválido em um dos itens.')
+          return
+        }
+        preco_unitario = p
+      }
+      payload.push({ materia_prima_id: l.materia_prima_id, quantidade: q, preco_unitario })
+    }
+
+    setErro('')
+    setSalvando(true)
+    try {
+      const codigo = await criarOrdemCompraManual({
+        fornecedor_id: fornecedorId || null,
+        observacao: observacao.trim() || null,
+        itens: payload,
+      })
+      onCriada(codigo)
+      onClose()
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Erro ao criar ordem de compra.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const totalEstimado = useMemo(() => {
+    let s = 0
+    for (const l of linhas) {
+      if (!l.materia_prima_id) continue
+      const q = parseNumero(l.quantidade)
+      if (!Number.isFinite(q) || q <= 0) continue
+      let unit: number
+      const precoRaw = l.preco_unitario.trim()
+      if (precoRaw !== '') {
+        const p = parseNumero(precoRaw)
+        unit = Number.isFinite(p) ? p : NaN
+      } else {
+        unit = mpById.get(l.materia_prima_id)?.preco_custo ?? 0
+      }
+      if (Number.isFinite(unit)) s += q * unit
+    }
+    return s
+  }, [linhas, mpById])
+
+  return (
+    <Modal open={open} onClose={onClose} title="Nova ordem de compra">
+      <div className="flex flex-col gap-4 max-h-[min(85vh,720px)]">
+        {erro && (
+          <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#fee2e2', color: '#dc2626' }}>
+            {erro}
+          </p>
+        )}
+
+        <div className="space-y-1.5 shrink-0">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+            Fornecedor
+          </label>
+          <SearchableSelect
+            value={fornecedorId}
+            onChange={setFornecedorId}
+            options={opcoesFornecedor}
+            placeholder="Pesquisar fornecedor…"
+            disabled={carregando}
+            loading={carregando}
+            emptyMessage="Nenhum fornecedor"
+          />
+        </div>
+
+        <div className="space-y-1.5 shrink-0">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+            Observações (opcional)
+          </label>
+          <textarea
+            value={observacao}
+            onChange={(e) => setObservacao(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[3rem]"
+            style={{
+              border: '1px solid var(--ac-border)',
+              background: 'var(--ac-bg)',
+              color: 'var(--ac-text)',
+            }}
+            placeholder="Notas internas sobre esta OC…"
+          />
+        </div>
+
+        <div className="min-h-0 flex flex-col gap-2 flex-1">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+              Itens
+            </span>
+            <Button type="button" variant="secondary" onClick={addLinha} disabled={carregando}>
+              Adicionar linha
+            </Button>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg -mx-1 px-1" style={{ border: '1px solid var(--ac-border)' }}>
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
+                  <th className="px-2 py-2 text-left text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
+                    Matéria-prima
+                  </th>
+                  <th className="px-2 py-2 text-right text-xs font-semibold uppercase w-[100px]" style={{ color: 'var(--ac-muted)' }}>
+                    Qtd
+                  </th>
+                  <th className="px-2 py-2 text-right text-xs font-semibold uppercase w-[120px]" style={{ color: 'var(--ac-muted)' }}>
+                    Preço unit.
+                  </th>
+                  <th className="w-10 px-1 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.map((l) => (
+                  <tr key={l.key} style={{ borderTop: '1px solid var(--ac-border)' }}>
+                    <td className="px-2 py-2 align-top">
+                      <SearchableSelect
+                        value={l.materia_prima_id}
+                        onChange={(v) => updateLinha(l.key, { materia_prima_id: v })}
+                        options={opcoesMateria}
+                        placeholder="Escolher…"
+                        disabled={carregando}
+                        loading={carregando}
+                        className="min-w-[200px]"
+                      />
+                    </td>
+                    <td className="px-2 py-2 align-top">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={l.quantidade}
+                        onChange={(e) => updateLinha(l.key, { quantidade: e.target.value })}
+                        className="w-full px-2 py-1.5 rounded text-sm text-right"
+                        style={{
+                          border: '1px solid var(--ac-border)',
+                          background: 'var(--ac-bg)',
+                          color: 'var(--ac-text)',
+                        }}
+                      />
+                    </td>
+                    <td className="px-2 py-2 align-top">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={l.preco_unitario}
+                        onChange={(e) => updateLinha(l.key, { preco_unitario: e.target.value })}
+                        placeholder="Custo MP"
+                        className="w-full px-2 py-1.5 rounded text-sm text-right"
+                        style={{
+                          border: '1px solid var(--ac-border)',
+                          background: 'var(--ac-bg)',
+                          color: 'var(--ac-text)',
+                        }}
+                      />
+                    </td>
+                    <td className="px-1 py-2 align-top text-center">
+                      <button
+                        type="button"
+                        title="Remover linha"
+                        disabled={linhas.length <= 1}
+                        onClick={() => removeLinha(l.key)}
+                        className="p-1.5 rounded-lg disabled:opacity-40"
+                        style={{ color: '#dc2626' }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14H6L5 6" />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm text-right font-medium" style={{ color: 'var(--ac-text)' }}>
+            Total estimado: <span style={{ color: 'var(--ac-accent)' }}>{fmt(totalEstimado)}</span>
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2 justify-end pt-2 shrink-0" style={{ borderTop: '1px solid var(--ac-border)' }}>
+          <Button variant="secondary" onClick={onClose} disabled={salvando}>
+            Cancelar
+          </Button>
+          <Button variant="primary" loading={salvando} onClick={salvar} disabled={carregando}>
+            Criar ordem
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export function OcClient({ fila, ordens, perm }: Props) {
@@ -630,6 +953,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [erroDelete, setErroDelete] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<StatusOC | 'todas'>('todas')
+  const [ocCriarOpen, setOcCriarOpen] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
   const gerarOcInFlightRef = useRef<Record<string, boolean>>({})
@@ -769,7 +1093,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
     <>
       {/* Header */}
       <div
-        className="flex items-center justify-between px-8 py-6"
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-8 py-6"
         style={{ borderBottom: '1px solid var(--ac-border)' }}
       >
         <div>
@@ -780,36 +1104,47 @@ export function OcClient({ fila, ordens, perm }: Props) {
               : 'Fila de reposição vazia'}
           </p>
         </div>
-        {perm.criar && filaState.length > 0 && (
-          <Button
-            variant="primary"
-            loading={gerandoTodas}
-            onClick={handleGerarTodas}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-              <polyline points="16 16 12 12 8 16" />
-              <line x1="12" y1="12" x2="12" y2="21" />
-              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-            </svg>
-            Gerar Todas as OCs
-          </Button>
+        {perm.criar && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="primary" onClick={() => setOcCriarOpen(true)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nova ordem de compra
+            </Button>
+            {filaState.length > 0 && (
+              <Button
+                variant="secondary"
+                loading={gerandoTodas}
+                onClick={handleGerarTodas}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                  <polyline points="16 16 12 12 8 16" />
+                  <line x1="12" y1="12" x2="12" y2="21" />
+                  <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                </svg>
+                Gerar Todas as OCs
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
       {/* Alertas */}
       {erro && (
-        <div className="mx-8 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>
+        <div className="mx-4 sm:mx-8 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>
           {erro}
         </div>
       )}
       {sucesso && (
-        <div className="mx-8 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
+        <div className="mx-4 sm:mx-8 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
           {sucesso}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="px-8 pt-5">
+      <div className="px-4 sm:px-8 pt-5">
         <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
           {[
             { key: 'fila' as const, label: 'Fila de Reposição', count: filaState.length },
@@ -844,7 +1179,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
 
       {/* ── Aba: Fila ── */}
       {aba === 'fila' && (
-        <div className="px-8 py-6">
+        <div className="px-4 sm:px-8 py-6">
           {filaState.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-20 rounded-xl text-center"
@@ -983,7 +1318,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
 
       {/* ── Aba: Histórico ── */}
       {aba === 'historico' && (
-        <div className="px-8 py-6">
+        <div className="px-4 sm:px-8 py-6">
           {/* Filtro de status */}
           <div className="flex gap-2 mb-5">
             {statusTabs.map((tab) => {
@@ -1023,7 +1358,9 @@ export function OcClient({ fila, ordens, perm }: Props) {
                 {filtroStatus === 'todas' ? 'Nenhuma OC gerada ainda' : `Nenhuma OC ${STATUS_OC[filtroStatus as StatusOC]?.label.toLowerCase()}`}
               </p>
               <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                {filtroStatus === 'todas' ? 'Gere as OCs a partir da aba "Fila de Reposição".' : 'Altere o filtro para ver outras.'}
+                {filtroStatus === 'todas'
+                  ? 'Use "Nova ordem de compra" no topo ou gere OCs pela aba "Fila de Reposição".'
+                  : 'Altere o filtro para ver outras.'}
               </p>
             </div>
           ) : (
@@ -1128,6 +1465,16 @@ export function OcClient({ fila, ordens, perm }: Props) {
           }}
         />
       )}
+
+      <OcCriarModal
+        open={ocCriarOpen}
+        onClose={() => setOcCriarOpen(false)}
+        onCriada={(codigo) => {
+          flash(`OC ${codigo} criada com sucesso.`)
+          refresh()
+          setAba('historico')
+        }}
+      />
 
       {/* Modal confirmar delete */}
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir Ordem de Compra">

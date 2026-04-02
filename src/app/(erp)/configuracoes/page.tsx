@@ -3,6 +3,8 @@ import { ConfiguracoesClient } from '@/components/configuracoes/configuracoes-cl
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
+import { getTaxasLucroConfig } from '@/lib/actions/app-config'
+import { getPermissoesEfetivas } from '@/lib/auth'
 import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Configurações — Alma Campeira' }
@@ -19,10 +21,12 @@ export default async function ConfiguracoesPage() {
 }
 
 async function ConfiguracoesPageData() {
-  const [categorias, categoriasMateriaPrima, categoriasConsumivel] = await Promise.all([
+  const [perms, categorias, categoriasMateriaPrima, categoriasConsumivel, taxasLucro] = await Promise.all([
+    getPermissoesEfetivas(),
     getCategoriasFaca(),
     getCategoriasMateriaPrima(),
     getCategoriasConsumivel(),
+    getTaxasLucroConfig(),
   ])
   return (
     <div data-nav-content-ready="Configurações">
@@ -30,6 +34,8 @@ async function ConfiguracoesPageData() {
         categorias={categorias}
         categoriasMateriaPrima={categoriasMateriaPrima}
         categoriasConsumivel={categoriasConsumivel}
+        taxasLucro={taxasLucro}
+        permTaxasLucro={perms.taxas_lucro}
       />
     </div>
   )

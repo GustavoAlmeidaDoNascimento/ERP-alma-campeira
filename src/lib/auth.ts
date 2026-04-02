@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
 import type { PermMap } from '@/lib/permissoes'
+import { MODULOS } from '@/types'
 import type { ModuloKey } from '@/types'
 import type { User } from '@supabase/supabase-js'
 
@@ -94,8 +95,5 @@ export async function assertPermissao(modulo: ModuloKey, acao: Acao): Promise<vo
 
 function acesso_total(): PermMap {
   const full = { ver: true, criar: true, editar: true, deletar: true }
-  return Object.fromEntries(
-    ['dashboard','metricas','materias_primas','fornecedores','facas','preco_venda','estoque',
-     'vendas','clientes','ordens_compra','usuarios','cargos'].map((k) => [k, full])
-  ) as PermMap
+  return Object.fromEntries(MODULOS.map((m) => [m.key, full])) as PermMap
 }

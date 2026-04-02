@@ -1,5 +1,6 @@
 'use client'
 
+import { colunasPermissaoModulo } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 import type { ModuloKey } from '@/types'
 
@@ -50,11 +51,42 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 
 export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
   function toggle(modulo: ModuloKey, col: keyof Perm) {
+    const activeCols = colunasPermissaoModulo(modulo)
+    if (!activeCols.includes(col as 'ver' | 'criar' | 'editar' | 'deletar')) return
+
     const perm = value[modulo]
+
+    if (modulo === 'lucro') {
+      const newVer = !perm.ver
+      onChange({
+        ...value,
+        [modulo]: { ver: newVer, criar: false, editar: false, deletar: false },
+      })
+      return
+    }
+
+    if (modulo === 'taxas_lucro') {
+      if (col === 'ver') {
+        const newVer = !perm.ver
+        onChange({
+          ...value,
+          [modulo]: { ver: newVer, criar: false, editar: newVer ? perm.editar : false, deletar: false },
+        })
+        return
+      }
+      if (col === 'editar') {
+        const newEdit = !perm.editar
+        onChange({
+          ...value,
+          [modulo]: { ver: newEdit ? true : perm.ver, criar: false, editar: newEdit, deletar: false },
+        })
+        return
+      }
+      return
+    }
+
     const newVal = !perm[col]
-    // Se habilitar criar/editar/deletar, habilita "ver" também automaticamente
     const ver = col === 'ver' ? newVal : (newVal ? true : perm.ver)
-    // Se desabilitar "ver", desabilita tudo
     const others = col === 'ver' && !newVal
       ? { criar: false, editar: false, deletar: false }
       : { criar: perm.criar, editar: perm.editar, deletar: perm.deletar }
@@ -67,7 +99,27 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
 
   function toggleAll(modulo: ModuloKey) {
     const perm = value[modulo]
-    const allOn = COLS.every((c) => perm[c.key])
+    const activeCols = colunasPermissaoModulo(modulo)
+
+    if (modulo === 'lucro') {
+      const allOn = perm.ver
+      const newPerm: Perm = allOn
+        ? { ver: false, criar: false, editar: false, deletar: false }
+        : { ver: true, criar: false, editar: false, deletar: false }
+      onChange({ ...value, [modulo]: newPerm })
+      return
+    }
+
+    if (modulo === 'taxas_lucro') {
+      const allOn = perm.ver && perm.editar
+      const newPerm: Perm = allOn
+        ? { ver: false, criar: false, editar: false, deletar: false }
+        : { ver: true, criar: false, editar: true, deletar: false }
+      onChange({ ...value, [modulo]: newPerm })
+      return
+    }
+
+    const allOn = activeCols.every((k) => perm[k])
     const newPerm: Perm = allOn
       ? { ver: false, criar: false, editar: false, deletar: false }
       : { ver: true, criar: true, editar: true, deletar: true }
@@ -97,7 +149,8 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
         <tbody>
           {MODULOS.map((m, i) => {
             const perm = value[m.key]
-            const allOn = COLS.every((c) => perm[c.key])
+            const activeCols = colunasPermissaoModulo(m.key)
+            const allOn = activeCols.every((k) => perm[k])
             return (
               <tr
                 key={m.key}
@@ -109,15 +162,26 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
                 <td className="px-4 py-2.5 font-medium text-sm" style={{ color: 'var(--ac-text)' }}>
                   {m.label}
                 </td>
-                {COLS.map((c) => (
-                  <td key={c.key} className="px-3 py-2.5 text-center">
-                    <Toggle
-                      checked={perm[c.key]}
-                      onChange={() => toggle(m.key, c.key)}
-                      disabled={readonly || (c.key !== 'ver' && !perm.ver)}
-                    />
-                  </td>
-                ))}
+                {COLS.map((c) => {
+                  const inModule = activeCols.includes(c.key as 'ver' | 'criar' | 'editar' | 'deletar')
+                  if (!inModule) {
+                    return (
+                      <td key={c.key} className="px-3 py-2.5 text-center">
+                        <span className="text-xs tabular-nums" style={{ color: 'var(--ac-muted)', opacity: 0.45 }}>—</span>
+                      </td>
+                    )
+                  }
+                  const needVer = c.key !== 'ver' && !perm.ver
+                  return (
+                    <td key={c.key} className="px-3 py-2.5 text-center">
+                      <Toggle
+                        checked={perm[c.key]}
+                        onChange={() => toggle(m.key, c.key)}
+                        disabled={readonly || needVer}
+                      />
+                    </td>
+                  )
+                })}
                 {!readonly && (
                   <td className="px-3 py-2.5 text-center">
                     <button

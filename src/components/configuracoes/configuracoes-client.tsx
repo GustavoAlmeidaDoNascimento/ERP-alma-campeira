@@ -1,16 +1,20 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CategoriasFacaSection } from './categorias-faca-section'
 import { CategoriasMateriaPrimaSection } from './categorias-materia-prima-section'
 import { CategoriasConsumivelSection } from './categorias-consumivel-section'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { updateTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import type { CategoriaFacaDB, CategoriaMateriaPrimaDB, CategoriaConsumivelDB } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 const SETTINGS_SECTIONS = [
   { id: 'config-aparencia', label: 'Aparência' },
+  { id: 'config-taxas-lucro', label: 'Lucro' },
   { id: 'categorias-faca', label: 'Facas' },
   { id: 'categorias-materia-prima', label: 'Matérias-primas' },
   { id: 'categorias-consumivel', label: 'Consumíveis' },
@@ -114,21 +118,41 @@ function ThemeOption({
   )
 }
 
+type PermTaxas = { ver: boolean; editar: boolean }
+
 type Props = {
   categorias: CategoriaFacaDB[]
   categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
   categoriasConsumivel: CategoriaConsumivelDB[]
+  taxasLucro: TaxasLucroConfig
+  permTaxasLucro: PermTaxas
 }
 
-export function ConfiguracoesClient({ categorias, categoriasMateriaPrima, categoriasConsumivel }: Props) {
+export function ConfiguracoesClient({
+  categorias,
+  categoriasMateriaPrima,
+  categoriasConsumivel,
+  taxasLucro,
+  permTaxasLucro,
+}: Props) {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
+  const [tp, setTp] = useState(String(taxasLucro.taxa_producao))
+  const [tc, setTc] = useState(String(taxasLucro.taxa_comissao))
+  const [taxasMsg, setTaxasMsg] = useState<string | null>(null)
+  const [taxasErr, setTaxasErr] = useState<string | null>(null)
+  const [pendingTaxas, startTaxas] = useTransition()
 
   // Evita hydration mismatch
   useEffect(() => setMounted(true), [])
+
+  useEffect(() => {
+    setTp(String(taxasLucro.taxa_producao))
+    setTc(String(taxasLucro.taxa_comissao))
+  }, [taxasLucro.taxa_producao, taxasLucro.taxa_comissao])
 
   async function handleSignOut() {
     setSignOutError(null)
@@ -147,6 +171,29 @@ export function ConfiguracoesClient({ categorias, categoriasMateriaPrima, catego
     router.refresh()
   }
 
+  function salvarTaxasLucro() {
+    setTaxasMsg(null)
+    setTaxasErr(null)
+    const taxa_producao = parseFloat(tp.replace(',', '.'))
+    const taxa_comissao = parseFloat(tc.replace(',', '.'))
+    if (!Number.isFinite(taxa_producao) || taxa_producao < 0) {
+      setTaxasErr('Informe um valor numérico válido para a taxa de produção.')
+      return
+    }
+    if (!Number.isFinite(taxa_comissao) || taxa_comissao < 0) {
+      setTaxasErr('Informe um valor numérico válido para a taxa de comissão.')
+      return
+    }
+    startTaxas(async () => {
+      try {
+        await updateTaxasLucroConfig({ taxa_producao, taxa_comissao })
+        setTaxasMsg('Taxas salvas.')
+      } catch (e: unknown) {
+        setTaxasErr(e instanceof Error ? e.message : 'Erro ao salvar.')
+      }
+    })
+  }
+
   return (
     <div className="min-h-0">
       {/* Header */}
@@ -160,7 +207,7 @@ export function ConfiguracoesClient({ categorias, categoriasMateriaPrima, catego
               Configurações
             </h2>
             <p className="text-sm mt-1 max-w-xl leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
-              Ajuste a aparência, organize categorias usadas no cadastro e gerencie sua sessão.
+              Ajuste a aparência, taxas usadas no cálculo de lucro, organize categorias no cadastro e gerencie sua sessão.
             </p>
           </div>
         </div>
@@ -265,6 +312,61 @@ export function ConfiguracoesClient({ categorias, categoriasMateriaPrima, catego
                 </div>
               )}
             </div>
+
+            {permTaxasLucro.ver && (
+              <div
+                id="config-taxas-lucro"
+                className="scroll-mt-24 rounded-xl p-5 sm:p-6 shadow-sm"
+                style={{
+                  background: 'var(--ac-card)',
+                  border: '1px solid var(--ac-border)',
+                  boxShadow: '0 1px 3px color-mix(in srgb, var(--ac-text) 6%, transparent)',
+                }}
+              >
+                <div className="mb-5 sm:mb-6">
+                  <h2 className="text-lg font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    Taxas para cálculo de lucro
+                  </h2>
+                  <p className="text-sm mt-1 leading-relaxed max-w-2xl" style={{ color: 'var(--ac-muted)' }}>
+                    O lucro na lista de facas é: preço de venda − taxa de produção − taxa de comissão − preço de custo.
+                    {!permTaxasLucro.editar && ' Você pode visualizar os valores; apenas quem tem permissão de edição altera as taxas.'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                  <Input
+                    id="taxa_producao_lucro"
+                    label="Taxa de produção (R$)"
+                    type="text"
+                    inputMode="decimal"
+                    value={tp}
+                    onChange={(e) => setTp(e.target.value)}
+                    disabled={!permTaxasLucro.editar || pendingTaxas}
+                  />
+                  <Input
+                    id="taxa_comissao_lucro"
+                    label="Taxa de comissão (R$)"
+                    type="text"
+                    inputMode="decimal"
+                    value={tc}
+                    onChange={(e) => setTc(e.target.value)}
+                    disabled={!permTaxasLucro.editar || pendingTaxas}
+                  />
+                </div>
+                {permTaxasLucro.editar && (
+                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <Button type="button" onClick={salvarTaxasLucro} loading={pendingTaxas}>
+                      Salvar taxas
+                    </Button>
+                    {taxasMsg && <span className="text-sm" style={{ color: '#15803d' }}>{taxasMsg}</span>}
+                  </div>
+                )}
+                {taxasErr && (
+                  <p className="text-sm mt-3 rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
+                    {taxasErr}
+                  </p>
+                )}
+              </div>
+            )}
 
             <CategoriasFacaSection categorias={categorias} />
             <CategoriasMateriaPrimaSection categorias={categoriasMateriaPrima} />

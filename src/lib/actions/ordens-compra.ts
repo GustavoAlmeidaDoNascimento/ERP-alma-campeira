@@ -198,6 +198,111 @@ export async function gerarTodasOCs(): Promise<number> {
   return criadas
 }
 
+export type CriarOcItemManual = {
+  materia_prima_id: string
+  quantidade: number
+  /** Se omitido, usa o preço de custo cadastrado na matéria-prima. */
+  preco_unitario?: number | null
+}
+
+/**
+ * Cria uma OC manualmente (sem passar pela fila de reposição): fornecedor, itens e observação.
+ */
+export async function criarOrdemCompraManual(input: {
+  fornecedor_id: string | null
+  observacao?: string | null
+  itens: CriarOcItemManual[]
+}): Promise<string> {
+  await assertPermissao('ordens_compra', 'criar')
+  const linhas = input.itens?.filter((i) => i.materia_prima_id) ?? []
+  if (linhas.length === 0) throw new Error('Adicione ao menos um item com matéria-prima.')
+
+  const supabase = await createClient()
+  const mpIds = [...new Set(linhas.map((i) => i.materia_prima_id))]
+
+  const { data: mps, error: mpErr } = await supabase
+    .from('materias_primas')
+    .select('id, preco_custo')
+    .in('id', mpIds)
+
+  if (mpErr) throw new Error(mpErr.message)
+  if (!mps || mps.length !== mpIds.length) {
+    throw new Error('Uma ou mais matérias-primas não foram encontradas.')
+  }
+
+  const custoPorId = new Map(mps.map((m) => [m.id, Number(m.preco_custo ?? 0)]))
+
+  const agregado = new Map<string, { quantidade: number; subtotal: number }>()
+  for (const row of linhas) {
+    const q = Number(row.quantidade)
+    if (!Number.isFinite(q) || q <= 0) throw new Error('Cada quantidade deve ser maior que zero.')
+
+    let unit: number
+    if (row.preco_unitario != null) {
+      const p = Number(row.preco_unitario)
+      if (!Number.isFinite(p) || p < 0) throw new Error('Preço unitário inválido.')
+      unit = p
+    } else {
+      unit = custoPorId.get(row.materia_prima_id) ?? 0
+    }
+
+    const prev = agregado.get(row.materia_prima_id)
+    const sub = q * unit
+    if (!prev) {
+      agregado.set(row.materia_prima_id, { quantidade: q, subtotal: sub })
+    } else {
+      agregado.set(row.materia_prima_id, {
+        quantidade: prev.quantidade + q,
+        subtotal: prev.subtotal + sub,
+      })
+    }
+  }
+
+  const itensInsert = Array.from(agregado.entries()).map(([materia_prima_id, { quantidade, subtotal }]) => {
+    const preco_unitario = quantidade > 0 ? subtotal / quantidade : 0
+    return {
+      materia_prima_id,
+      quantidade,
+      preco_unitario,
+    }
+  })
+
+  const codigo = await gerarCodigoOC(supabase)
+
+  const { data: oc, error: ocErr } = await supabase
+    .from('ordens_compra')
+    .insert({
+      codigo,
+      fornecedor_id: input.fornecedor_id ?? null,
+      status: 'pendente',
+      data_geracao: new Date().toISOString().split('T')[0],
+      observacao: input.observacao?.trim() || null,
+    })
+    .select('id')
+    .single()
+
+  if (ocErr || !oc) throw new Error(ocErr?.message ?? 'Erro ao criar OC.')
+
+  const rows = itensInsert.map((r) => ({
+    ordem_compra_id: oc.id,
+    materia_prima_id: r.materia_prima_id,
+    quantidade_vendida: 0,
+    quantidade_adicional: r.quantidade,
+    quantidade: r.quantidade,
+    preco_unitario: r.preco_unitario,
+  }))
+
+  const { error: itensErr } = await supabase.from('ordem_compra_itens').insert(rows)
+  if (itensErr) {
+    await supabase.from('ordens_compra').delete().eq('id', oc.id)
+    throw new Error(itensErr.message)
+  }
+
+  revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico', 'max')
+  return codigo
+}
+
 // ─── Consultas de OC ──────────────────────────────────────────────────────────
 
 async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {

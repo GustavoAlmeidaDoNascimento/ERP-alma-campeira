@@ -3,6 +3,15 @@ import { MODULOS } from '@/types'
 
 export type PermMap = Record<ModuloKey, { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }>
 
+export type PermColKey = 'ver' | 'criar' | 'editar' | 'deletar'
+
+/** Colunas usadas na matriz de cargos (lucro só "ver"; taxas só "ver" e "editar"). */
+export function colunasPermissaoModulo(modulo: ModuloKey): PermColKey[] {
+  if (modulo === 'lucro') return ['ver']
+  if (modulo === 'taxas_lucro') return ['ver', 'editar']
+  return ['ver', 'criar', 'editar', 'deletar']
+}
+
 export function permissoesVazias(): PermMap {
   return Object.fromEntries(
     MODULOS.map((m) => [m.key, { ver: false, criar: false, editar: false, deletar: false }])
