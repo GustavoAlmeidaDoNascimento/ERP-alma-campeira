@@ -80,15 +80,19 @@ export function CategoriasMateriaPrimaSection({ categorias }: Props) {
     <>
       <div
         id="categorias-materia-prima"
-        className="rounded-xl p-6"
-        style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)' }}
+        className="scroll-mt-24 rounded-xl p-5 sm:p-6 shadow-sm"
+        style={{
+          background: 'var(--ac-card)',
+          border: '1px solid var(--ac-border)',
+          boxShadow: '0 1px 3px color-mix(in srgb, var(--ac-text) 6%, transparent)',
+        }}
       >
-        <div className="flex items-start justify-between mb-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-5">
           <div>
-            <h2 className="font-semibold text-base" style={{ color: 'var(--ac-text)' }}>
+            <h2 className="font-semibold text-lg" style={{ color: 'var(--ac-text)' }}>
               Categorias de Matérias-Primas
             </h2>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
+            <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
               Gerencie os tipos usados no cadastro das matérias-primas
             </p>
           </div>
