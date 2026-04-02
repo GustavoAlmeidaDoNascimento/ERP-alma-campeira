@@ -27,7 +27,7 @@ export function Modal({ open, onClose, title, children, width = '520px' }: Modal
       onClick={onClose}
     >
       <div
-        className="relative rounded-xl shadow-xl w-full"
+        className="relative flex max-h-[min(90vh,calc(100vh-2rem))] w-full flex-col overflow-hidden rounded-xl shadow-xl"
         style={{
           maxWidth: width,
           background: 'var(--ac-card)',
@@ -35,9 +35,9 @@ export function Modal({ open, onClose, title, children, width = '520px' }: Modal
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Header — fixo no topo enquanto o corpo rola */}
         <div
-          className="flex items-center justify-between px-6 py-4"
+          className="flex shrink-0 items-center justify-between px-6 py-4"
           style={{ borderBottom: '1px solid var(--ac-border)' }}
         >
           <h2 className="font-semibold text-base" style={{ color: 'var(--ac-text)' }}>
@@ -57,8 +57,8 @@ export function Modal({ open, onClose, title, children, width = '520px' }: Modal
           </button>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-5">{children}</div>
+        {/* Corpo rolável (matrizes longas, formulários grandes) */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">{children}</div>
       </div>
     </div>
   )
