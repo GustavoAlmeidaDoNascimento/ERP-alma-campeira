@@ -10,10 +10,18 @@ export type TaxasLucroConfig = {
   taxa_comissao: number
 }
 
-/** PostgREST quando a tabela ainda não existe no projeto (migração não aplicada). */
+const APP_CONFIG_MISSING_MSG =
+  'A tabela app_config ainda não existe no Supabase. Abra o SQL Editor, execute o arquivo supabase/migration_app_config_taxas_lucro.sql do repositório e, se o erro persistir, em Project Settings → API use "Reload schema" (cache do PostgREST).'
+
+/** PostgREST / Postgres quando app_config não existe ou não está no cache. */
 function isAppConfigUnavailable(error: { message?: string }): boolean {
   const m = error.message ?? ''
-  return m.includes('app_config') && m.includes('schema cache')
+  if (!m.includes('app_config')) return false
+  return (
+    m.includes('schema cache') ||
+    m.includes('does not exist') ||
+    m.includes('Could not find the table')
+  )
 }
 
 export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
@@ -60,7 +68,10 @@ export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
     { onConflict: 'id' }
   )
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (isAppConfigUnavailable(error)) throw new Error(APP_CONFIG_MISSING_MSG)
+    throw new Error(error.message)
+  }
   revalidatePath('/configuracoes')
   revalidatePath('/facas')
 }
