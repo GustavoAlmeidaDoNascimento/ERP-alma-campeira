@@ -1,4 +1,5 @@
 -- Taxas globais para cálculo de lucro (lista de facas) e novos módulos de permissão.
+-- Colunas taxa_*_lucro: percentual do preço de venda (0–100; ex.: 5 = 5%).
 -- Execute no SQL Editor do Supabase após as migrations de cargos.
 
 CREATE TABLE IF NOT EXISTS app_config (

@@ -50,14 +50,20 @@ export function statusEstoqueFaca(faca: Faca): StatusEstoque {
   return 'ok'
 }
 
-/** Lucro unitário: preço venda − taxas globais (config.) − custo. */
+/**
+ * Lucro unitário: preço venda
+ * − (% produção sobre venda) − (% comissão sobre venda) − custo.
+ * taxas em percentual (ex.: 5 = 5%).
+ */
 export function lucroUnitarioFaca(
   faca: Pick<Faca, 'preco_venda' | 'preco_custo'>,
   taxas: { taxa_producao: number; taxa_comissao: number }
 ): number {
   const custo = Number(faca.preco_custo ?? 0)
   const venda = Number(faca.preco_venda ?? 0)
-  return venda - taxas.taxa_producao - taxas.taxa_comissao - custo
+  const p = Math.max(0, Number(taxas.taxa_producao) || 0) / 100
+  const c = Math.max(0, Number(taxas.taxa_comissao) || 0) / 100
+  return venda * (1 - p - c) - custo
 }
 
 export type FacaMateriaPrima = {

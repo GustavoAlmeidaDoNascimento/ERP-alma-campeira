@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 
 const SETTINGS_SECTIONS = [
   { id: 'config-aparencia', label: 'Aparência' },
-  { id: 'config-taxas-lucro', label: 'Lucro' },
+  { id: 'config-taxas-lucro', label: 'Taxa' },
   { id: 'categorias-faca', label: 'Facas' },
   { id: 'categorias-materia-prima', label: 'Matérias-primas' },
   { id: 'categorias-consumivel', label: 'Consumíveis' },
@@ -176,12 +176,12 @@ export function ConfiguracoesClient({
     setTaxasErr(null)
     const taxa_producao = parseFloat(tp.replace(',', '.'))
     const taxa_comissao = parseFloat(tc.replace(',', '.'))
-    if (!Number.isFinite(taxa_producao) || taxa_producao < 0) {
-      setTaxasErr('Informe um valor numérico válido para a taxa de produção.')
+    if (!Number.isFinite(taxa_producao) || taxa_producao < 0 || taxa_producao > 100) {
+      setTaxasErr('Informe a taxa de produção entre 0 e 100%.')
       return
     }
-    if (!Number.isFinite(taxa_comissao) || taxa_comissao < 0) {
-      setTaxasErr('Informe um valor numérico válido para a taxa de comissão.')
+    if (!Number.isFinite(taxa_comissao) || taxa_comissao < 0 || taxa_comissao > 100) {
+      setTaxasErr('Informe a taxa de comissão entre 0 e 100%.')
       return
     }
     startTaxas(async () => {
@@ -328,14 +328,14 @@ export function ConfiguracoesClient({
                     Taxas para cálculo de lucro
                   </h2>
                   <p className="text-sm mt-1 leading-relaxed max-w-2xl" style={{ color: 'var(--ac-muted)' }}>
-                    O lucro na lista de facas é: preço de venda − taxa de produção − taxa de comissão − preço de custo.
+                    O lucro na lista de facas é: preço de venda − (produção % sobre a venda) − (comissão % sobre a venda) − preço de custo.
                     {!permTaxasLucro.editar && ' Você pode visualizar os valores; apenas quem tem permissão de edição altera as taxas.'}
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
                   <Input
                     id="taxa_producao_lucro"
-                    label="Taxa de produção (R$)"
+                    label="Taxa de produção (%)"
                     type="text"
                     inputMode="decimal"
                     value={tp}
@@ -344,7 +344,7 @@ export function ConfiguracoesClient({
                   />
                   <Input
                     id="taxa_comissao_lucro"
-                    label="Taxa de comissão (R$)"
+                    label="Taxa de comissão (%)"
                     type="text"
                     inputMode="decimal"
                     value={tc}

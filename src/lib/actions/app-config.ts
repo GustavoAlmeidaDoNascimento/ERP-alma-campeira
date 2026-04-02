@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 
+/** Taxas em % do preço de venda (ex.: 10 = 10%). */
 export type TaxasLucroConfig = {
   taxa_producao: number
   taxa_comissao: number
@@ -41,8 +42,12 @@ export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
   await assertPermissao('taxas_lucro', 'editar')
   const tp = Number(input.taxa_producao)
   const tc = Number(input.taxa_comissao)
-  if (!Number.isFinite(tp) || tp < 0) throw new Error('Taxa de produção inválida.')
-  if (!Number.isFinite(tc) || tc < 0) throw new Error('Taxa de comissão inválida.')
+  if (!Number.isFinite(tp) || tp < 0 || tp > 100) {
+    throw new Error('Taxa de produção inválida (use 0 a 100%).')
+  }
+  if (!Number.isFinite(tc) || tc < 0 || tc > 100) {
+    throw new Error('Taxa de comissão inválida (use 0 a 100%).')
+  }
 
   const supabase = await createClient()
   const { error } = await supabase.from('app_config').upsert(
