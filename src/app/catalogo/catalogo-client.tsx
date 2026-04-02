@@ -8,7 +8,6 @@ export type FacaCatalogoItem = {
   categoria: string
   foto_url: string | null
   preco_venda: number
-  estoque_atual: number
 }
 
 const logoMask: CSSProperties = {
@@ -303,18 +302,6 @@ export function CatalogoClient({ facas }: Props) {
                 >
                   {formatPreco(faca.preco_venda)}
                 </p>
-
-                {faca.estoque_atual > 0 ? (
-                  <span className="badge-disponivel">
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
-                    Disponível
-                  </span>
-                ) : (
-                  <span className="badge-encomenda">
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9ca3af', flexShrink: 0 }} />
-                    Sob encomenda
-                  </span>
-                )}
               </div>
             </div>
           ))}

@@ -14,7 +14,7 @@ async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('facas')
-      .select('id, nome, categoria, foto_url, preco_venda, estoque_atual')
+      .select('id, nome, categoria, foto_url, preco_venda')
       .order('nome')
     return (data ?? []) as FacaCatalogoItem[]
   } catch {
@@ -121,36 +121,6 @@ export default async function CatalogoPage() {
           height: 1px;
           background: linear-gradient(to right, transparent, rgba(202,138,4,0.45), transparent);
           margin: 24px 0;
-        }
-
-        .badge-encomenda {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          color: #6b7280;
-          background: #f3f4f6;
-          border: 1px solid #e5e7eb;
-          padding: 3px 8px;
-          border-radius: 999px;
-          margin-top: 8px;
-        }
-
-        .badge-disponivel {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          color: #15803d;
-          background: rgba(22, 163, 74, 0.08);
-          border: 1px solid rgba(22, 163, 74, 0.22);
-          padding: 3px 8px;
-          border-radius: 999px;
-          margin-top: 8px;
         }
       `}</style>
 
