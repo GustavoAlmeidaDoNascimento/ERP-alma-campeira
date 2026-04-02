@@ -356,11 +356,11 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     const supabase = await createClient()
     const { desde, ate } = calcularDatasPerido(periodo)
 
-    // Movimentações filtradas por período
+    // Movimentações filtradas por período (mp/faca via embeds; consumíveis exigem coluna consumivel_id — ver `supabase/migration_movimentacoes_consumivel.sql`)
     let movQuery = supabase
       .from('movimentacoes_estoque')
       .select(
-        'id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome), consumivel:consumiveis(codigo, nome)',
+        'id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)',
       )
       .order('created_at', { ascending: false })
 
@@ -446,12 +446,8 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m) => {
       const mp = Array.isArray(m.materia_prima) ? m.materia_prima[0] : m.materia_prima
       const faca = Array.isArray(m.faca) ? m.faca[0] : m.faca
-      const consRaw = (m as { consumivel?: { codigo: string; nome: string } | { codigo: string; nome: string }[] })
-        .consumivel
-      const cons = Array.isArray(consRaw) ? consRaw[0] : consRaw
       const item = (mp as { nome?: string; codigo?: string } | null) ??
-        (faca as { nome?: string; codigo?: string } | null) ??
-        cons
+        (faca as { nome?: string; codigo?: string } | null)
       return {
         id: m.id,
         tipo: m.tipo,
