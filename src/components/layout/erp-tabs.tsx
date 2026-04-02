@@ -811,24 +811,15 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
   const initialHref = useMemo(() => normalizeHref(pathname), [pathname])
   const initialLabel = useMemo(() => getRouteLabel(initialHref), [initialHref])
 
-  const [openTabs, setOpenTabs] = useState<OpenTab[]>(() => {
-    if (typeof window === 'undefined') return [{ href: initialHref, label: initialLabel }]
+  // Estado inicial precisa ser idêntico no servidor e no primeiro paint do cliente (sem localStorage),
+  // senão a hidratação quebra. Abas persistidas são aplicadas em useEffect após montar.
+  const [openTabs, setOpenTabs] = useState<OpenTab[]>(() => [{ href: initialHref, label: initialLabel }])
+  const [activeHref, setActiveHref] = useState<string>(() => initialHref)
 
-    const raw = localStorage.getItem(STORAGE_KEY)
-    // Se nunca persistiu nada, abre a rota atual. Se persistiu vazio ([]), respeita.
-    if (raw === null) return [{ href: initialHref, label: initialLabel }]
-    const storedTabs = parseStoredTabs(raw)
-    return storedTabs
-  })
-
-  const [activeHref, setActiveHref] = useState<string>(() => {
-    if (typeof window === 'undefined') return initialHref
-
-    const storedTabs = parseStoredTabs(localStorage.getItem(STORAGE_KEY) ?? '')
-    const storedActive = localStorage.getItem(ACTIVE_KEY)
-    const normalizedActive = storedActive ? normalizeHref(storedActive) : storedTabs[0]?.href
-    return normalizedActive || ''
-  })
+  const primeiraRotaRef = useRef<{ href: string; label: string } | null>(null)
+  if (primeiraRotaRef.current === null) {
+    primeiraRotaRef.current = { href: initialHref, label: initialLabel }
+  }
 
   // Sinal para refetch por aba (usado pelos CRUDs para atualizar só a aba ativa)
   const [tabRefreshSeq, setTabRefreshSeq] = useState<Record<string, number>>({})
@@ -846,6 +837,32 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs))
     localStorage.setItem(ACTIVE_KEY, active)
   }, [])
+
+  // Hidrata abas / aba ativa a partir do localStorage uma vez após o primeiro paint (alinha com SSR).
+  useEffect(() => {
+    const snap = primeiraRotaRef.current
+    if (!snap) return
+    const { href: ih, label: il } = snap
+    const defaultTab: OpenTab = { href: ih, label: il }
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw === null) {
+      persist([defaultTab], ih)
+      return
+    }
+    const storedTabs = parseStoredTabs(raw)
+    if (storedTabs.length === 0) {
+      setOpenTabs([defaultTab])
+      setActiveHref(ih)
+      persist([defaultTab], ih)
+      return
+    }
+    setOpenTabs(storedTabs)
+    const storedActive = localStorage.getItem(ACTIVE_KEY)
+    const normalizedActive = storedActive ? normalizeHref(storedActive) : storedTabs[0]?.href
+    if (normalizedActive) setActiveHref(normalizedActive)
+    // Não depende de pathname: só hidrata na montagem.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persist])
 
   const openTab = useCallback(
     (href: string) => {
