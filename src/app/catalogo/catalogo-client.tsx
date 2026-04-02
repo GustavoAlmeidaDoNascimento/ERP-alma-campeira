@@ -294,16 +294,6 @@ export function CatalogoClient({ facas }: Props) {
 
                 <p
                   style={{
-                    fontSize: 12,
-                    color: '#6b7280',
-                    marginBottom: 8,
-                  }}
-                >
-                  {faca.categoria}
-                </p>
-
-                <p
-                  style={{
                     fontSize: 17,
                     fontWeight: 800,
                     color: '#CA8A04',
