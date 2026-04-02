@@ -91,6 +91,7 @@ export function CatalogoClient({ facas }: Props) {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('')
   const [precoMinStr, setPrecoMinStr] = useState('')
   const [precoMaxStr, setPrecoMaxStr] = useState('')
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
 
   const categorias = useMemo(() => {
     const set = new Set(facas.map((f) => f.categoria).filter(Boolean))
@@ -243,7 +244,12 @@ export function CatalogoClient({ facas }: Props) {
             >
               <div className="card-img-wrap">
                 {faca.foto_url ? (
-                  <>
+                  <button
+                    type="button"
+                    onClick={() => setLightbox({ src: faca.foto_url!, alt: faca.nome })}
+                    style={{ display: 'block', width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'zoom-in' }}
+                    aria-label={`Ampliar foto de ${faca.nome}`}
+                  >
                     <img
                       src={faca.foto_url}
                       alt={faca.nome}
@@ -251,7 +257,7 @@ export function CatalogoClient({ facas }: Props) {
                       loading="lazy"
                       decoding="async"
                     />
-                  </>
+                  </button>
                 ) : (
                   <div
                     style={{
@@ -316,6 +322,47 @@ export function CatalogoClient({ facas }: Props) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {lightbox && (
+        <div
+          onClick={() => setLightbox(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.82)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+            cursor: 'zoom-out',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            aria-label="Fechar"
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              background: 'rgba(255,255,255,0.12)', border: 'none',
+              borderRadius: '50%', width: 40, height: 40,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#fff',
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 20, height: 20 }}>
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+          <img
+            src={lightbox.src}
+            alt={lightbox.alt}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '90vw', maxHeight: '88vh',
+              borderRadius: 14, objectFit: 'contain',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+              cursor: 'default',
+            }}
+          />
         </div>
       )}
     </>
