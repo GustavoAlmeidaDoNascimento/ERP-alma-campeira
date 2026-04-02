@@ -45,7 +45,7 @@ export function SearchableSelect({
 
   useEffect(() => {
     if (!open) setQuery(selectedLabel)
-  }, [selectedLabel, open])
+  }, [open, selectedLabel])
 
   const filtered = useMemo(() => {
     const q = normalize(query.trim())
@@ -132,7 +132,7 @@ export function SearchableSelect({
         aria-controls={`${id}-listbox`}
         aria-autocomplete="list"
         disabled={disabled || loading}
-        value={open ? query : selectedLabel || query}
+        value={open ? query : selectedLabel}
         placeholder={placeholder}
         onChange={(e) => {
           const v = e.target.value
@@ -145,13 +145,11 @@ export function SearchableSelect({
           setOpen(true)
         }}
         onKeyDown={onInputKeyDown}
-        className={`w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none transition-[box-shadow] focus:ring-2 focus:ring-offset-0 ${inputClassName}`}
+        className={`w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--ac-muted)_35%,transparent)] focus-visible:ring-offset-0 ${inputClassName}`}
         style={{
           background: 'var(--ac-bg)',
           border: '1px solid var(--ac-border)',
           color: 'var(--ac-text)',
-          // @ts-expect-error ring color via CSS var
-          '--tw-ring-color': 'color-mix(in srgb, var(--ac-muted) 40%, transparent)',
         }}
       />
 
