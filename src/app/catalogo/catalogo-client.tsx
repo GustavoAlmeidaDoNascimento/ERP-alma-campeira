@@ -250,7 +250,6 @@ export function CatalogoClient({ facas }: Props) {
                       loading="lazy"
                       decoding="async"
                     />
-                    <div className="card-img-gradient" />
                   </>
                 ) : (
                   <div

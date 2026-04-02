@@ -90,13 +90,6 @@ export default async function CatalogoPage() {
           transform: scale(1.06);
         }
 
-        .card-img-gradient {
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 50%);
-          pointer-events: none;
-        }
-
         .catalog-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
