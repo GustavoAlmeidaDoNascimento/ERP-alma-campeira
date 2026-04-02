@@ -95,6 +95,30 @@ export async function criarVenda(input: VendaInput) {
     throw new Error('Crie a venda como "Em Espera" ou "Em Produção". Para concluir, use "Marcar como entregue".')
   }
 
+  // Validar estoque disponível para cada faca
+  const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
+  const { data: facas } = await supabase
+    .from('facas')
+    .select('id, nome, estoque_atual')
+    .in('id', facaIds)
+
+  if (facas) {
+    const facaMap = new Map(facas.map((f) => [f.id, f]))
+    const insuficientes = input.itens.filter((item) => {
+      const faca = facaMap.get(item.faca_id)
+      return faca && faca.estoque_atual < item.quantidade
+    })
+    if (insuficientes.length > 0) {
+      const detalhes = insuficientes
+        .map((item) => {
+          const f = facaMap.get(item.faca_id)
+          return `${f?.nome ?? 'Desconhecida'} (solicitado: ${item.quantidade}, disponível: ${f?.estoque_atual ?? 0})`
+        })
+        .join('; ')
+      throw new Error(`Estoque insuficiente: ${detalhes}`)
+    }
+  }
+
   const codigo = await gerarCodigoPedido()
   const valor_total = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
 
@@ -135,6 +159,30 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
   if (input.status === 'entregue') {
     throw new Error('Para entregar a venda, use a ação "Marcar como entregue" na tela de detalhes.')
+  }
+
+  // Validar estoque disponível para cada faca
+  const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
+  const { data: facas } = await supabase
+    .from('facas')
+    .select('id, nome, estoque_atual')
+    .in('id', facaIds)
+
+  if (facas) {
+    const facaMap = new Map(facas.map((f) => [f.id, f]))
+    const insuficientes = input.itens.filter((item) => {
+      const faca = facaMap.get(item.faca_id)
+      return faca && faca.estoque_atual < item.quantidade
+    })
+    if (insuficientes.length > 0) {
+      const detalhes = insuficientes
+        .map((item) => {
+          const f = facaMap.get(item.faca_id)
+          return `${f?.nome ?? 'Desconhecida'} (solicitado: ${item.quantidade}, disponível: ${f?.estoque_atual ?? 0})`
+        })
+        .join('; ')
+      throw new Error(`Estoque insuficiente: ${detalhes}`)
+    }
   }
 
   const { data: pedido } = await supabase

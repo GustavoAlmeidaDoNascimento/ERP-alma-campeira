@@ -109,6 +109,21 @@ export async function gerarOC(
   if (filaErr) throw new Error(filaErr.message)
   if (!filaRows || filaRows.length === 0) throw new Error('Nenhum item na fila para este fornecedor.')
 
+  // Verificar se já existe OC pendente para este fornecedor
+  const ocExistenteQuery = supabase
+    .from('ordens_compra')
+    .select('codigo')
+    .eq('status', 'pendente')
+
+  const { data: ocExistente } = fornecedor_id === null
+    ? await ocExistenteQuery.is('fornecedor_id', null)
+    : await ocExistenteQuery.eq('fornecedor_id', fornecedor_id)
+
+  if (ocExistente && ocExistente.length > 0) {
+    const codigos = ocExistente.map((o) => o.codigo).join(', ')
+    throw new Error(`Já existe uma OC pendente para este fornecedor (${codigos}). Conclua ou cancele antes de gerar uma nova.`)
+  }
+
   // Agrupar por materia_prima_id
   const agrupado = new Map<string, { quantidade: number; preco_custo: number }>()
   for (const row of filaRows) {

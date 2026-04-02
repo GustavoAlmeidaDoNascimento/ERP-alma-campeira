@@ -44,6 +44,10 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
     e.preventDefault()
     setErro('')
     if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
+    if (form.telefone.trim() && !/^[\d\s()\-+]+$/.test(form.telefone)) {
+      setErro('Telefone inválido. Use apenas números, espaços e os caracteres ( ) - +')
+      return
+    }
 
     setLoading(true)
     try {
@@ -75,9 +79,13 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           <Input
             id="telefone"
             label="Telefone"
+            type="tel"
             placeholder="(51) 99999-0000"
             value={form.telefone}
-            onChange={(e) => set('telefone', e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^\d\s()\-+]/g, '')
+              set('telefone', v)
+            }}
           />
           <Input
             id="email"

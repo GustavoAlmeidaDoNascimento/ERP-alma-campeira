@@ -1023,7 +1023,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       flash(`OC ${codigo} gerada com sucesso.`)
       setFilaState((prev) => prev.filter((grupo) => (grupo.fornecedor_id ?? '__sem_fornecedor__') !== chave))
       setAdicionaisFila({})
-      refresh()
+      await refresh()
       setAba('historico')
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao gerar OC.')
@@ -1053,7 +1053,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       flash(`${criadas} ${criadas === 1 ? 'OC gerada' : 'OCs geradas'} com sucesso.`)
       setFilaState([])
       setAdicionaisFila({})
-      refresh()
+      await refresh()
       setAba('historico')
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao gerar OCs.')
