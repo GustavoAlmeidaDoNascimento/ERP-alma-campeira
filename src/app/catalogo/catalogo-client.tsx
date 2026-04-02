@@ -89,7 +89,7 @@ type Props = {
 
 export function CatalogoClient({ facas }: Props) {
   const [buscaNome, setBuscaNome] = useState('')
-  const [buscaCategoria, setBuscaCategoria] = useState('')
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState('')
   const [precoMinStr, setPrecoMinStr] = useState('')
   const [precoMaxStr, setPrecoMaxStr] = useState('')
 
@@ -100,18 +100,17 @@ export function CatalogoClient({ facas }: Props) {
 
   const filtradas = useMemo(() => {
     const qNome = norm(buscaNome.trim())
-    const qCat = norm(buscaCategoria.trim())
     const minP = parsePrecoInput(precoMinStr)
     const maxP = parsePrecoInput(precoMaxStr)
 
     return facas.filter((f) => {
       if (qNome && !norm(f.nome).includes(qNome)) return false
-      if (qCat && !norm(f.categoria).includes(qCat)) return false
+      if (categoriaSelecionada && f.categoria !== categoriaSelecionada) return false
       if (minP !== null && f.preco_venda < minP) return false
       if (maxP !== null && f.preco_venda > maxP) return false
       return true
     })
-  }, [facas, buscaNome, buscaCategoria, precoMinStr, precoMaxStr])
+  }, [facas, buscaNome, categoriaSelecionada, precoMinStr, precoMaxStr])
 
   const total = facas.length
   const n = filtradas.length
@@ -174,24 +173,27 @@ export function CatalogoClient({ facas }: Props) {
           }}
         >
           <div>
-            <label htmlFor="catalogo-busca-cat" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <label htmlFor="catalogo-categoria" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               Categoria
             </label>
-            <input
-              id="catalogo-busca-cat"
-              type="text"
-              placeholder="Ex.: churrasco, cozinha…"
-              value={buscaCategoria}
-              onChange={(e) => setBuscaCategoria(e.target.value)}
-              style={{ ...inputStyle, boxSizing: 'border-box' }}
-              list="catalogo-categorias-datalist"
-              autoComplete="off"
-            />
-            <datalist id="catalogo-categorias-datalist">
+            <select
+              id="catalogo-categoria"
+              value={categoriaSelecionada}
+              onChange={(e) => setCategoriaSelecionada(e.target.value)}
+              style={{
+                ...inputStyle,
+                boxSizing: 'border-box',
+                cursor: 'pointer',
+                appearance: 'auto',
+              }}
+            >
+              <option value="">Todas as categorias</option>
               {categorias.map((c) => (
-                <option key={c} value={c} />
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -295,7 +297,7 @@ export function CatalogoClient({ facas }: Props) {
                   style={{
                     fontSize: 17,
                     fontWeight: 800,
-                    color: '#CA8A04',
+                    color: '#15803d',
                     letterSpacing: '-0.01em',
                   }}
                 >
