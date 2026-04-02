@@ -6,10 +6,9 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { MPModal } from './mp-modal'
-import { entradaEstoqueMP } from '@/lib/actions/materias-primas'
+import { entradaEstoqueMP, getMPEditModalData } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
-import type { MPDetalheData } from '@/lib/actions/materias-primas'
-import type { CategoriaMateriaPrimaDB, Fornecedor } from '@/types'
+import type { MPDetalheData, MPEditModalData } from '@/lib/actions/materias-primas'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
@@ -17,8 +16,6 @@ type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 type Props = {
   detalhe: MPDetalheData
-  fornecedores: Fornecedor[]
-  categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
   perm: Perm
 }
 
@@ -29,11 +26,13 @@ const tipoMovLabel: Record<string, { label: string; color: string; bg: string }>
   ajuste:       { label: 'Ajuste',    color: '#6b7280', bg: '#f3f4f6' },
 }
 
-export function MPDetalheClient({ detalhe, fornecedores, categoriasMateriaPrima, perm }: Props) {
+export function MPDetalheClient({ detalhe, perm }: Props) {
   const { mp, facasQueUsam, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editModalData, setEditModalData] = useState<MPEditModalData | null>(null)
+  const [loadingEditData, setLoadingEditData] = useState(false)
   const [entradaModalOpen, setEntradaModalOpen] = useState(false)
   const [quantidade, setQuantidade] = useState('1')
   const [observacao, setObservacao] = useState('')
@@ -162,7 +161,22 @@ export function MPDetalheClient({ detalhe, fornecedores, categoriasMateriaPrima,
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {perm.editar && (
-              <Button variant="secondary" onClick={() => setEditModalOpen(true)}>
+              <Button
+                variant="secondary"
+                loading={loadingEditData}
+                onClick={async () => {
+                  if (!editModalData) {
+                    setLoadingEditData(true)
+                    try {
+                      const data = await getMPEditModalData()
+                      setEditModalData(data)
+                    } finally {
+                      setLoadingEditData(false)
+                    }
+                  }
+                  setEditModalOpen(true)
+                }}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-4">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -302,8 +316,8 @@ export function MPDetalheClient({ detalhe, fornecedores, categoriasMateriaPrima,
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         editando={mp}
-        fornecedores={fornecedores}
-        categoriasMateriaPrima={categoriasMateriaPrima}
+        fornecedores={editModalData?.fornecedores ?? []}
+        categoriasMateriaPrima={editModalData?.categoriasMateriaPrima ?? []}
         onSaved={refreshActiveTab}
       />
 

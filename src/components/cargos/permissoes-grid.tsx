@@ -20,7 +20,7 @@ const COLS: { key: keyof Perm; label: string }[] = [
   { key: 'deletar', label: 'Excluir' },
 ]
 
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
+function Toggle({ checked, onChange, disabled, title }: { checked: boolean; onChange: () => void; disabled?: boolean; title?: string }) {
   return (
     <button
       type="button"
@@ -32,7 +32,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
       }}
-      title={disabled ? 'Somente leitura' : checked ? 'Permitido — clique para bloquear' : 'Bloqueado — clique para permitir'}
+      title={title ?? (checked ? 'Permitido — clique para bloquear' : 'Bloqueado — clique para permitir')}
     >
       {checked ? (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-3.5"
@@ -65,7 +65,7 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
       return
     }
 
-    if (modulo === 'taxas_lucro') {
+    if (modulo === 'taxas_lucro' || modulo === 'preco_venda') {
       if (col === 'ver') {
         const newVer = !perm.ver
         onChange({
@@ -97,35 +97,6 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
     })
   }
 
-  function toggleAll(modulo: ModuloKey) {
-    const perm = value[modulo]
-    const activeCols = colunasPermissaoModulo(modulo)
-
-    if (modulo === 'lucro') {
-      const allOn = perm.ver
-      const newPerm: Perm = allOn
-        ? { ver: false, criar: false, editar: false, deletar: false }
-        : { ver: true, criar: false, editar: false, deletar: false }
-      onChange({ ...value, [modulo]: newPerm })
-      return
-    }
-
-    if (modulo === 'taxas_lucro') {
-      const allOn = perm.ver && perm.editar
-      const newPerm: Perm = allOn
-        ? { ver: false, criar: false, editar: false, deletar: false }
-        : { ver: true, criar: false, editar: true, deletar: false }
-      onChange({ ...value, [modulo]: newPerm })
-      return
-    }
-
-    const allOn = activeCols.every((k) => perm[k])
-    const newPerm: Perm = allOn
-      ? { ver: false, criar: false, editar: false, deletar: false }
-      : { ver: true, criar: true, editar: true, deletar: true }
-    onChange({ ...value, [modulo]: newPerm })
-  }
-
   return (
     <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
       <table className="w-full text-sm">
@@ -139,18 +110,12 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
                 {c.label}
               </th>
             ))}
-            {!readonly && (
-              <th className="text-center px-3 py-2.5 font-semibold text-xs uppercase tracking-wide w-16" style={{ color: 'var(--ac-muted)' }}>
-                Todos
-              </th>
-            )}
           </tr>
         </thead>
         <tbody>
           {MODULOS.map((m, i) => {
             const perm = value[m.key]
             const activeCols = colunasPermissaoModulo(m.key)
-            const allOn = activeCols.every((k) => perm[k])
             return (
               <tr
                 key={m.key}
@@ -172,33 +137,22 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
                     )
                   }
                   const needVer = c.key !== 'ver' && !perm.ver
+                  const toggleTitle = readonly
+                    ? 'Somente leitura'
+                    : needVer
+                    ? 'Habilite "Ver" primeiro'
+                    : undefined
                   return (
                     <td key={c.key} className="px-3 py-2.5 text-center">
                       <Toggle
                         checked={perm[c.key]}
                         onChange={() => toggle(m.key, c.key)}
                         disabled={readonly || needVer}
+                        title={toggleTitle}
                       />
                     </td>
                   )
                 })}
-                {!readonly && (
-                  <td className="px-3 py-2.5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleAll(m.key)}
-                      className="text-xs px-2 py-1 rounded transition-colors"
-                      style={{
-                        color: allOn ? 'var(--ac-accent)' : 'var(--ac-muted)',
-                        background: allOn ? 'color-mix(in srgb, var(--ac-accent) 10%, transparent)' : 'var(--ac-bg)',
-                        border: `1px solid ${allOn ? 'var(--ac-accent)' : 'var(--ac-border)'}`,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {allOn ? 'Remover' : 'Tudo'}
-                    </button>
-                  </td>
-                )}
               </tr>
             )
           })}

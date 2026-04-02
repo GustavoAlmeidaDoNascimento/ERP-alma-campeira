@@ -25,8 +25,6 @@ export type ErpTabData =
   | {
       kind: 'mp-detalhe'
       detalhe: MPDetalheData
-      fornecedores: Fornecedor[]
-      categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
       perm: Perm
     }
   | {
@@ -132,15 +130,13 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   const mpDetalheMatch = path.match(/^\/materias-primas\/([a-f0-9-]+)$/)
   if (mpDetalheMatch) {
     const mpId = mpDetalheMatch[1]
-    const [perms, detalhe, fornecedores, categoriasMateriaPrima] = await Promise.all([
+    const [perms, detalhe] = await Promise.all([
       getPermissoesEfetivas(),
       getMPDetalhe(mpId),
-      getFornecedores(80),
-      getCategoriasMateriaPrima(),
     ])
     const perm = perms.materias_primas as Perm
     assertAllowed(perm, 'materias_primas')
-    return { kind: 'mp-detalhe', detalhe, fornecedores, categoriasMateriaPrima, perm }
+    return { kind: 'mp-detalhe', detalhe, perm }
   }
 
   if (path === '/materias-primas') {

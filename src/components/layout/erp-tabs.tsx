@@ -331,7 +331,7 @@ function TabPane({
   // Permite renderizar componente e manter state interno enquanto a aba estiver aberta.
   switch (data.kind) {
     case 'mp-detalhe':
-      return <MPDetalheClient detalhe={data.detalhe} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
+      return <MPDetalheClient detalhe={data.detalhe} perm={data.perm} />
     case 'materias-primas':
       return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
     case 'facas':

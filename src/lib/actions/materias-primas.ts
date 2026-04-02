@@ -4,7 +4,9 @@ import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { MateriaPrima, MovimentacaoEstoque, Faca } from '@/types'
+import type { MateriaPrima, MovimentacaoEstoque, Faca, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
+import { getFornecedores } from '@/lib/actions/fornecedores'
+import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 
 const getMateriasPrimasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<MateriaPrima[]> => {
@@ -280,6 +282,24 @@ const getMPDetalheCached = unstable_cache(
 export async function getMPDetalhe(mpId: string): Promise<MPDetalheData> {
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getMPDetalheCached(userId, mpId))
+}
+
+// ============================================================
+// Dados para o modal de edição (lazy — só carrega quando necessário)
+// ============================================================
+
+export type MPEditModalData = {
+  fornecedores: Fornecedor[]
+  categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+}
+
+export async function getMPEditModalData(): Promise<MPEditModalData> {
+  await assertPermissao('materias_primas', 'editar')
+  const [fornecedores, categoriasMateriaPrima] = await Promise.all([
+    getFornecedores(80),
+    getCategoriasMateriaPrima(),
+  ])
+  return { fornecedores, categoriasMateriaPrima }
 }
 
 // ============================================================

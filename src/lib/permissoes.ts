@@ -5,10 +5,18 @@ export type PermMap = Record<ModuloKey, { ver: boolean; criar: boolean; editar: 
 
 export type PermColKey = 'ver' | 'criar' | 'editar' | 'deletar'
 
-/** Colunas usadas na matriz de cargos (lucro só "ver"; taxas só "ver" e "editar"). */
+/**
+ * Colunas ativas na matriz de permissões por módulo.
+ * Módulos de somente leitura: dashboard, metricas, lucro.
+ * Módulos sem criar/excluir: taxas_lucro, preco_venda.
+ * Demais módulos: todas as quatro colunas.
+ */
 export function colunasPermissaoModulo(modulo: ModuloKey): PermColKey[] {
+  if (modulo === 'dashboard') return ['ver']
+  if (modulo === 'metricas') return ['ver']
   if (modulo === 'lucro') return ['ver']
   if (modulo === 'taxas_lucro') return ['ver', 'editar']
+  if (modulo === 'preco_venda') return ['ver', 'editar']
   return ['ver', 'criar', 'editar', 'deletar']
 }
 
