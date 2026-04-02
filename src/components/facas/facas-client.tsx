@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { FacaModal } from './faca-modal'
@@ -120,15 +121,29 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
             {facas.length} {facas.length === 1 ? 'faca no catálogo' : 'facas no catálogo'}
           </p>
         </div>
-        {perm.criar && (
-          <Button onClick={abrirNovo}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nova faca
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/catalogo"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-all hover:brightness-95"
+            style={{
+              background: 'transparent',
+              color: 'var(--ac-text)',
+              border: '1px solid var(--ac-border)',
+              fontWeight: 500,
+            }}
+          >
+            Ver catálogo público
+          </Link>
+          {perm.criar && (
+            <Button onClick={abrirNovo}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nova faca
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}

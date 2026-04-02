@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { Metadata } from 'next'
 import type { CSSProperties } from 'react'
 import { CatalogoClient, type FacaCatalogoItem } from './catalogo-client'
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
   try {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { data } = await supabase
       .from('facas')
       .select('id, nome, categoria, foto_url, preco_venda')
