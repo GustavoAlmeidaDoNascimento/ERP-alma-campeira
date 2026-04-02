@@ -260,7 +260,7 @@ export function CatalogoClient({ facas }: Props) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'radial-gradient(circle at 50% 60%, #1a1a1a, #111)',
+                        background: '#ffffff',
                     }}
                   >
                     <div
