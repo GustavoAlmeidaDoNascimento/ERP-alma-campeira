@@ -2,7 +2,41 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
-export type SearchableSelectOption = { value: string; label: string }
+export type SearchableSelectOption = {
+  value: string
+  label: string
+  /** URL já otimizada (ex.: `getOptimizedSupabaseImageUrl`); se ausente ou vazio, mostra placeholder */
+  imageUrl?: string | null
+}
+
+function OptionThumb({ src, title }: { src?: string | null; title: string }) {
+  const box = 'size-9 shrink-0 overflow-hidden rounded-md border sm:size-10'
+  if (src) {
+    return (
+      <span className={box} style={{ borderColor: 'var(--ac-border)' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- miniatura pequena, URL já otimizada */}
+        <img src={src} alt="" className="size-full object-cover" title={title} />
+      </span>
+    )
+  }
+  return (
+    <span
+      className={`${box} flex items-center justify-center`}
+      style={{
+        borderColor: 'var(--ac-border)',
+        background: 'color-mix(in srgb, var(--ac-border) 22%, transparent)',
+      }}
+      title="Sem foto"
+      aria-hidden
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="size-4 opacity-50" style={{ color: 'var(--ac-muted)' }}>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <path d="M21 15l-5-5L5 21" />
+      </svg>
+    </span>
+  )
+}
 
 function normalize(s: string) {
   return s
@@ -12,6 +46,7 @@ function normalize(s: string) {
 }
 
 type Props = {
+  id?: string
   value: string
   onChange: (value: string) => void
   options: SearchableSelectOption[]
@@ -24,6 +59,7 @@ type Props = {
 }
 
 export function SearchableSelect({
+  id: idProp,
   value,
   onChange,
   options,
@@ -34,18 +70,17 @@ export function SearchableSelect({
   className = '',
   inputClassName = '',
 }: Props) {
-  const id = useId()
+  const genId = useId()
+  const id = idProp ?? genId
   const rootRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
 
-  const selectedLabel = useMemo(() => options.find((o) => o.value === value)?.label ?? '', [options, value])
-
-  useEffect(() => {
-    if (!open) setQuery(selectedLabel)
-  }, [open, selectedLabel])
+  const selectedOption = useMemo(() => options.find((o) => o.value === value), [options, value])
+  const selectedLabel = selectedOption?.label ?? ''
+  const selectedImageUrl = selectedOption?.imageUrl
 
   const filtered = useMemo(() => {
     const q = normalize(query.trim())
@@ -56,15 +91,13 @@ export function SearchableSelect({
     })
   }, [options, query])
 
-  useEffect(() => {
-    setHighlight(0)
-  }, [query, open])
+  const highlightSafe = filtered.length === 0 ? 0 : Math.min(highlight, filtered.length - 1)
 
   useEffect(() => {
     if (!open) return
-    const el = listRef.current?.querySelector(`[data-idx="${highlight}"]`)
+    const el = listRef.current?.querySelector(`[data-idx="${highlightSafe}"]`)
     el?.scrollIntoView({ block: 'nearest' })
-  }, [highlight, open])
+  }, [highlightSafe, open])
 
   useEffect(() => {
     if (!open) return
@@ -90,7 +123,6 @@ export function SearchableSelect({
         e.preventDefault()
         e.stopPropagation()
         setOpen(false)
-        setQuery(selectedLabel)
       }
       return
     }
@@ -108,9 +140,9 @@ export function SearchableSelect({
       return
     }
     if (e.key === 'Enter') {
-      if (open && filtered[highlight]) {
+      const o = filtered[highlightSafe]
+      if (open && o) {
         e.preventDefault()
-        const o = filtered[highlight]
         pick(o.value, o.label)
       }
       return
@@ -124,34 +156,41 @@ export function SearchableSelect({
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
-      <input
-        id={id}
-        type="text"
-        role="combobox"
-        aria-expanded={showList}
-        aria-controls={`${id}-listbox`}
-        aria-autocomplete="list"
-        disabled={disabled || loading}
-        value={open ? query : selectedLabel}
-        placeholder={placeholder}
-        onChange={(e) => {
-          const v = e.target.value
-          setQuery(v)
-          setOpen(true)
-          if (value) onChange('')
-        }}
-        onFocus={() => {
-          setQuery(selectedLabel)
-          setOpen(true)
-        }}
-        onKeyDown={onInputKeyDown}
-        className={`w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--ac-muted)_35%,transparent)] focus-visible:ring-offset-0 ${inputClassName}`}
-        style={{
-          background: 'var(--ac-bg)',
-          border: '1px solid var(--ac-border)',
-          color: 'var(--ac-text)',
-        }}
-      />
+      <div className={`mt-1 flex gap-2 ${value ? 'items-center' : 'items-stretch'}`}>
+        {value ? (
+          <OptionThumb src={selectedImageUrl} title={selectedLabel} />
+        ) : null}
+        <input
+          id={id}
+          type="text"
+          role="combobox"
+          aria-expanded={showList}
+          aria-controls={`${id}-listbox`}
+          aria-autocomplete="list"
+          disabled={disabled || loading}
+          value={open ? query : selectedLabel}
+          placeholder={placeholder}
+          onChange={(e) => {
+            const v = e.target.value
+            setQuery(v)
+            setHighlight(0)
+            setOpen(true)
+            if (value) onChange('')
+          }}
+          onFocus={() => {
+            setQuery(selectedLabel)
+            setHighlight(0)
+            setOpen(true)
+          }}
+          onKeyDown={onInputKeyDown}
+          className={`min-w-0 flex-1 px-3 py-2 rounded-lg text-sm outline-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--ac-muted)_35%,transparent)] focus-visible:ring-offset-0 ${inputClassName}`}
+          style={{
+            background: 'var(--ac-bg)',
+            border: '1px solid var(--ac-border)',
+            color: 'var(--ac-text)',
+          }}
+        />
+      </div>
 
       {loading && (
         <p className="mt-1 text-xs" style={{ color: 'var(--ac-muted)' }}>
@@ -182,16 +221,17 @@ export function SearchableSelect({
                   data-idx={idx}
                   role="option"
                   aria-selected={value === o.value}
-                  className="flex w-full px-3 py-2 text-left text-sm transition-colors"
+                  className="flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left text-sm transition-colors sm:gap-3 sm:px-3 sm:py-2"
                   style={{
-                    background: highlight === idx ? 'color-mix(in srgb, var(--ac-border) 45%, transparent)' : 'transparent',
+                    background: highlightSafe === idx ? 'color-mix(in srgb, var(--ac-border) 45%, transparent)' : 'transparent',
                     color: 'var(--ac-text)',
                   }}
                   onMouseEnter={() => setHighlight(idx)}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => pick(o.value, o.label)}
                 >
-                  {o.label}
+                  <OptionThumb src={o.imageUrl} title={o.label} />
+                  <span className="min-w-0 flex-1 leading-snug">{o.label}</span>
                 </button>
               </li>
             ))

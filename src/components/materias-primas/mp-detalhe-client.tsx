@@ -44,7 +44,10 @@ export function MPDetalheClient({ detalhe, fornecedores, categoriasMateriaPrima,
     ? getOptimizedSupabaseImageUrl(mp.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
     : ''
 
-  const qtd = Number(quantidade) || 0
+  const qtd =
+    quantidade === ''
+      ? 0
+      : Math.max(0, Number.parseInt(String(quantidade), 10) || 0)
 
   async function handleEntrada() {
     if (qtd <= 0) return
@@ -335,10 +338,22 @@ export function MPDetalheClient({ detalhe, fornecedores, categoriasMateriaPrima,
             id="quantidade"
             label="Quantidade recebida *"
             type="number"
-            min="0.001"
-            step="0.001"
+            inputMode="numeric"
+            min={1}
+            step={1}
             value={quantidade}
-            onChange={(e) => { setQuantidade(e.target.value); setEntradaErro('') }}
+            onChange={(e) => {
+              const raw = e.target.value
+              if (raw === '') {
+                setQuantidade('')
+                setEntradaErro('')
+                return
+              }
+              const n = Number.parseInt(raw, 10)
+              if (Number.isNaN(n) || n < 0) return
+              setQuantidade(String(n))
+              setEntradaErro('')
+            }}
           />
 
           <div className="flex flex-col gap-1.5">

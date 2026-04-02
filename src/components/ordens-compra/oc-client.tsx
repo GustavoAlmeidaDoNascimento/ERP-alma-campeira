@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import {
   getFilaReposicao,
   getOrdensCompra,
@@ -17,6 +18,7 @@ import { STATUS_OC } from '@/types'
 import type { FilaFornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
+import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -200,8 +202,30 @@ function OcDetalheModal({
     return Number.isFinite(n) ? n : NaN
   }
 
-  const itens = oc.itens ?? []
+  const itens = useMemo(() => oc.itens ?? [], [oc.itens])
   const idsMateriaJaNoPedido = useMemo(() => new Set(itens.map((i) => i.materia_prima_id)), [itens])
+
+  const opcoesMateriaPrima = useMemo(
+    () =>
+      materiasPrimas
+        .filter((mp) => !idsMateriaJaNoPedido.has(mp.id))
+        .map((mp) => {
+          const imageUrl =
+            getOptimizedSupabaseImageUrl(mp.foto_url, {
+              width: 80,
+              height: 80,
+              quality: 72,
+              resize: 'cover',
+              fallbackUrl: '',
+            }) || null
+          return {
+            value: mp.id,
+            label: `${mp.codigo} — ${mp.nome}`,
+            imageUrl,
+          }
+        }),
+    [materiasPrimas, idsMateriaJaNoPedido]
+  )
 
   useEffect(() => {
     if (!perm.editar || oc.status !== 'pendente') return
@@ -417,29 +441,23 @@ function OcDetalheModal({
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 min-w-[240px]">
-                <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+              <div className="flex-1 min-w-[min(100%,240px)] sm:min-w-[240px]">
+                <label
+                  htmlFor="oc-mp-search"
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
                   Matéria-prima
                 </label>
-                <select
+                <SearchableSelect
+                  id="oc-mp-search"
                   value={materiaPrimaParaAdicionar}
-                  onChange={(e) => setMateriaPrimaParaAdicionar(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 rounded-lg text-sm"
-                  style={{
-                    background: 'var(--ac-bg)',
-                    border: '1px solid var(--ac-border)',
-                    color: 'var(--ac-text)',
-                  }}
-                >
-                  <option value="">Selecione...</option>
-                  {materiasPrimas
-                    .filter((mp) => !idsMateriaJaNoPedido.has(mp.id))
-                    .map((mp) => (
-                      <option key={mp.id} value={mp.id}>
-                        {mp.codigo} — {mp.nome}
-                      </option>
-                    ))}
-                </select>
+                  onChange={setMateriaPrimaParaAdicionar}
+                  options={opcoesMateriaPrima}
+                  placeholder="Pesquisar por código ou nome…"
+                  loading={carregandoMateriasPrimas}
+                  emptyMessage="Nenhuma matéria-prima disponível para este pedido"
+                />
               </div>
 
               <div className="w-[220px]">
@@ -489,11 +507,6 @@ function OcDetalheModal({
               </Button>
             </div>
 
-            {carregandoMateriasPrimas && (
-              <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                Carregando matérias-primas...
-              </p>
-            )}
           </div>
         )}
 
