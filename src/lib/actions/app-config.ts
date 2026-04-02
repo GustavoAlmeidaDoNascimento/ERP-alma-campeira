@@ -9,6 +9,12 @@ export type TaxasLucroConfig = {
   taxa_comissao: number
 }
 
+/** PostgREST quando a tabela ainda não existe no projeto (migração não aplicada). */
+function isAppConfigUnavailable(error: { message?: string }): boolean {
+  const m = error.message ?? ''
+  return m.includes('app_config') && m.includes('schema cache')
+}
+
 export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
   await requireAuthenticatedUserId()
   const supabase = await createClient()
@@ -18,7 +24,12 @@ export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
     .eq('id', 1)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (isAppConfigUnavailable(error)) {
+      return { taxa_producao: 0, taxa_comissao: 0 }
+    }
+    throw new Error(error.message)
+  }
   if (!data) return { taxa_producao: 0, taxa_comissao: 0 }
   return {
     taxa_producao: Number(data.taxa_producao_lucro ?? 0),
