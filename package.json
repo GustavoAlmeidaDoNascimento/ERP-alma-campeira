@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "preview": "next build && next start",
     "start": "next start",
     "lint": "eslint .",
     "test:e2e:perf": "playwright test tests/e2e/perf-navegacao.spec.ts"

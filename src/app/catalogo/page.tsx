@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import type { CSSProperties } from 'react'
 import { CatalogoClient, type FacaCatalogoItem } from './catalogo-client'
 
@@ -127,11 +126,6 @@ export default async function CatalogoPage() {
           to   { opacity: 1; transform: translateY(0); }
         }
 
-        .hero-rule {
-          height: 1px;
-          background: linear-gradient(to right, transparent, rgba(202,138,4,0.45), transparent);
-          margin: 8px 0 12px;
-        }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: '#ffffff', color: '#111827' }}>
@@ -157,33 +151,27 @@ export default async function CatalogoPage() {
           </div>
         </header>
 
-        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '18px 20px 4px', textAlign: 'center' }}>
-          <h1
-            style={{
-              margin: 0,
-              marginBottom: 6,
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
-            <Image
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '8px 16px 0', textAlign: 'center' }}>
+          <h1 style={{ margin: 0, lineHeight: 0 }}>
+            <img
               src="/images/letreiro.png"
               alt="Alma Campeira Cutelaria"
               width={340}
               height={155}
-              priority
+              decoding="async"
+              fetchPriority="high"
               style={{
-                width: 'min(380px, 88vw)',
+                width: 'min(320px, 86vw)',
                 height: 'auto',
                 objectFit: 'contain',
+                display: 'block',
+                margin: '0 auto',
               }}
             />
           </h1>
-
-          <div className="hero-rule" />
         </section>
 
-        <main style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px 60px' }}>
+        <main style={{ maxWidth: 1280, margin: '0 auto', padding: '10px 20px 60px' }}>
           <CatalogoClient facas={facas} />
         </main>
 
