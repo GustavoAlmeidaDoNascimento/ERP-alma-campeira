@@ -506,34 +506,11 @@ function ErpTabsContent() {
         const nome = data.detalhe.faca.nome?.trim() || data.detalhe.faca.codigo?.trim() || ''
         updateTabLabel(href, formatFacaTabLabel(nome))
       }
-
-      // Prefetch adjacent open tabs that aren't cached yet
-      const idx = openTabs.findIndex((t) => t.href === href)
-      if (idx === -1) return
-      const adjacent = [openTabs[idx - 1], openTabs[idx + 1]].filter(Boolean)
-      for (const tab of adjacent) {
-        if (!dataCacheRef.current.has(tab.href)) {
-          setTimeout(() => {
-            if (dataCacheRef.current.has(tab.href)) return
-            if (LOG) console.log('[TABS] prefetch start', { href: tab.href })
-            getErpTabData(tab.href)
-              .then((d) => {
-                dataCacheRef.current.set(tab.href, d)
-                if (LOG) console.log('[TABS] prefetch done', { href: tab.href })
-              })
-              .catch(() => {
-                if (LOG) console.log('[TABS] prefetch failed', { href: tab.href })
-              })
-          }, 200)
-        }
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [openTabs, updateTabLabel]
+    [updateTabLabel]
   )
 
   // Track which tabs have been visited at least once — only those get mounted.
-  // On refresh, only the active tab is in this set, so only it fetches data.
   const [visited, setVisited] = useState<Set<string>>(() => new Set([activeHref]))
 
   useEffect(() => {
@@ -544,6 +521,100 @@ function ErpTabsContent() {
       return next
     })
   }, [activeHref])
+
+  // ── Background preloader: spiral expansion from active tab ──
+  // After the active tab finishes loading, preloads all other open tabs
+  // in expanding rings (left, right, left, right…). If the user switches
+  // to an unloaded tab mid-process, the preloader cancels, waits for the
+  // new active tab to load, and restarts the spiral from there.
+  const preloadAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    // Abort any in-flight preload cycle
+    preloadAbortRef.current?.abort()
+    const controller = new AbortController()
+    preloadAbortRef.current = controller
+    const signal = controller.signal
+
+    async function preload() {
+      // 1. Wait for the active tab to finish loading into cache
+      while (!dataCacheRef.current.has(activeHref) && !signal.aborted) {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      if (signal.aborted) return
+
+      // 2. Build spiral order from active tab index
+      const idx = openTabs.findIndex((t) => t.href === activeHref)
+      if (idx === -1) return
+
+      const order: number[] = []
+      let left = idx - 1
+      let right = idx + 1
+      while (left >= 0 || right < openTabs.length) {
+        if (left >= 0) { order.push(left); left-- }
+        if (right < openTabs.length) { order.push(right); right++ }
+      }
+
+      // 3. Load tabs one by one in spiral order
+      for (const i of order) {
+        if (signal.aborted) return
+        const tab = openTabs[i]
+        if (dataCacheRef.current.has(tab.href)) continue
+
+        try {
+          if (LOG) console.log('[TABS] preload start', { href: tab.href })
+          const d = await getErpTabData(tab.href)
+          if (signal.aborted) return
+
+          dataCacheRef.current.set(tab.href, d)
+
+          if (d.kind === 'faca-detalhe') {
+            const nome = d.detalhe.faca.nome?.trim() || d.detalhe.faca.codigo?.trim() || ''
+            updateTabLabel(tab.href, formatFacaTabLabel(nome))
+          }
+
+          // Mount the component so its state is preserved when user switches to it
+          setVisited((prev) => {
+            if (prev.has(tab.href)) return prev
+            const next = new Set(prev)
+            next.add(tab.href)
+            return next
+          })
+
+          if (LOG) console.log('[TABS] preload done', { href: tab.href })
+        } catch {
+          if (LOG) console.log('[TABS] preload failed', { href: tab.href })
+        }
+      }
+
+      // 4. Final sweep — check if any tab was missed (e.g. tabs opened during preload)
+      for (const tab of openTabs) {
+        if (signal.aborted) return
+        if (dataCacheRef.current.has(tab.href)) continue
+        try {
+          const d = await getErpTabData(tab.href)
+          if (signal.aborted) return
+          dataCacheRef.current.set(tab.href, d)
+          if (d.kind === 'faca-detalhe') {
+            const nome = d.detalhe.faca.nome?.trim() || d.detalhe.faca.codigo?.trim() || ''
+            updateTabLabel(tab.href, formatFacaTabLabel(nome))
+          }
+          setVisited((prev) => {
+            if (prev.has(tab.href)) return prev
+            const next = new Set(prev)
+            next.add(tab.href)
+            return next
+          })
+        } catch { /* skip */ }
+      }
+    }
+
+    preload()
+
+    return () => controller.abort()
+    // Re-run whenever activeHref changes (cancels in-flight preload and restarts spiral)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHref, openTabs, updateTabLabel])
 
   // Clean up visited set and data cache when tabs are closed
   useEffect(() => {
