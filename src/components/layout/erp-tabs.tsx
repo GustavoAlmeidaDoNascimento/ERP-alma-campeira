@@ -701,6 +701,15 @@ function ErpTabsContent() {
                   key={tab.href}
                   data-tab-item
                   className="flex min-w-0 flex-shrink-0 items-center gap-2 rounded-md border pl-3 pr-1 py-1.5"
+                  onMouseDown={(e) => {
+                    if (e.button !== 1) return
+                    e.preventDefault()
+                  }}
+                  onAuxClick={(e) => {
+                    if (e.button !== 1) return
+                    e.preventDefault()
+                    closeTab(tab.href)
+                  }}
                   onPointerDown={(e) => onPointerDown(e, tab.href, i)}
                   onClick={(e) => {
                     const target = e.target as HTMLElement
