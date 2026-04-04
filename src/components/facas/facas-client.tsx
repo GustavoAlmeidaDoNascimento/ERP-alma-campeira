@@ -371,6 +371,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
         editando={editando}
         categorias={categorias}
         materiasPrimas={materiasPrimas}
+        verPrecoVenda={verPrecoVenda}
         onSaved={refreshActiveTab}
       />
 

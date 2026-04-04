@@ -15,14 +15,14 @@ type Props = {
   editando?: Faca | null
   categorias: CategoriaFacaDB[]
   materiasPrimas: MateriaPrima[]
+  verPrecoVenda: boolean
   onSaved?: () => void
 }
 
 type Form = {
   nome: string
   categoria: string
-  taxa_producao: string
-  taxa_venda: string
+  preco_venda: string
   estoque_atual: string
   estoque_minimo: string
 }
@@ -32,13 +32,12 @@ type BomItem = {
   quantidade: string
 }
 
-export function FacaModal({ open, onClose, editando, categorias, materiasPrimas, onSaved }: Props) {
+export function FacaModal({ open, onClose, editando, categorias, materiasPrimas, verPrecoVenda, onSaved }: Props) {
   const defaultCategoria = categorias[0]?.nome ?? ''
   const [form, setForm] = useState<Form>({
     nome: '',
     categoria: defaultCategoria,
-    taxa_producao: '0',
-    taxa_venda: '0',
+    preco_venda: '0',
     estoque_atual: '0',
     estoque_minimo: '0',
   })
@@ -79,8 +78,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       setForm({
         nome: editando.nome,
         categoria: editando.categoria,
-        taxa_producao: String(editando.taxa_producao ?? 0),
-        taxa_venda: String(editando.taxa_venda ?? 0),
+        preco_venda: String(editando.preco_venda ?? 0),
         estoque_atual: String(editando.estoque_atual),
         estoque_minimo: String(editando.estoque_minimo),
       })
@@ -89,8 +87,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       setForm({
         nome: '',
         categoria: categorias[0]?.nome ?? '',
-        taxa_producao: '0',
-        taxa_venda: '0',
+        preco_venda: '0',
         estoque_atual: '0',
         estoque_minimo: '0',
       })
@@ -162,28 +159,20 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       const preco = Number(mp?.preco_custo ?? 0)
       return acc + (preco * qtd)
     }, 0)
-    const taxaProducao = Math.max(0, Number(form.taxa_producao) || 0)
-    const taxaVenda = Math.max(0, Number(form.taxa_venda) || 0)
-    const precoCusto = baseMaterias * (1 + (taxaProducao / 100))
-    const precoVenda = precoCusto * (1 + (taxaVenda / 100))
-    return {
-      baseMaterias,
-      precoCusto,
-      precoVenda,
-    }
-  }, [bomItens, form.taxa_producao, form.taxa_venda, materiasById])
+    return { baseMaterias, precoCusto: baseMaterias }
+  }, [bomItens, materiasById])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
 
     if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
-    if (isNaN(Number(form.taxa_producao)) || Number(form.taxa_producao) < 0) {
-      setErro('Taxa de produção inválida.')
-      return
-    }
-    if (isNaN(Number(form.taxa_venda)) || Number(form.taxa_venda) < 0) {
-      setErro('Taxa de venda inválida.')
+
+    const precoVendaNum = verPrecoVenda
+      ? Math.max(0, Number(form.preco_venda) || 0)
+      : Math.max(0, Number(editando?.preco_venda) || 0)
+    if (verPrecoVenda && (!Number.isFinite(Number(form.preco_venda)) || Number(form.preco_venda) < 0)) {
+      setErro('Preço de venda inválido.')
       return
     }
 
@@ -202,9 +191,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       if (editando?.id) fd.append('id', editando.id)
       fd.append('nome', form.nome)
       fd.append('categoria', form.categoria)
-      fd.append('taxa_producao', String(parseFloat(form.taxa_producao) || 0))
-      fd.append('taxa_venda', String(parseFloat(form.taxa_venda) || 0))
-      fd.append('preco_venda', String(custos.precoVenda))
+      fd.append('preco_venda', String(precoVendaNum))
       fd.append('estoque_atual', String(parseInt(form.estoque_atual) || 0))
       fd.append('estoque_minimo', String(parseInt(form.estoque_minimo) || 0))
       if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
@@ -281,27 +268,19 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           </select>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Input
-            id="taxa_producao"
-            label="Taxa de Produção (%)"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="0"
-            value={form.taxa_producao}
-            onChange={(e) => set('taxa_producao', e.target.value)}
-          />
-          <Input
-            id="taxa_venda"
-            label="Taxa de Venda (%)"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="0"
-            value={form.taxa_venda}
-            onChange={(e) => set('taxa_venda', e.target.value)}
-          />
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {verPrecoVenda && (
+            <Input
+              id="preco_venda"
+              label="Preço de venda *"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+              value={form.preco_venda}
+              onChange={(e) => set('preco_venda', e.target.value)}
+            />
+          )}
           <Input
             id="estoque_atual"
             label="Estoque Atual"
@@ -321,25 +300,22 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         </div>
 
         <div
-          className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl p-3"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl p-3"
           style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
         >
           <div>
-            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Base matérias-primas</p>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Somatório matérias-primas</p>
             <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
               {custos.baseMaterias.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Preço de custo</p>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Preço de custo (referência)</p>
             <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
               {custos.precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Preço de venda calculado</p>
-            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-              {custos.precoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--ac-muted)' }}>
+              Lucro na lista usa as taxas em Configurações.
             </p>
           </div>
         </div>

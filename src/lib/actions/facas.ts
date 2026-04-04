@@ -46,8 +46,6 @@ export async function gerarCodigoFaca(): Promise<string> {
 type FacaInput = {
   nome: string
   categoria: string
-  taxa_producao: number
-  taxa_venda: number
   preco_venda: number
   estoque_atual: number
   estoque_minimo: number
@@ -62,8 +60,8 @@ export async function criarFaca(input: FacaInput) {
     codigo,
     nome: input.nome.trim(),
     categoria: input.categoria,
-    taxa_producao: input.taxa_producao,
-    taxa_venda: input.taxa_venda,
+    taxa_producao: 0,
+    taxa_venda: 0,
     preco_venda: input.preco_venda,
     estoque_atual: input.estoque_atual,
     estoque_minimo: input.estoque_minimo,
@@ -83,8 +81,8 @@ export async function atualizarFaca(id: string, input: FacaInput) {
     .update({
       nome: input.nome.trim(),
       categoria: input.categoria,
-      taxa_producao: input.taxa_producao,
-      taxa_venda: input.taxa_venda,
+      taxa_producao: 0,
+      taxa_venda: 0,
       preco_venda: input.preco_venda,
       estoque_atual: input.estoque_atual,
       estoque_minimo: input.estoque_minimo,
@@ -119,8 +117,6 @@ export async function salvarFacaComFoto(formData: FormData) {
   const id = formData.get('id')
   const nome = String(formData.get('nome') ?? '').trim()
   const categoria = String(formData.get('categoria') ?? '').trim()
-  const taxa_producao = Number(formData.get('taxa_producao'))
-  const taxa_venda = Number(formData.get('taxa_venda'))
   const preco_venda = Number(formData.get('preco_venda'))
   const estoque_atual = Number(formData.get('estoque_atual'))
   const estoque_minimo = Number(formData.get('estoque_minimo'))
@@ -129,9 +125,7 @@ export async function salvarFacaComFoto(formData: FormData) {
 
   if (!nome) throw new Error('Nome é obrigatório.')
   if (!categoria) throw new Error('Categoria é obrigatória.')
-  if (!Number.isFinite(taxa_producao) || taxa_producao < 0) throw new Error('Taxa de produção inválida.')
-  if (!Number.isFinite(taxa_venda) || taxa_venda < 0) throw new Error('Taxa de venda inválida.')
-  if (!Number.isFinite(preco_venda)) throw new Error('Preço de venda inválido.')
+  if (!Number.isFinite(preco_venda) || preco_venda < 0) throw new Error('Preço de venda inválido.')
   if (!Number.isFinite(estoque_atual)) throw new Error('Estoque atual inválido.')
   if (!Number.isFinite(estoque_minimo)) throw new Error('Estoque mínimo inválido.')
 
@@ -159,8 +153,8 @@ export async function salvarFacaComFoto(formData: FormData) {
     const { error } = await supabase.from('facas').update({
       nome,
       categoria,
-      taxa_producao,
-      taxa_venda,
+      taxa_producao: 0,
+      taxa_venda: 0,
       preco_venda,
       estoque_atual,
       estoque_minimo,
@@ -174,8 +168,8 @@ export async function salvarFacaComFoto(formData: FormData) {
         codigo,
         nome,
         categoria,
-        taxa_producao,
-        taxa_venda,
+        taxa_producao: 0,
+        taxa_venda: 0,
         preco_venda,
         estoque_atual,
         estoque_minimo,
@@ -455,9 +449,7 @@ async function calcularPrecoCustoPorFaca(
   const custoByFaca = new Map<string, number>()
   for (const faca of facas) {
     const base = baseByFaca.get(faca.id) ?? 0
-    const taxaProducao = Number(faca.taxa_producao ?? 0)
-    const custo = base * (1 + (taxaProducao / 100))
-    custoByFaca.set(faca.id, Math.round(custo * 100) / 100)
+    custoByFaca.set(faca.id, Math.round(base * 100) / 100)
   }
   return custoByFaca
 }

@@ -376,7 +376,7 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     if (ate) ocQuery = ocQuery.lt('created_at', ate)
 
     const [facasRes, mpRes, movRes, bomRes, ocRes] = await Promise.all([
-      supabase.from('facas').select('id, codigo, nome, estoque_atual, estoque_minimo, taxa_venda, preco_venda'),
+      supabase.from('facas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_venda'),
       supabase.from('materias_primas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_custo, fornecedor:fornecedores(nome)'),
       movQuery.limit(50),
       supabase.from('faca_materias_primas').select('faca_id, materia_prima_id, quantidade, faca:facas(id, codigo, nome), mp:materias_primas(id, codigo, nome, preco_custo)'),
@@ -413,7 +413,6 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     // ── Saúde Estoque Facas ──
     const saudeFacas: SaudeEstoqueFaca[] = facas
       .map((f) => {
-        const taxa = Number(f.taxa_venda ?? 0)
         return {
           id: f.id,
           codigo: f.codigo,
@@ -421,7 +420,7 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
           estoqueAtual: Number(f.estoque_atual),
           estoqueMinimo: Number(f.estoque_minimo),
           status: estoqueStatus(Number(f.estoque_atual), Number(f.estoque_minimo)),
-          coberturaDias: taxa > 0 ? Math.round(Number(f.estoque_atual) / taxa) : null,
+          coberturaDias: null,
         }
       })
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])

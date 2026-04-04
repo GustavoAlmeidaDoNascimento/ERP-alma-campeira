@@ -44,9 +44,6 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
       return acc + preco * item.quantidade
     }, 0)
   }, [bom])
-  const taxaProducao = Number(faca.taxa_producao ?? 0)
-  const taxaVenda = Number(faca.taxa_venda ?? 0)
-  const precoCusto = custoTotal * (1 + (taxaProducao / 100))
 
   const mpFotoThumbById = useMemo(() => {
     const map = new Map<string, string>()
@@ -188,17 +185,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
               </div>
               {custoTotal > 0 && (
                 <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                  Custo base MP: {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              )}
-              {precoCusto > 0 && (
-                <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                  Preço de custo: {precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              )}
-              {verPrecoVenda && (
-                <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                  Taxas: produção {taxaProducao.toFixed(2)}% | venda {taxaVenda.toFixed(2)}%
+                  Preço de custo (somatório MP): {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               )}
             </div>
@@ -430,6 +417,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
         editando={faca}
         categorias={categorias}
         materiasPrimas={materiasPrimas}
+        verPrecoVenda={verPrecoVenda}
         onSaved={refreshActiveTab}
       />
 
