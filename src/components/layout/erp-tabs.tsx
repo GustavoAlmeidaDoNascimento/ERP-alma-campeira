@@ -240,6 +240,11 @@ function TabPane({
   const [data, setData] = useState<ErpTabData | null>(cachedData ?? null)
   const [errMsg, setErrMsg] = useState<string>('')
 
+  // Track whether we've completed at least one successful load and which refreshSeq was last fetched.
+  // This prevents re-fetching just because the user switched back to this tab.
+  const loadedRef = useRef(!!cachedData)
+  const lastFetchedSeqRef = useRef(cachedData ? 0 : -1)
+
   useEffect(() => {
     if (LOG) console.log('[TABS] TabPane mounted', { href, hasCachedData: !!cachedData })
     return () => {
@@ -250,6 +255,13 @@ function TabPane({
 
   useEffect(() => {
     if (!active) return
+
+    // Skip fetch if already loaded and refreshSeq hasn't changed.
+    // This means switching back to a visited tab never triggers a re-fetch.
+    // Only an explicit refresh (F5 resets the component; refreshTab increments refreshSeq) will fetch again.
+    if (loadedRef.current && lastFetchedSeqRef.current === refreshSeq) return
+
+    lastFetchedSeqRef.current = refreshSeq
 
     let cancelled = false
     async function run() {
@@ -267,6 +279,7 @@ function TabPane({
 
         const d = await getErpTabData(href)
         if (cancelled) return
+        loadedRef.current = true
         setData(d)
         setStatus('ready')
         onData?.(href, d)
