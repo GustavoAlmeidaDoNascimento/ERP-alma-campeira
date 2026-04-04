@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 export type FacaCatalogoItem = {
   id: string
@@ -93,6 +93,15 @@ export function CatalogoClient({ facas }: Props) {
   const [precoMaxStr, setPrecoMaxStr] = useState('')
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
 
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox])
+
   const categorias = useMemo(() => {
     const set = new Set(facas.map((f) => f.categoria).filter(Boolean))
     return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -132,7 +141,7 @@ export function CatalogoClient({ facas }: Props) {
       <div
         style={{
           maxWidth: 560,
-          margin: '0 auto 28px',
+          margin: '0 auto 20px',
           textAlign: 'left',
         }}
       >
@@ -236,28 +245,40 @@ export function CatalogoClient({ facas }: Props) {
         </div>
       ) : (
         <div className="catalog-grid">
-          {filtradas.map((faca, i) => (
+          {filtradas.map((faca, i) => {
+            const abrirFoto = faca.foto_url
+              ? () => setLightbox({ src: faca.foto_url!, alt: faca.nome })
+              : undefined
+            return (
             <div
               key={faca.id}
-              className="card fade-in"
+              className={`card fade-in${faca.foto_url ? ' card--clickable' : ''}`}
               style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
+              role={faca.foto_url ? 'button' : undefined}
+              tabIndex={faca.foto_url ? 0 : undefined}
+              aria-label={faca.foto_url ? `Ver foto ampliada: ${faca.nome}` : undefined}
+              onClick={abrirFoto}
+              onKeyDown={
+                faca.foto_url
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        abrirFoto?.()
+                      }
+                    }
+                  : undefined
+              }
             >
               <div className="card-img-wrap">
                 {faca.foto_url ? (
-                  <button
-                    type="button"
-                    onClick={() => setLightbox({ src: faca.foto_url!, alt: faca.nome })}
-                    style={{ display: 'block', width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, cursor: 'zoom-in' }}
-                    aria-label={`Ampliar foto de ${faca.nome}`}
-                  >
-                    <img
-                      src={faca.foto_url}
-                      alt={faca.nome}
-                      className="card-img"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </button>
+                  <img
+                    src={faca.foto_url}
+                    alt=""
+                    className="card-img"
+                    loading="lazy"
+                    decoding="async"
+                    aria-hidden
+                  />
                 ) : (
                   <div
                     style={{
@@ -321,7 +342,8 @@ export function CatalogoClient({ facas }: Props) {
                 </p>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

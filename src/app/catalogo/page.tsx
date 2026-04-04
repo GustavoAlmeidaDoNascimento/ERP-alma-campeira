@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import type { CSSProperties } from 'react'
 import { CatalogoClient, type FacaCatalogoItem } from './catalogo-client'
 
@@ -71,6 +72,15 @@ export default async function CatalogoPage() {
           transform: translateY(-3px);
         }
 
+        .card--clickable {
+          cursor: pointer;
+        }
+
+        .card--clickable:focus-visible {
+          outline: 2px solid #ca8a04;
+          outline-offset: 3px;
+        }
+
         .card-img-wrap {
           aspect-ratio: 1 / 1;
           background: #f3f4f6;
@@ -120,7 +130,7 @@ export default async function CatalogoPage() {
         .hero-rule {
           height: 1px;
           background: linear-gradient(to right, transparent, rgba(202,138,4,0.45), transparent);
-          margin: 24px 0;
+          margin: 8px 0 12px;
         }
       `}</style>
 
@@ -147,35 +157,33 @@ export default async function CatalogoPage() {
           </div>
         </header>
 
-        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '52px 20px 12px', textAlign: 'center' }}>
-          <p style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.2em',
-            color: '#CA8A04',
-            textTransform: 'uppercase',
-            marginBottom: 14,
-          }}>
-            ✦ &nbsp; Catálogo Oficial &nbsp; ✦
-          </p>
-          <h1 style={{
-            fontSize: 'clamp(2rem, 5vw, 3.5rem)',
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.1,
-            color: '#111827',
-            marginBottom: 14,
-          }}>
-            Nossas Facas
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '18px 20px 4px', textAlign: 'center' }}>
+          <h1
+            style={{
+              margin: 0,
+              marginBottom: 6,
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
+            <Image
+              src="/images/letreiro.png"
+              alt="Alma Campeira Cutelaria"
+              width={340}
+              height={155}
+              priority
+              style={{
+                width: 'min(380px, 88vw)',
+                height: 'auto',
+                objectFit: 'contain',
+              }}
+            />
           </h1>
-          <p style={{ fontSize: 15, color: '#6b7280', maxWidth: 440, margin: '0 auto', lineHeight: 1.7 }}>
-            Cada peça produzida artesanalmente com os melhores aços, unindo tradição gaúcha e qualidade em cada lâmina.
-          </p>
 
           <div className="hero-rule" />
         </section>
 
-        <main style={{ maxWidth: 1280, margin: '0 auto', padding: '8px 20px 60px' }}>
+        <main style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px 60px' }}>
           <CatalogoClient facas={facas} />
         </main>
 
