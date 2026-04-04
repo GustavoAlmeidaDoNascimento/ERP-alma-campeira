@@ -136,7 +136,7 @@ export default async function CatalogoPage() {
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           borderBottom: '1px solid #e5e7eb',
-          padding: '12px 20px',
+          padding: '8px 16px',
         }}>
           <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ ...logoMask, width: 36, height: 36, flexShrink: 0 }} aria-hidden />
@@ -151,7 +151,7 @@ export default async function CatalogoPage() {
           </div>
         </header>
 
-        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '8px 16px 0', textAlign: 'center' }}>
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 12px 0', textAlign: 'center' }}>
           <h1 style={{ margin: 0, lineHeight: 0 }}>
             <img
               src="/images/letreiro.png"
@@ -161,17 +161,17 @@ export default async function CatalogoPage() {
               decoding="async"
               fetchPriority="high"
               style={{
-                width: 'min(320px, 86vw)',
+                width: 'min(260px, 72vw)',
                 height: 'auto',
                 objectFit: 'contain',
                 display: 'block',
-                margin: '0 auto',
+                margin: '0 auto -4px',
               }}
             />
           </h1>
         </section>
 
-        <main style={{ maxWidth: 1280, margin: '0 auto', padding: '10px 20px 60px' }}>
+        <main style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px 60px' }}>
           <CatalogoClient facas={facas} />
         </main>
 

@@ -141,7 +141,7 @@ export function CatalogoClient({ facas }: Props) {
       <div
         style={{
           maxWidth: 560,
-          margin: '0 auto 20px',
+          margin: '0 auto 14px',
           textAlign: 'left',
         }}
       >
