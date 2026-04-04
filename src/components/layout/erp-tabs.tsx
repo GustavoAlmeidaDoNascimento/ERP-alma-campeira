@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 import { getRouteIcon, getRouteLabel, normalizePath } from '@/components/layout/erp-navigation'
 import type { ReactNode } from 'react'
@@ -32,6 +32,9 @@ const STORAGE_KEY = 'erp_open_tabs_v1'
 const ACTIVE_KEY = 'erp_active_tab_v1'
 
 const LOG = process.env.NODE_ENV === 'development'
+
+/** Rota padrão após login — alinhado a `src/app/page.tsx` */
+const ERP_FALLBACK_HREF = '/materias-primas'
 
 function normalizeHref(href: string) {
   const [pathOnly] = href.split('?')
@@ -829,6 +832,7 @@ type ErpTabsProviderProps = {
 }
 
 export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
+  const router = useRouter()
   const pathname = usePathname()
   const initialHref = useMemo(() => normalizeHref(pathname), [pathname])
   const initialLabel = useMemo(() => getRouteLabel(initialHref), [initialHref])
@@ -842,6 +846,9 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
   if (primeiraRotaRef.current === null) {
     primeiraRotaRef.current = { href: initialHref, label: initialLabel }
   }
+
+  /** Evita sobrescrever estado na 1ª execução (hidratação de abas ainda roda depois). */
+  const pathnameSyncSkippedOnce = useRef(false)
 
   // Sinal para refetch por aba (usado pelos CRUDs para atualizar só a aba ativa)
   const [tabRefreshSeq, setTabRefreshSeq] = useState<Record<string, number>>({})
@@ -886,6 +893,22 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persist])
 
+  // Voltar / avançar do navegador: URL é a fonte da verdade após a primeira navegação.
+  useEffect(() => {
+    const normalized = normalizeHref(pathname)
+    if (!pathnameSyncSkippedOnce.current) {
+      pathnameSyncSkippedOnce.current = true
+      return
+    }
+    setActiveHref(normalized)
+    setOpenTabs((prev) => {
+      const exists = prev.some((t) => t.href === normalized)
+      const next = exists ? prev : [...prev, { href: normalized, label: getRouteLabel(normalized) }]
+      persist(next, normalized)
+      return next
+    })
+  }, [pathname, persist])
+
   const openTab = useCallback(
     (href: string) => {
       const normalizedHref = normalizeHref(href)
@@ -899,39 +922,49 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
         setActiveHref(normalizedHref)
         return next
       })
+      router.push(normalizedHref)
     },
-    [persist]
+    [persist, router]
   )
 
   const selectTab = useCallback(
     (href: string) => {
       const normalizedHref = normalizeHref(href)
-      setActiveHref(normalizedHref)
+      const label = getRouteLabel(normalizedHref)
       if (LOG) console.log('[TABS] selectTab', { href: normalizedHref })
-      persist(openTabs, normalizedHref)
-      if (!openTabs.some((t) => t.href === normalizedHref)) {
-        // Fallback: se abriu via UI externa, garante que a aba exista.
-        const label = getRouteLabel(normalizedHref)
-        setOpenTabs((prev) => [...prev, { href: normalizedHref, label }])
-      }
+      setOpenTabs((prev) => {
+        const exists = prev.some((t) => t.href === normalizedHref)
+        const next = exists ? prev : [...prev, { href: normalizedHref, label }]
+        persist(next, normalizedHref)
+        return next
+      })
+      setActiveHref(normalizedHref)
+      router.push(normalizedHref)
     },
-    [openTabs, persist]
+    [persist, router]
   )
 
   const closeTab = useCallback(
     (href: string) => {
       const normalizedHref = normalizeHref(href)
+      const pathAtClose = normalizeHref(pathname)
       setOpenTabs((prev) => {
         const remaining = prev.filter((t) => t.href !== normalizedHref)
+        const closingActive = pathAtClose === normalizedHref
         const nextActive = remaining[remaining.length - 1]?.href ?? ''
+        const dest = nextActive || ERP_FALLBACK_HREF
         if (LOG) console.log('[TABS] closeTab', { href: normalizedHref, remaining: remaining.length })
-        if (nextActive) setActiveHref(nextActive)
-        else setActiveHref('')
-        persist(remaining, nextActive)
+        if (closingActive) {
+          setActiveHref(dest)
+          persist(remaining, dest)
+          queueMicrotask(() => router.push(dest))
+        } else {
+          persist(remaining, pathAtClose)
+        }
         return remaining
       })
     },
-    [persist]
+    [persist, pathname, router]
   )
 
   const reorderTabs = useCallback(
