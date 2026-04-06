@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
 import { VendaDetalheModal } from './venda-detalhe-modal'
-import { deletarVenda, getVendaDetalhe } from '@/lib/actions/vendas'
+import { avancarStatus, deletarVenda, getVendaDetalhe, marcarEntregue } from '@/lib/actions/vendas'
 import { getErpTabData } from '@/lib/actions/erp-tab-data'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
@@ -40,6 +40,8 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [filtroStatus, setFiltroStatus] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
+  const [acaoLoading, setAcaoLoading] = useState<{ id: string; tipo: 'producao' | 'entrega' } | null>(null)
+  const [acaoErro, setAcaoErro] = useState<{ id: string; msg: string } | null>(null)
 
   // Sincroniza quando TabPane re-busca dados (ex: ao reabrir a aba)
   useEffect(() => {
@@ -87,6 +89,34 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
       setDetalhe(venda)
     } finally {
       setLoadingDetalheId(null)
+    }
+  }
+
+  async function acaoIniciarProducao(p: Pedido) {
+    if (!perm.editar) return
+    setAcaoErro(null)
+    setAcaoLoading({ id: p.id, tipo: 'producao' })
+    try {
+      await avancarStatus(p.id, 'em_producao')
+      await handleStatusChange(p.id, 'em_producao')
+    } catch (e: unknown) {
+      setAcaoErro({ id: p.id, msg: e instanceof Error ? e.message : 'Erro ao iniciar produção.' })
+    } finally {
+      setAcaoLoading(null)
+    }
+  }
+
+  async function acaoEntregue(p: Pedido) {
+    if (!perm.editar) return
+    setAcaoErro(null)
+    setAcaoLoading({ id: p.id, tipo: 'entrega' })
+    try {
+      await marcarEntregue(p.id)
+      await handleStatusChange(p.id, 'entregue', new Date().toISOString())
+    } catch (e: unknown) {
+      setAcaoErro({ id: p.id, msg: e instanceof Error ? e.message : 'Erro ao marcar entrega.' })
+    } finally {
+      setAcaoLoading(null)
     }
   }
 
@@ -189,6 +219,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>Ação</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -196,7 +227,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca || filtroStatus !== 'todos' ? 'Nenhuma venda para esse filtro.' : 'Nenhuma venda cadastrada ainda.'}
                   </td>
                 </tr>
@@ -235,6 +266,41 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                         style={{ color: st.color, background: st.bg, border: `1px solid ${st.border}` }}>
                         {st.label}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <div className="flex flex-col gap-1 min-w-[9rem]">
+                        {perm.editar && p.status === 'em_espera' && (
+                          <button
+                            type="button"
+                            onClick={() => acaoIniciarProducao(p)}
+                            disabled={acaoLoading?.id === p.id}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity disabled:opacity-60 whitespace-nowrap"
+                            style={{ background: '#b45309', color: '#fff', border: 'none' }}
+                          >
+                            {acaoLoading?.id === p.id && acaoLoading.tipo === 'producao' ? '…' : 'Iniciar produção'}
+                          </button>
+                        )}
+                        {perm.editar && p.status === 'em_producao' && (
+                          <button
+                            type="button"
+                            onClick={() => acaoEntregue(p)}
+                            disabled={acaoLoading?.id === p.id}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity disabled:opacity-60 whitespace-nowrap"
+                            style={{ background: '#15803d', color: '#fff', border: 'none' }}
+                          >
+                            {acaoLoading?.id === p.id && acaoLoading.tipo === 'entrega' ? '…' : 'Entregue'}
+                          </button>
+                        )}
+                        {p.status === 'entregue' && (
+                          <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>—</span>
+                        )}
+                        {!perm.editar && (p.status === 'em_espera' || p.status === 'em_producao') && (
+                          <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>—</span>
+                        )}
+                        {acaoErro?.id === p.id && (
+                          <span className="text-[11px] leading-tight" style={{ color: '#dc2626' }}>{acaoErro.msg}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {(p.valor_total ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
