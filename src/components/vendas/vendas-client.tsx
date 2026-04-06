@@ -63,8 +63,8 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
       // Optimistic update continua válido se falhar
     }
 
-    // Quando uma venda vira "entregue", isso alimenta a fila de reposição
-    // que é exibida na aba de Ordens de Compra.
+    // Quando uma venda vira "entregue", o servidor preenche a fila de reposição
+    // e tenta gerar OCs automaticamente; a aba de compras é atualizada.
     if (novoStatus === 'entregue') refreshTab('/ordens-compra')
   }, [refreshTab])
 

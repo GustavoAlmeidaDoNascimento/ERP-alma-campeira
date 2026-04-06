@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
+import { executarGerarTodasOCsDesdeFilaAutomatico } from '@/lib/ordens-compra/gerar-oc-fila'
 import type { Pedido, StatusPedido } from '@/types'
 
 function normalizeStatusPedido(status: string): StatusPedido {
@@ -351,6 +352,12 @@ export async function marcarEntregue(id: string) {
       })
       if (filaErr) throw new Error(filaErr.message)
     }
+  }
+
+  try {
+    await executarGerarTodasOCsDesdeFilaAutomatico()
+  } catch {
+    // Fila já foi preenchida; OC pode ser gerada manualmente (ex.: já existe OC pendente para um fornecedor).
   }
 
   revalidatePath('/vendas')
