@@ -186,6 +186,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cliente</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</th>
@@ -195,7 +196,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca || filtroStatus !== 'todos' ? 'Nenhuma venda para esse filtro.' : 'Nenhuma venda cadastrada ainda.'}
                   </td>
                 </tr>
@@ -222,6 +223,9 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                       ) : (
                         <span style={{ color: 'var(--ac-muted)' }}>—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm" style={{ color: 'var(--ac-text)' }}>
+                      {p.vendedor ? p.vendedor.nome : <span style={{ color: 'var(--ac-muted)' }}>—</span>}
                     </td>
                     <td className="px-4 py-3 text-sm" style={{ color: 'var(--ac-muted)' }}>
                       {new Date(p.data_pedido + 'T12:00:00').toLocaleDateString('pt-BR')}
