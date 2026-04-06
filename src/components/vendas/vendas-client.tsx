@@ -40,8 +40,9 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [filtroStatus, setFiltroStatus] = useState<StatusPedido | 'todos'>('todos')
   const [busca, setBusca] = useState('')
-  const [acaoLoading, setAcaoLoading] = useState<{ id: string; tipo: 'producao' | 'entrega' } | null>(null)
-  const [acaoErro, setAcaoErro] = useState<{ id: string; msg: string } | null>(null)
+  const [confirmarAcao, setConfirmarAcao] = useState<{ pedido: Pedido; tipo: 'producao' | 'entrega' } | null>(null)
+  const [loadingAcaoConfirm, setLoadingAcaoConfirm] = useState(false)
+  const [erroAcaoConfirm, setErroAcaoConfirm] = useState('')
 
   // Sincroniza quando TabPane re-busca dados (ex: ao reabrir a aba)
   useEffect(() => {
@@ -92,31 +93,36 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
     }
   }
 
-  async function acaoIniciarProducao(p: Pedido) {
+  function abrirConfirmarProducao(p: Pedido) {
     if (!perm.editar) return
-    setAcaoErro(null)
-    setAcaoLoading({ id: p.id, tipo: 'producao' })
-    try {
-      await avancarStatus(p.id, 'em_producao')
-      await handleStatusChange(p.id, 'em_producao')
-    } catch (e: unknown) {
-      setAcaoErro({ id: p.id, msg: e instanceof Error ? e.message : 'Erro ao iniciar produção.' })
-    } finally {
-      setAcaoLoading(null)
-    }
+    setErroAcaoConfirm('')
+    setConfirmarAcao({ pedido: p, tipo: 'producao' })
   }
 
-  async function acaoEntregue(p: Pedido) {
+  function abrirConfirmarEntregue(p: Pedido) {
     if (!perm.editar) return
-    setAcaoErro(null)
-    setAcaoLoading({ id: p.id, tipo: 'entrega' })
+    setErroAcaoConfirm('')
+    setConfirmarAcao({ pedido: p, tipo: 'entrega' })
+  }
+
+  async function executarAcaoConfirmada() {
+    if (!confirmarAcao) return
+    setErroAcaoConfirm('')
+    setLoadingAcaoConfirm(true)
+    const { pedido: p, tipo } = confirmarAcao
     try {
-      await marcarEntregue(p.id)
-      await handleStatusChange(p.id, 'entregue', new Date().toISOString())
+      if (tipo === 'producao') {
+        await avancarStatus(p.id, 'em_producao')
+        await handleStatusChange(p.id, 'em_producao')
+      } else {
+        await marcarEntregue(p.id)
+        await handleStatusChange(p.id, 'entregue', new Date().toISOString())
+      }
+      setConfirmarAcao(null)
     } catch (e: unknown) {
-      setAcaoErro({ id: p.id, msg: e instanceof Error ? e.message : 'Erro ao marcar entrega.' })
+      setErroAcaoConfirm(e instanceof Error ? e.message : (tipo === 'producao' ? 'Erro ao iniciar produção.' : 'Erro ao marcar entrega.'))
     } finally {
-      setAcaoLoading(null)
+      setLoadingAcaoConfirm(false)
     }
   }
 
@@ -272,23 +278,21 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                         {perm.editar && p.status === 'em_espera' && (
                           <button
                             type="button"
-                            onClick={() => acaoIniciarProducao(p)}
-                            disabled={acaoLoading?.id === p.id}
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity disabled:opacity-60 whitespace-nowrap"
+                            onClick={() => abrirConfirmarProducao(p)}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity whitespace-nowrap"
                             style={{ background: '#b45309', color: '#fff', border: 'none' }}
                           >
-                            {acaoLoading?.id === p.id && acaoLoading.tipo === 'producao' ? '…' : 'Iniciar produção'}
+                            Iniciar produção
                           </button>
                         )}
                         {perm.editar && p.status === 'em_producao' && (
                           <button
                             type="button"
-                            onClick={() => acaoEntregue(p)}
-                            disabled={acaoLoading?.id === p.id}
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity disabled:opacity-60 whitespace-nowrap"
+                            onClick={() => abrirConfirmarEntregue(p)}
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity whitespace-nowrap"
                             style={{ background: '#15803d', color: '#fff', border: 'none' }}
                           >
-                            {acaoLoading?.id === p.id && acaoLoading.tipo === 'entrega' ? '…' : 'Entregue'}
+                            Entregue
                           </button>
                         )}
                         {p.status === 'entregue' && (
@@ -296,9 +300,6 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                         )}
                         {!perm.editar && (p.status === 'em_espera' || p.status === 'em_producao') && (
                           <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>—</span>
-                        )}
-                        {acaoErro?.id === p.id && (
-                          <span className="text-[11px] leading-tight" style={{ color: '#dc2626' }}>{acaoErro.msg}</span>
                         )}
                       </div>
                     </td>
@@ -381,6 +382,46 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
         onStatusChange={handleStatusChange}
         perm={perm}
       />
+
+      {/* Confirmar mudança de status (lista) */}
+      <Modal
+        open={!!confirmarAcao}
+        onClose={() => !loadingAcaoConfirm && setConfirmarAcao(null)}
+        title={confirmarAcao?.tipo === 'producao' ? 'Iniciar produção' : 'Marcar como entregue'}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
+            {confirmarAcao?.tipo === 'producao' ? (
+              <>
+                Deseja colocar a venda <strong>{confirmarAcao.pedido.codigo}</strong> em produção? O status passará de <strong>Em espera</strong> para <strong>Em produção</strong>.
+              </>
+            ) : (
+              <>
+                Confirma a entrega da venda <strong>{confirmarAcao?.pedido.codigo}</strong>? Será dada baixa no estoque das facas, registrada a movimentação e atualizada a reposição de matérias-primas (incluindo ordens de compra quando aplicável).
+              </>
+            )}
+          </p>
+          {erroAcaoConfirm && (
+            <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroAcaoConfirm}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" disabled={loadingAcaoConfirm} onClick={() => setConfirmarAcao(null)}>
+              Cancelar
+            </Button>
+            <Button
+              loading={loadingAcaoConfirm}
+              onClick={executarAcaoConfirmada}
+              style={
+                confirmarAcao?.tipo === 'producao'
+                  ? { background: '#b45309', color: '#fff', border: 'none' }
+                  : { background: '#15803d', color: '#fff', border: 'none' }
+              }
+            >
+              {confirmarAcao?.tipo === 'producao' ? 'Iniciar produção' : 'Confirmar entrega'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Confirmar exclusão */}
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir venda">
