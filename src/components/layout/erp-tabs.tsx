@@ -369,7 +369,7 @@ function TabPane({
     case 'ordens-compra':
       return <OcClient fila={data.fila} ordens={data.ordens} perm={data.perm} />
     case 'vendas':
-      return <VendasClient pedidos={data.pedidos} clientes={data.clientes} facas={data.facas} perm={data.perm} />
+      return <VendasClient pedidos={data.pedidos} clientes={data.clientes} facas={data.facas} usuarios={data.usuarios} perm={data.perm} />
     case 'clientes':
       return <ClientesClient clientes={data.clientes} perm={data.perm} />
     case 'usuarios':

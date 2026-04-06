@@ -233,6 +233,7 @@ export type Pedido = {
   id: string
   codigo: string
   cliente_id: string | null
+  vendedor_id: string | null
   data_pedido: string
   status: StatusPedido
   observacao: string | null
@@ -240,6 +241,7 @@ export type Pedido = {
   entregue_at: string | null
   created_at: string
   cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo'> | null
+  vendedor?: { id: string; nome: string } | null
   itens?: PedidoItem[]
 }
 

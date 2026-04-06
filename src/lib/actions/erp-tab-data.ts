@@ -10,7 +10,7 @@ import { getConsumiveis } from '@/lib/actions/consumiveis'
 import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
-import { getUsuarios } from '@/lib/actions/usuarios'
+import { getUsuarios, getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
 import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
@@ -68,6 +68,7 @@ export type ErpTabData =
       pedidos: Pedido[]
       clientes: Cliente[]
       facas: Faca[]
+      usuarios: { id: string; nome: string }[]
       perm: Perm
     }
   | {
@@ -211,15 +212,16 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/vendas') {
-    const [perms, pedidos, clientes, facas] = await Promise.all([
+    const [perms, pedidos, clientes, facas, usuarios] = await Promise.all([
       getPermissoesEfetivas(),
       getVendas(80),
       getClientes(80),
       getFacas(120),
+      getUsuariosPerfisList(),
     ])
     const perm = perms.vendas as Perm
     assertAllowed(perm, 'vendas')
-    return { kind: 'vendas', pedidos, clientes, facas, perm }
+    return { kind: 'vendas', pedidos, clientes, facas, usuarios, perm }
   }
 
   if (path === '/clientes') {

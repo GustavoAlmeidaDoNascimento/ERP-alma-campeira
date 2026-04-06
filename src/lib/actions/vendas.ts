@@ -25,6 +25,7 @@ const getVendasCached = unstable_cache(
       .select(`
         *,
         cliente:clientes(id, nome, tipo),
+        vendedor:usuarios_perfis(id, nome),
         itens:pedido_itens(*)
       `)
       .order('created_at', { ascending: false })
@@ -49,6 +50,7 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
     .select(`
       *,
       cliente:clientes(id, nome, tipo),
+      vendedor:usuarios_perfis(id, nome),
       itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url))
     `)
     .eq('id', id)
@@ -80,6 +82,7 @@ export type VendaItemInput = {
 
 export type VendaInput = {
   cliente_id: string | null
+  vendedor_id: string | null
   data_pedido: string
   observacao: string
   status: StatusPedido
@@ -127,6 +130,7 @@ export async function criarVenda(input: VendaInput) {
     .insert({
       codigo,
       cliente_id: input.cliente_id || null,
+      vendedor_id: input.vendedor_id || null,
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
       status: input.status,
@@ -161,30 +165,6 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     throw new Error('Para entregar a venda, use a ação "Marcar como entregue" na tela de detalhes.')
   }
 
-  // Validar estoque disponível para cada faca
-  const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
-  const { data: facas } = await supabase
-    .from('facas')
-    .select('id, nome, estoque_atual')
-    .in('id', facaIds)
-
-  if (facas) {
-    const facaMap = new Map(facas.map((f) => [f.id, f]))
-    const insuficientes = input.itens.filter((item) => {
-      const faca = facaMap.get(item.faca_id)
-      return faca && faca.estoque_atual < item.quantidade
-    })
-    if (insuficientes.length > 0) {
-      const detalhes = insuficientes
-        .map((item) => {
-          const f = facaMap.get(item.faca_id)
-          return `${f?.nome ?? 'Desconhecida'} (solicitado: ${item.quantidade}, disponível: ${f?.estoque_atual ?? 0})`
-        })
-        .join('; ')
-      throw new Error(`Estoque insuficiente: ${detalhes}`)
-    }
-  }
-
   const { data: pedido } = await supabase
     .from('pedidos')
     .select('status')
@@ -194,12 +174,59 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     throw new Error('Vendas entregues não podem ser editadas.')
   }
 
+  // Valida estoque apenas para o delta de aumento de quantidade.
+  // Itens já existentes no pedido não consomem estoque até a entrega,
+  // então só bloqueamos se a nova quantidade EXCEDER a anterior.
+  const { data: itensAtuais } = await supabase
+    .from('pedido_itens')
+    .select('faca_id, quantidade')
+    .eq('pedido_id', id)
+
+  const qtdAtualMap = new Map<string, number>()
+  for (const i of itensAtuais ?? []) {
+    qtdAtualMap.set(i.faca_id, (qtdAtualMap.get(i.faca_id) ?? 0) + Number(i.quantidade))
+  }
+
+  // Por faca, quanto a mais está sendo pedido vs o que já estava no pedido
+  const deltaMap = new Map<string, number>()
+  for (const item of input.itens) {
+    const anterior = qtdAtualMap.get(item.faca_id) ?? 0
+    const delta = item.quantidade - anterior
+    if (delta > 0) deltaMap.set(item.faca_id, (deltaMap.get(item.faca_id) ?? 0) + delta)
+  }
+
+  if (deltaMap.size > 0) {
+    const facaIds = [...deltaMap.keys()]
+    const { data: facas } = await supabase
+      .from('facas')
+      .select('id, nome, estoque_atual')
+      .in('id', facaIds)
+
+    if (facas) {
+      const facaMap = new Map(facas.map((f) => [f.id, f]))
+      const insuficientes = facaIds.filter((fid) => {
+        const faca = facaMap.get(fid)
+        return faca && faca.estoque_atual < (deltaMap.get(fid) ?? 0)
+      })
+      if (insuficientes.length > 0) {
+        const detalhes = insuficientes
+          .map((fid) => {
+            const f = facaMap.get(fid)
+            return `${f?.nome ?? 'Desconhecida'} (adicionar: ${deltaMap.get(fid)}, disponível: ${f?.estoque_atual ?? 0})`
+          })
+          .join('; ')
+        throw new Error(`Estoque insuficiente: ${detalhes}`)
+      }
+    }
+  }
+
   const valor_total = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
 
   const { error } = await supabase
     .from('pedidos')
     .update({
       cliente_id: input.cliente_id || null,
+      vendedor_id: input.vendedor_id || null,
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
       status: input.status,

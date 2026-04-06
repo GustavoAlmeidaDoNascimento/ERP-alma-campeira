@@ -79,6 +79,14 @@ export type VendasPorTipoCliente = {
   percentual: number
 }
 
+export type VendedorRanking = {
+  vendedorId: string | null
+  vendedorNome: string
+  totalValor: number
+  totalPedidos: number
+  participacao: number
+}
+
 export type MetricasVendasData = {
   kpi: KpiVendas
   vendasPorMes: VendasPorMes[]
@@ -86,6 +94,7 @@ export type MetricasVendasData = {
   rankingProdutos: ProdutoRanking[]
   pipeline: StatusPipeline[]
   vendasPorTipo: VendasPorTipoCliente[]
+  rankingVendedores: VendedorRanking[]
   periodo: PeriodoId
 }
 
@@ -198,7 +207,7 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
 
     let pedidosQuery = supabase
       .from('pedidos')
-      .select('id, codigo, cliente_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo)')
+      .select('id, codigo, cliente_id, vendedor_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo), vendedor:usuarios_perfis(id, nome)')
 
     if (desde) pedidosQuery = pedidosQuery.gte('data_pedido', desde.split('T')[0])
     if (ate) pedidosQuery = pedidosQuery.lt('data_pedido', ate.split('T')[0])
@@ -275,6 +284,32 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
       .sort((a, b) => b.totalValor - a.totalValor)
       .slice(0, 10)
 
+    // ── Ranking Vendedores ──
+    const vendedorMap = new Map<string, { nome: string; totalValor: number; totalPedidos: number }>()
+    for (const p of pedidos) {
+      const vid = (p as any).vendedor_id ?? '__sem_vendedor__'
+      const vend = Array.isArray((p as any).vendedor) ? (p as any).vendedor[0] : (p as any).vendedor
+      const entry = vendedorMap.get(vid) ?? {
+        nome: (vend as any)?.nome ?? 'Sem vendedor',
+        totalValor: 0,
+        totalPedidos: 0,
+      }
+      entry.totalValor += Number(p.valor_total ?? 0)
+      entry.totalPedidos += 1
+      vendedorMap.set(vid, entry)
+    }
+
+    const rankingVendedores: VendedorRanking[] = Array.from(vendedorMap.entries())
+      .map(([vid, v]) => ({
+        vendedorId: vid === '__sem_vendedor__' ? null : vid,
+        vendedorNome: v.nome,
+        totalValor: v.totalValor,
+        totalPedidos: v.totalPedidos,
+        participacao: faturamentoTotal > 0 ? (v.totalValor / faturamentoTotal) * 100 : 0,
+      }))
+      .sort((a, b) => b.totalValor - a.totalValor)
+      .slice(0, 10)
+
     // ── Ranking Produtos ──
     const produtoMap = new Map<string, { codigo: string; nome: string; totalValor: number; totalQuantidade: number }>()
     const totalItensValor = itens.reduce((s, i) => s + Number(i.subtotal ?? 0), 0)
@@ -342,7 +377,7 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
       }))
       .sort((a, b) => b.totalValor - a.totalValor)
 
-    return { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, periodo }
+    return { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, rankingVendedores, periodo }
   })
 }
 

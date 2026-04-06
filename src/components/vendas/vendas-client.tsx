@@ -17,6 +17,7 @@ type Props = {
   pedidos: Pedido[]
   clientes: Cliente[]
   facas: Faca[]
+  usuarios: { id: string; nome: string }[]
   perm: Perm
 }
 
@@ -27,7 +28,7 @@ const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'entregue', label: 'Entregue' },
 ]
 
-export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }: Props) {
+export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuarios, perm }: Props) {
   const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciais)
   const { refreshActiveTab, refreshTab } = useErpTabs()
   const [formAberto, setFormAberto] = useState(false)
@@ -300,6 +301,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, perm }
         editando={editando}
         clientes={clientes}
         facas={facas}
+        usuarios={usuarios}
         onSaved={refreshActiveTab}
       />
 

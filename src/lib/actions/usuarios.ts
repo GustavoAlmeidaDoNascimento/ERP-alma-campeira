@@ -9,6 +9,17 @@ import type { Usuario, PerfilUsuario } from '@/types'
 import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 
+export async function getUsuariosPerfisList(): Promise<{ id: string; nome: string }[]> {
+  await requireAuthenticatedUserId()
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('usuarios_perfis')
+    .select('id, nome')
+    .eq('ativo', true)
+    .order('nome')
+  return data ?? []
+}
+
 const getUsuariosCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Usuario[]> => {
     const supabase = await createClient()

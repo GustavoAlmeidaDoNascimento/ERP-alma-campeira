@@ -14,6 +14,7 @@ type Props = {
   editando: Pedido | null
   clientes: Cliente[]
   facas: Faca[]
+  usuarios: { id: string; nome: string }[]
   onSaved?: () => void
 }
 
@@ -27,8 +28,9 @@ function today() {
   return new Date().toISOString().split('T')[0]
 }
 
-export function VendaFormModal({ open, onClose, editando, clientes, facas, onSaved }: Props) {
+export function VendaFormModal({ open, onClose, editando, clientes, facas, usuarios, onSaved }: Props) {
   const [clienteId, setClienteId] = useState('')
+  const [vendedorId, setVendedorId] = useState('')
   const [dataPedido, setDataPedido] = useState(today())
   const [status, setStatus] = useState<StatusPedido>('em_espera')
   const [observacao, setObservacao] = useState('')
@@ -59,6 +61,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
     setErro('')
     if (editando) {
       setClienteId(editando.cliente_id ?? '')
+      setVendedorId(editando.vendedor_id ?? '')
       setDataPedido(editando.data_pedido)
       setStatus(editando.status)
       setObservacao(editando.observacao ?? '')
@@ -73,6 +76,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
       )
     } else {
       setClienteId('')
+      setVendedorId('')
       setDataPedido(today())
       setStatus('em_espera')
       setObservacao('')
@@ -113,6 +117,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
     try {
       const input = {
         cliente_id: clienteId || null,
+        vendedor_id: vendedorId || null,
         data_pedido: dataPedido,
         status,
         observacao,
@@ -155,8 +160,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
     >
       <div className="flex flex-col gap-5">
 
-        {/* Linha 1: Cliente + Data + Status */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Linha 1: Cliente + Vendedor */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cliente</label>
             <select
@@ -173,6 +178,26 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, onSav
               ))}
             </select>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</label>
+            <select
+              value={vendedorId}
+              onChange={(e) => setVendedorId(e.target.value)}
+              className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+              style={selectStyle}
+              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+              onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+            >
+              <option value="">— Sem vendedor —</option>
+              {usuarios.map((u) => (
+                <option key={u.id} value={u.id}>{u.nome}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Linha 2: Data da venda + Status */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data da venda</label>
             <input

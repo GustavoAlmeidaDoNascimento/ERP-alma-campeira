@@ -33,7 +33,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
-  const { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo } = data
+  const { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, rankingVendedores } = data
 
   const maxMesValor = Math.max(...vendasPorMes.map((v) => v.totalValor), 1)
 
@@ -135,6 +135,34 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(c.totalValor)}</p>
                   <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(c.participacao)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Ranking Vendedores */}
+      {rankingVendedores.length > 0 && (
+        <Section title="Top Vendedores por Faturamento">
+          <div className="space-y-2">
+            {rankingVendedores.map((v, i) => (
+              <div key={v.vendedorId ?? i} className="flex items-center gap-3">
+                <span
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                  style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
+                >
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</span>
+                  </div>
+                  <BarHorizontal percentage={v.participacao} height={5} />
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</p>
+                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(v.participacao)} &middot; {v.totalPedidos} pedidos</p>
                 </div>
               </div>
             ))}
