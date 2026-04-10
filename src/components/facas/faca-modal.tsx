@@ -152,14 +152,13 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
     return map
   }, [materiasPrimas])
 
-  const custos = useMemo(() => {
-    const baseMaterias = bomItens.reduce((acc, item) => {
+  const custoReferencia = useMemo(() => {
+    return bomItens.reduce((acc, item) => {
       const mp = materiasById.get(item.materia_prima_id)
       const qtd = Number(item.quantidade) || 0
       const preco = Number(mp?.preco_custo ?? 0)
-      return acc + (preco * qtd)
+      return acc + preco * qtd
     }, 0)
-    return { baseMaterias, precoCusto: baseMaterias }
   }, [bomItens, materiasById])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -300,24 +299,19 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         </div>
 
         <div
-          className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl p-3"
+          className="rounded-xl p-3"
           style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
         >
-          <div>
-            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Somatório matérias-primas</p>
-            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-              {custos.baseMaterias.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>Preço de custo (referência)</p>
-            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-              {custos.precoCusto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-            </p>
-            <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--ac-muted)' }}>
-              Lucro na lista usa as taxas em Configurações.
-            </p>
-          </div>
+          <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
+            Preço de custo (referência)
+          </p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+            {custoReferencia.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </p>
+          <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--ac-muted)' }}>
+            Soma dos preços de custo das matérias-primas × quantidade. O lucro na lista usa esse valor e as taxas em
+            Configurações.
+          </p>
         </div>
 
         {/* ========== SEÇÃO BOM (Matérias-Primas) ========== */}
