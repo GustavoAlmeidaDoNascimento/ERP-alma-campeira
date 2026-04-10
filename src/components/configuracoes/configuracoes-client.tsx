@@ -12,6 +12,27 @@ import { updateTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app
 import type { CategoriaFacaDB, CategoriaMateriaPrimaDB, CategoriaConsumivelDB } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
+const SENHA_MIN_LEN = 8
+
+function usuarioPodeSenhaEmail(identities: { provider: string }[] | undefined): boolean {
+  return Boolean(identities?.some((i) => i.provider === 'email'))
+}
+
+function mapearErroSenhaSupabase(message: string): string {
+  const m = message.toLowerCase()
+  if (m.includes('invalid login credentials')) return 'Senha atual incorreta.'
+  if (m.includes('password should be at least') || (m.includes('at least') && m.includes('character'))) {
+    return 'A nova senha não atende ao tamanho mínimo exigido pelo sistema.'
+  }
+  if (m.includes('same as the old password') || m.includes('different from the old')) {
+    return 'A nova senha deve ser diferente da senha atual.'
+  }
+  if (m.includes('weak') || m.includes('pwned') || m.includes('leaked')) {
+    return 'Esta senha é considerada fraca ou comprometida. Escolha outra.'
+  }
+  return message
+}
+
 const SETTINGS_SECTIONS = [
   { id: 'config-aparencia', label: 'Aparência' },
   { id: 'config-taxas-lucro', label: 'Taxa' },
@@ -140,6 +161,14 @@ export function ConfiguracoesClient({
   const [mounted, setMounted] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
+  const [authContaLoading, setAuthContaLoading] = useState(true)
+  const [podeTrocarSenha, setPodeTrocarSenha] = useState(false)
+  const [senhaAtual, setSenhaAtual] = useState('')
+  const [senhaNova, setSenhaNova] = useState('')
+  const [senhaConfirmar, setSenhaConfirmar] = useState('')
+  const [passwordPending, setPasswordPending] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [tp, setTp] = useState(String(taxasLucro.taxa_producao))
   const [tc, setTc] = useState(String(taxasLucro.taxa_comissao))
   const [taxasMsg, setTaxasMsg] = useState<string | null>(null)
@@ -148,6 +177,21 @@ export function ConfiguracoesClient({
 
   // Evita hydration mismatch
   useEffect(() => setMounted(true), [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (cancelled) return
+      const emailOk = Boolean(user?.email?.trim())
+      setPodeTrocarSenha(emailOk && usuarioPodeSenhaEmail(user?.identities))
+      setAuthContaLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     setTp(String(taxasLucro.taxa_producao))
@@ -169,6 +213,67 @@ export function ConfiguracoesClient({
 
     router.replace('/login')
     router.refresh()
+  }
+
+  async function handleTrocarSenha(e: React.FormEvent) {
+    e.preventDefault()
+    setPasswordError(null)
+    setPasswordSuccess(null)
+
+    const atual = senhaAtual
+    const nova = senhaNova.trim()
+    const conf = senhaConfirmar.trim()
+
+    if (nova.length < SENHA_MIN_LEN) {
+      setPasswordError(`A nova senha deve ter pelo menos ${SENHA_MIN_LEN} caracteres.`)
+      return
+    }
+    if (nova !== conf) {
+      setPasswordError('A confirmação não coincide com a nova senha.')
+      return
+    }
+    if (nova === atual) {
+      setPasswordError('A nova senha deve ser diferente da senha atual.')
+      return
+    }
+
+    setPasswordPending(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const email = user?.email?.trim()
+      if (!email) {
+        setPasswordError('Não foi possível obter o e-mail da conta.')
+        return
+      }
+
+      const { error: signErr } = await supabase.auth.signInWithPassword({
+        email,
+        password: atual,
+      })
+      if (signErr) {
+        setPasswordError(
+          signErr.message === 'Invalid login credentials'
+            ? 'Senha atual incorreta.'
+            : mapearErroSenhaSupabase(signErr.message),
+        )
+        return
+      }
+
+      const { error: updErr } = await supabase.auth.updateUser({ password: nova })
+      if (updErr) {
+        setPasswordError(mapearErroSenhaSupabase(updErr.message))
+        return
+      }
+
+      setSenhaAtual('')
+      setSenhaNova('')
+      setSenhaConfirmar('')
+      setPasswordSuccess('Senha alterada com sucesso.')
+      router.refresh()
+    } finally {
+      setPasswordPending(false)
+    }
   }
 
   function salvarTaxasLucro() {
@@ -386,9 +491,72 @@ export function ConfiguracoesClient({
                   Conta
                 </h2>
                 <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
-                  Encerre sua sessão atual neste dispositivo.
+                  Altere sua senha ou encerre a sessão neste dispositivo.
                 </p>
               </div>
+
+              {authContaLoading ? (
+                <p className="text-sm mb-6" style={{ color: 'var(--ac-muted)' }}>
+                  Carregando opções da conta…
+                </p>
+              ) : podeTrocarSenha ? (
+                <form onSubmit={handleTrocarSenha} className="mb-8 flex flex-col gap-4 max-w-md">
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    Alterar senha
+                  </h3>
+                  <Input
+                    id="conta_senha_atual"
+                    label="Senha atual *"
+                    type="password"
+                    autoComplete="current-password"
+                    value={senhaAtual}
+                    onChange={(e) => setSenhaAtual(e.target.value)}
+                    disabled={passwordPending}
+                  />
+                  <Input
+                    id="conta_senha_nova"
+                    label={`Nova senha * (mín. ${SENHA_MIN_LEN} caracteres)`}
+                    type="password"
+                    autoComplete="new-password"
+                    value={senhaNova}
+                    onChange={(e) => setSenhaNova(e.target.value)}
+                    disabled={passwordPending}
+                  />
+                  <Input
+                    id="conta_senha_confirmar"
+                    label="Confirmar nova senha *"
+                    type="password"
+                    autoComplete="new-password"
+                    value={senhaConfirmar}
+                    onChange={(e) => setSenhaConfirmar(e.target.value)}
+                    disabled={passwordPending}
+                  />
+                  <div>
+                    <Button type="submit" loading={passwordPending}>
+                      Alterar senha
+                    </Button>
+                  </div>
+                  {passwordSuccess ? (
+                    <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#15803d', background: '#dcfce7' }}>
+                      {passwordSuccess}
+                    </p>
+                  ) : null}
+                  {passwordError ? (
+                    <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
+                      {passwordError}
+                    </p>
+                  ) : null}
+                </form>
+              ) : (
+                <div
+                  className="mb-8 rounded-lg px-3 py-3 text-sm leading-relaxed max-w-xl"
+                  style={{ background: 'var(--ac-bg)', color: 'var(--ac-muted)', border: '1px solid var(--ac-border)' }}
+                >
+                  Sua conta não usa login com e-mail e senha (por exemplo, apenas provedor social). A troca de senha
+                  por aqui não está disponível. Use o fluxo oferecido pelo provedor ou, na tela de login, a opção de
+                  recuperação por e-mail, se configurada no projeto.
+                </div>
+              )}
 
               <button
                 type="button"
