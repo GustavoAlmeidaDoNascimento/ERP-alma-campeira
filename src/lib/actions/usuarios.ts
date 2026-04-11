@@ -155,9 +155,38 @@ export async function atualizarPerfil(
 
 export async function deletarUsuario(id: string) {
   await assertPermissao('usuarios', 'deletar')
+  const currentId = await requireAuthenticatedUserId()
+  if (id === currentId) {
+    throw new Error('Não é possível excluir o próprio usuário.')
+  }
+
   const admin = createAdminClient()
+
+  // Referências em `public` impedem a remoção em auth.users; limpa na ordem correta.
+  const { error: pedidosErr } = await admin
+    .from('pedidos')
+    .update({ vendedor_id: null })
+    .eq('vendedor_id', id)
+  if (pedidosErr) throw new Error(pedidosErr.message)
+
+  const { error: movErr } = await admin
+    .from('movimentacoes_estoque')
+    .update({ usuario_id: null })
+    .eq('usuario_id', id)
+  if (movErr) throw new Error(movErr.message)
+
+  const { error: permErr } = await admin.from('usuario_permissoes').delete().eq('usuario_id', id)
+  if (permErr) throw new Error(permErr.message)
+
+  const { error: perfilErr } = await admin.from('usuarios_perfis').delete().eq('id', id)
+  if (perfilErr) throw new Error(perfilErr.message)
+
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) throw new Error(error.message)
+
   revalidatePath('/usuarios')
+  revalidatePath('/vendas')
   revalidateTag('usuarios-list', 'max')
+  revalidateTag('vendas-list', 'max')
+  revalidateTag('metricas-vendas', 'max')
 }
