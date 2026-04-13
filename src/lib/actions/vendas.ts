@@ -90,6 +90,25 @@ export type VendaInput = {
   itens: VendaItemInput[]
 }
 
+async function inserirItensPedido(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pedidoId: string,
+  itens: VendaItemInput[]
+) {
+  for (const item of itens) {
+    const { error } = await supabase.from('pedido_itens').insert({
+      pedido_id: pedidoId,
+      faca_id: item.faca_id,
+      quantidade: item.quantidade,
+      preco_unitario: item.preco_unitario,
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+  }
+}
+
 export async function criarVenda(input: VendaInput) {
   await assertPermissao('vendas', 'criar')
   const supabase = await createClient()
@@ -141,16 +160,16 @@ export async function criarVenda(input: VendaInput) {
     .single()
 
   if (error) throw new Error(error.message)
+  if (!pedido?.id) throw new Error('Não foi possível criar a venda (ID não retornado).')
 
-  const { error: itemsError } = await supabase.from('pedido_itens').insert(
-    input.itens.map((i) => ({
-      pedido_id: pedido.id,
-      faca_id: i.faca_id,
-      quantidade: i.quantidade,
-      preco_unitario: i.preco_unitario,
-    }))
-  )
-  if (itemsError) throw new Error(itemsError.message)
+  try {
+    await inserirItensPedido(supabase, pedido.id, input.itens)
+  } catch (e) {
+    // Evita pedido órfão quando falha ao gravar itens.
+    await supabase.from('pedido_itens').delete().eq('pedido_id', pedido.id)
+    await supabase.from('pedidos').delete().eq('id', pedido.id)
+    throw e
+  }
 
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
@@ -238,15 +257,13 @@ export async function atualizarVenda(id: string, input: VendaInput) {
 
   await supabase.from('pedido_itens').delete().eq('pedido_id', id)
 
-  const { error: itemsError } = await supabase.from('pedido_itens').insert(
-    input.itens.map((i) => ({
-      pedido_id: id,
-      faca_id: i.faca_id,
-      quantidade: i.quantidade,
-      preco_unitario: i.preco_unitario,
-    }))
-  )
-  if (itemsError) throw new Error(itemsError.message)
+  try {
+    await inserirItensPedido(supabase, id, input.itens)
+  } catch (e) {
+    // Não deixa itens parcialmente gravados.
+    await supabase.from('pedido_itens').delete().eq('pedido_id', id)
+    throw e
+  }
 
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
