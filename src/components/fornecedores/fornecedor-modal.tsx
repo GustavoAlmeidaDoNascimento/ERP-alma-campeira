@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { criarFornecedor, atualizarFornecedor } from '@/lib/actions/fornecedores'
-import type { Fornecedor, TipoDocumentoFornecedor } from '@/types'
+import type { Fornecedor, TipoDocumento } from '@/types'
 import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
 
@@ -31,7 +31,7 @@ type Form = {
   nome: string
   telefone: string
   email: string
-  tipo_documento: TipoDocumentoFornecedor
+  tipo_documento: TipoDocumento
   documento: string
   cep: string
   logradouro: string
@@ -57,7 +57,7 @@ const formVazio: Form = {
   uf: '',
 }
 
-function tipoDocDeFornecedor(f: Fornecedor): TipoDocumentoFornecedor {
+function tipoDocDeFornecedor(f: Fornecedor): TipoDocumento {
   return f.tipo_documento === 'cpf' ? 'cpf' : 'cnpj'
 }
 
@@ -95,7 +95,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
     setForm((f) => ({ ...f, [field]: value }))
   }
 
-  function onTipoDocumentoChange(tipo: TipoDocumentoFornecedor) {
+  function onTipoDocumentoChange(tipo: TipoDocumento) {
     setForm((f) => {
       const d = apenasDigitos(f.documento)
       return {
@@ -200,7 +200,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
             <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento</label>
             <select
               value={form.tipo_documento}
-              onChange={(e) => onTipoDocumentoChange(e.target.value as TipoDocumentoFornecedor)}
+              onChange={(e) => onTipoDocumentoChange(e.target.value as TipoDocumento)}
               className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
               style={{
                 ...inputStyle,

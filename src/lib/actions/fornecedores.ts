@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import type { Fornecedor, TipoDocumentoFornecedor } from '@/types'
+import type { Fornecedor, TipoDocumento } from '@/types'
 import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
 
 const getFornecedoresCached = unstable_cache(
@@ -31,7 +31,7 @@ type FornecedorInput = {
   nome: string
   telefone: string
   email: string
-  tipo_documento: TipoDocumentoFornecedor
+  tipo_documento: TipoDocumento
   documento: string
   cep: string
   logradouro: string

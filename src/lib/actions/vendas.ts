@@ -25,7 +25,7 @@ const getVendasCached = unstable_cache(
       .from('pedidos')
       .select(`
         *,
-        cliente:clientes(id, nome, tipo),
+        cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
         vendedor:usuarios_perfis(id, nome),
         itens:pedido_itens(*)
       `)
@@ -50,7 +50,7 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
     .from('pedidos')
     .select(`
       *,
-      cliente:clientes(id, nome, tipo),
+      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
       vendedor:usuarios_perfis(id, nome),
       itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url))
     `)

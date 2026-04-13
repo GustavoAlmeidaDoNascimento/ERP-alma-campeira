@@ -207,7 +207,7 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
 
     let pedidosQuery = supabase
       .from('pedidos')
-      .select('id, codigo, cliente_id, vendedor_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo), vendedor:usuarios_perfis(id, nome)')
+      .select('id, codigo, cliente_id, vendedor_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado), vendedor:usuarios_perfis(id, nome)')
 
     if (desde) pedidosQuery = pedidosQuery.gte('data_pedido', desde.split('T')[0])
     if (ate) pedidosQuery = pedidosQuery.lt('data_pedido', ate.split('T')[0])

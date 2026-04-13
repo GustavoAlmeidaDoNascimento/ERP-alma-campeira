@@ -7,6 +7,7 @@ import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, StatusPedido } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { formatarDocumento } from '@/lib/br/documento'
 
 type Props = {
   pedido: Pedido | null
@@ -77,6 +78,18 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                 <span className="ml-2 text-xs" style={{ color: 'var(--ac-muted)' }}>({pedido.cliente.tipo})</span>
               )}
             </p>
+            {pedido.cliente?.documento ? (
+              <p className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
+                {formatarDocumento(pedido.cliente.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', pedido.cliente.documento)}
+                {pedido.cliente.cidade && pedido.cliente.estado
+                  ? ` · ${pedido.cliente.cidade}/${pedido.cliente.estado}`
+                  : ''}
+              </p>
+            ) : pedido.cliente?.cidade && pedido.cliente?.estado ? (
+              <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                {pedido.cliente.cidade}/{pedido.cliente.estado}
+              </p>
+            ) : null}
             <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
               Data: {new Date(pedido.data_pedido + 'T12:00:00').toLocaleDateString('pt-BR')}
             </p>

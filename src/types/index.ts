@@ -1,12 +1,12 @@
-export type TipoDocumentoFornecedor = 'cnpj' | 'cpf'
+/** CNPJ (padrão em PJ) ou CPF — armazenado só com dígitos em `documento`. */
+export type TipoDocumento = 'cnpj' | 'cpf'
 
 export type Fornecedor = {
   id: string
   nome: string
   telefone: string | null
   email: string | null
-  /** Padrão CNPJ; armazenado só com dígitos em `documento`. */
-  tipo_documento: TipoDocumentoFornecedor
+  tipo_documento: TipoDocumento
   documento: string | null
   cep: string | null
   logradouro: string | null
@@ -240,6 +240,13 @@ export type Cliente = {
   tipo: TipoCliente
   telefone: string | null
   email: string | null
+  tipo_documento: TipoDocumento
+  documento: string | null
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
   cidade: string | null
   estado: string | null
   created_at: string
@@ -274,7 +281,7 @@ export type Pedido = {
   valor_total: number | null
   entregue_at: string | null
   created_at: string
-  cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo'> | null
+  cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null
   vendedor?: { id: string; nome: string } | null
   itens?: PedidoItem[]
 }

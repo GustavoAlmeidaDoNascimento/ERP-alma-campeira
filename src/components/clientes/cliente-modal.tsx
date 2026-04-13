@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/modal'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { criarCliente, atualizarCliente } from '@/lib/actions/clientes'
 import { TIPOS_CLIENTE } from '@/types'
-import type { Cliente } from '@/types'
+import type { Cliente, TipoDocumento } from '@/types'
+import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
+import { buscarEnderecoPorCep } from '@/lib/br/viacep'
 
 type Props = {
   open: boolean
@@ -15,17 +18,9 @@ type Props = {
 }
 
 const ESTADOS_BR = [
-  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
-  'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO',
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ]
-
-type InputProps = {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: string
-}
 
 const inputStyle = {
   background: 'var(--ac-card)',
@@ -33,28 +28,8 @@ const inputStyle = {
   color: 'var(--ac-text)',
 }
 
-function Input({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-}: InputProps) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all"
-        style={inputStyle}
-        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--ac-accent) 20%, transparent)' }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)'; e.currentTarget.style.boxShadow = 'none' }}
-      />
-    </div>
-  )
+function tipoDocDeCliente(c: Cliente): TipoDocumento {
+  return c.tipo_documento === 'cpf' ? 'cpf' : 'cnpj'
 }
 
 export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
@@ -62,28 +37,116 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
   const [tipo, setTipo] = useState<string>('Lojista')
   const [telefone, setTelefone] = useState('')
   const [email, setEmail] = useState('')
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>('cnpj')
+  const [documento, setDocumento] = useState('')
+  const [cep, setCep] = useState('')
+  const [logradouro, setLogradouro] = useState('')
+  const [numero, setNumero] = useState('')
+  const [complemento, setComplemento] = useState('')
+  const [bairro, setBairro] = useState('')
   const [cidade, setCidade] = useState('')
-  const [estado, setEstado] = useState('RS')
+  const [estado, setEstado] = useState('')
   const [loading, setLoading] = useState(false)
+  const [buscandoCep, setBuscandoCep] = useState(false)
   const [erro, setErro] = useState('')
 
   useEffect(() => {
-    if (open) {
-      setNome(editando?.nome ?? '')
-      setTipo(editando?.tipo ?? 'Lojista')
-      setTelefone(editando?.telefone ?? '')
-      setEmail(editando?.email ?? '')
-      setCidade(editando?.cidade ?? '')
-      setEstado(editando?.estado ?? 'RS')
-      setErro('')
+    if (!open) return
+    if (editando) {
+      const td = tipoDocDeCliente(editando)
+      const doc = editando.documento ?? ''
+      setNome(editando.nome)
+      setTipo(editando.tipo)
+      setTelefone(editando.telefone ?? '')
+      setEmail(editando.email ?? '')
+      setTipoDocumento(td)
+      setDocumento(td === 'cpf' ? formatarCpf(doc) : formatarCnpj(doc))
+      setCep(formatarCep(editando.cep ?? ''))
+      setLogradouro(editando.logradouro ?? '')
+      setNumero(editando.numero ?? '')
+      setComplemento(editando.complemento ?? '')
+      setBairro(editando.bairro ?? '')
+      setCidade(editando.cidade ?? '')
+      setEstado(editando.estado ?? '')
+    } else {
+      setNome('')
+      setTipo('Lojista')
+      setTelefone('')
+      setEmail('')
+      setTipoDocumento('cnpj')
+      setDocumento('')
+      setCep('')
+      setLogradouro('')
+      setNumero('')
+      setComplemento('')
+      setBairro('')
+      setCidade('')
+      setEstado('RS')
     }
+    setErro('')
   }, [open, editando])
+
+  function onTipoDocumentoChange(t: TipoDocumento) {
+    const d = apenasDigitos(documento)
+    setTipoDocumento(t)
+    setDocumento(t === 'cpf' ? formatarCpf(d) : formatarCnpj(d))
+  }
+
+  function onDocumentoInput(v: string) {
+    const d = apenasDigitos(v)
+    setDocumento(tipoDocumento === 'cpf' ? formatarCpf(d) : formatarCnpj(d))
+  }
+
+  function onCepInput(v: string) {
+    setCep(formatarCep(v))
+  }
+
+  async function handleBuscarCep() {
+    setErro('')
+    const limpo = apenasDigitos(cep)
+    if (limpo.length !== 8) {
+      setErro('Informe um CEP com 8 dígitos.')
+      return
+    }
+    setBuscandoCep(true)
+    try {
+      const end = await buscarEnderecoPorCep(limpo)
+      if (!end) {
+        setErro('CEP não encontrado. Verifique o número ou preencha o endereço manualmente.')
+        return
+      }
+      setLogradouro((prev) => end.logradouro || prev)
+      setComplemento((prev) => end.complemento || prev)
+      setBairro((prev) => end.bairro || prev)
+      setCidade((prev) => end.cidade || prev)
+      setEstado((prev) => end.uf || prev)
+    } catch {
+      setErro('Não foi possível consultar o CEP. Tente novamente.')
+    } finally {
+      setBuscandoCep(false)
+    }
+  }
 
   async function salvar() {
     if (!nome.trim()) { setErro('Nome é obrigatório.'); return }
-    setErro(''); setLoading(true)
+    setErro('')
+    setLoading(true)
     try {
-      const input = { nome, tipo, telefone, email, cidade, estado }
+      const input = {
+        nome,
+        tipo,
+        telefone,
+        email,
+        tipo_documento: tipoDocumento,
+        documento,
+        cep,
+        logradouro,
+        numero,
+        complemento,
+        bairro,
+        cidade,
+        estado,
+      }
       if (editando) await atualizarCliente(editando.id, input)
       else await criarCliente(input)
       onClose()
@@ -96,14 +159,18 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={editando ? 'Editar cliente' : 'Novo cliente'}>
-      <div className="flex flex-col gap-4">
+    <Modal open={open} onClose={onClose} title={editando ? 'Editar cliente' : 'Novo cliente'} width="640px">
+      <div className="flex flex-col gap-4 max-h-[min(72vh,560px)] overflow-y-auto">
+        <Input
+          id="cli-nome"
+          label="Nome *"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Razão social ou nome completo"
+        />
 
-        <Input label="Nome" value={nome} onChange={setNome} placeholder="Razão social ou nome completo" />
-
-        {/* Tipo */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Tipo</label>
+          <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Tipo de cliente</label>
           <select
             value={tipo}
             onChange={(e) => setTipo(e.target.value)}
@@ -113,43 +180,149 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
               backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
               backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', paddingRight: '36px',
             }}
-            onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
-            onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
           >
-            {TIPOS_CLIENTE.map((t) => <option key={t} value={t}>{t}</option>)}
+            {TIPOS_CLIENTE.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Telefone" value={telefone} onChange={setTelefone} placeholder="(51) 99999-9999" />
-          <Input label="E-mail" value={email} onChange={setEmail} placeholder="contato@empresa.com" type="email" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Cidade" value={cidade} onChange={setCidade} placeholder="Porto Alegre" />
-
-          {/* Estado */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estado</label>
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento</label>
             <select
-              value={estado}
-              onChange={(e) => setEstado(e.target.value)}
+              value={tipoDocumento}
+              onChange={(e) => onTipoDocumentoChange(e.target.value as TipoDocumento)}
               className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
               style={{
                 ...inputStyle,
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
                 backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', paddingRight: '36px',
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
-              onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
             >
-              <option value="">—</option>
-              {ESTADOS_BR.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+              <option value="cnpj">CNPJ (padrão)</option>
+              <option value="cpf">CPF</option>
             </select>
+          </div>
+          <div className="sm:col-span-2">
+            <Input
+              id="cli-documento"
+              label={tipoDocumento === 'cpf' ? 'CPF' : 'CNPJ'}
+              placeholder={tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+              value={documento}
+              onChange={(e) => onDocumentoInput(e.target.value)}
+              autoComplete="off"
+            />
           </div>
         </div>
 
-        {erro && <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>}
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            id="cli-tel"
+            label="Telefone"
+            type="tel"
+            value={telefone}
+            onChange={(e) => setTelefone(e.target.value.replace(/[^\d\s()\-+]/g, ''))}
+            placeholder="(51) 99999-9999"
+          />
+          <Input
+            id="cli-email"
+            label="E-mail"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="contato@empresa.com"
+          />
+        </div>
+
+        <div
+          className="rounded-lg p-3 flex flex-col gap-3"
+          style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Endereço</p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+            <div className="flex-1 min-w-0">
+              <Input
+                id="cli-cep"
+                label="CEP"
+                placeholder="00000-000"
+                value={cep}
+                onChange={(e) => onCepInput(e.target.value)}
+                inputMode="numeric"
+              />
+            </div>
+            <Button type="button" variant="secondary" loading={buscandoCep} onClick={handleBuscarCep} className="shrink-0 w-full sm:w-auto">
+              Buscar pelo CEP
+            </Button>
+          </div>
+          <Input
+            id="cli-logradouro"
+            label="Logradouro (rua)"
+            placeholder="Rua, avenida..."
+            value={logradouro}
+            onChange={(e) => setLogradouro(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="cli-numero"
+              label="Número"
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              placeholder="123"
+            />
+            <Input
+              id="cli-complemento"
+              label="Complemento"
+              value={complemento}
+              onChange={(e) => setComplemento(e.target.value)}
+              placeholder="Sala, bloco..."
+            />
+          </div>
+          <Input
+            id="cli-bairro"
+            label="Bairro"
+            value={bairro}
+            onChange={(e) => setBairro(e.target.value)}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              id="cli-cidade"
+              label="Cidade"
+              value={cidade}
+              onChange={(e) => setCidade(e.target.value)}
+              placeholder="Porto Alegre"
+            />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cli-uf" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>UF</label>
+              <select
+                id="cli-uf"
+                value={estado}
+                onChange={(e) => setEstado(e.target.value)}
+                className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+                style={{
+                  ...inputStyle,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', paddingRight: '36px',
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+              >
+                <option value="">—</option>
+                {ESTADOS_BR.map((uf) => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {erro && (
+          <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>
+        )}
 
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>

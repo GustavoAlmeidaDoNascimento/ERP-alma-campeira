@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { ClienteModal } from './cliente-modal'
 import { deletarCliente } from '@/lib/actions/clientes'
 import type { Cliente } from '@/types'
+import { apenasDigitos, formatarDocumento } from '@/lib/br/documento'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -28,13 +29,23 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
   const filtrados = useMemo(() => {
     if (!busca.trim()) return clientes
     const q = busca.toLowerCase()
-    return clientes.filter(
-      (c) =>
+    const qDoc = apenasDigitos(busca)
+    return clientes.filter((c) => {
+      const doc = c.documento ? apenasDigitos(c.documento) : ''
+      const docFmt = formatarDocumento(c.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', c.documento ?? '').toLowerCase()
+      return (
         c.nome.toLowerCase().includes(q) ||
         c.cidade?.toLowerCase().includes(q) ||
         c.estado?.toLowerCase().includes(q) ||
-        c.tipo.toLowerCase().includes(q)
-    )
+        c.tipo.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
+        c.telefone?.toLowerCase().includes(q) ||
+        c.logradouro?.toLowerCase().includes(q) ||
+        (qDoc.length > 0 && doc.includes(qDoc)) ||
+        (qDoc.length > 0 && c.cep && apenasDigitos(c.cep).includes(qDoc)) ||
+        (q.length > 0 && docFmt.includes(q))
+      )
+    })
   }, [clientes, busca])
 
   function abrirNovo() { setEditando(null); setModalAberto(true) }
@@ -82,7 +93,7 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
             style={{ color: 'var(--ac-muted)' }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input type="text" placeholder="Buscar por nome, cidade ou tipo..."
+          <input type="text" placeholder="Buscar por nome, CNPJ/CPF, cidade, CEP..."
             value={busca} onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
             style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
@@ -99,6 +110,7 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CNPJ / CPF</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Tipo</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Localização</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Contato</th>
@@ -108,7 +120,7 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={6} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum cliente cadastrado ainda.'}
                   </td>
                 </tr>
@@ -120,6 +132,11 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                 >
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>{c.nome}</td>
+                  <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    {c.documento
+                      ? formatarDocumento(c.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', c.documento)
+                      : '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
                       style={TIPO_STYLE[c.tipo] ?? TIPO_STYLE['Pessoa Física']}>
