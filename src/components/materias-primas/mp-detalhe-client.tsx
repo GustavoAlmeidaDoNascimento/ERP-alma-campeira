@@ -11,6 +11,7 @@ import { statusEstoque } from '@/types'
 import type { MPDetalheData, MPEditModalData } from '@/lib/actions/materias-primas'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { formatarDocumento } from '@/lib/br/documento'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -139,6 +140,14 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
               {mp.fornecedor && (
                 <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>
                   Fornecedor: <strong style={{ color: 'var(--ac-text)' }}>{mp.fornecedor.nome}</strong>
+                  {mp.fornecedor.documento ? (
+                    <span className="ml-1 font-mono text-xs">
+                      ({formatarDocumento(mp.fornecedor.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', mp.fornecedor.documento)})
+                    </span>
+                  ) : null}
+                  {mp.fornecedor.cidade && mp.fornecedor.uf ? (
+                    <span className="ml-1">— {mp.fornecedor.cidade}/{mp.fornecedor.uf}</span>
+                  ) : null}
                 </span>
               )}
               <span className="text-sm" style={{ color: 'var(--ac-text)' }}>

@@ -11,7 +11,9 @@ const getConsumiveisCached = unstable_cache(
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('consumiveis')
-      .select('*, fornecedor:fornecedores(id, nome, telefone, email, created_at)')
+      .select(
+        '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
+      )
       .order('codigo')
       .limit(limit)
     if (error) throw new Error(error.message)

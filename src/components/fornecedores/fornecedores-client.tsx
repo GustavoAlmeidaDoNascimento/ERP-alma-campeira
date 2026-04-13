@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { FornecedorModal } from './fornecedor-modal'
 import { deletarFornecedor } from '@/lib/actions/fornecedores'
 import type { Fornecedor } from '@/types'
+import { apenasDigitos, formatarDocumento } from '@/lib/br/documento'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -22,9 +23,22 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
   const filtrados = useMemo(() => {
     if (!busca.trim()) return fornecedores
     const q = busca.toLowerCase()
-    return fornecedores.filter(
-      (f) => f.nome.toLowerCase().includes(q) || f.telefone?.toLowerCase().includes(q) || f.email?.toLowerCase().includes(q)
-    )
+    const qDoc = apenasDigitos(busca)
+    return fornecedores.filter((f) => {
+      const doc = f.documento ? apenasDigitos(f.documento) : ''
+      const docFmt = formatarDocumento(f.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', f.documento ?? '').toLowerCase()
+      return (
+        f.nome.toLowerCase().includes(q) ||
+        f.telefone?.toLowerCase().includes(q) ||
+        f.email?.toLowerCase().includes(q) ||
+        f.cidade?.toLowerCase().includes(q) ||
+        f.uf?.toLowerCase().includes(q) ||
+        f.logradouro?.toLowerCase().includes(q) ||
+        (qDoc.length > 0 && doc.includes(qDoc)) ||
+        (qDoc.length > 0 && f.cep && apenasDigitos(f.cep).includes(qDoc)) ||
+        (q.length > 0 && docFmt.includes(q))
+      )
+    })
   }, [fornecedores, busca])
 
   function abrirNovo() { setEditando(null); setModalAberto(true) }
@@ -73,7 +87,7 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
             style={{ color: 'var(--ac-muted)' }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input type="text" placeholder="Buscar por nome, telefone ou e-mail..."
+          <input type="text" placeholder="Buscar por nome, CNPJ/CPF, cidade, CEP..."
             value={busca} onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
             style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
@@ -90,6 +104,8 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CNPJ / CPF</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Local</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Telefone</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>E-mail</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cadastrado em</th>
@@ -99,7 +115,7 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum fornecedor cadastrado ainda.'}
                   </td>
                 </tr>
@@ -111,6 +127,14 @@ export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Forne
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                 >
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>{f.nome}</td>
+                  <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    {f.documento
+                      ? formatarDocumento(f.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', f.documento)
+                      : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-xs max-w-[200px] truncate" style={{ color: 'var(--ac-muted)' }} title={[f.logradouro, f.numero, f.bairro].filter(Boolean).join(', ') || undefined}>
+                    {f.cidade && f.uf ? `${f.cidade} / ${f.uf}` : f.cidade || f.uf || '—'}
+                  </td>
                   <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>{f.telefone ?? '—'}</td>
                   <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>{f.email ?? '—'}</td>
                   <td className="px-4 py-3 text-sm" style={{ color: 'var(--ac-muted)' }}>

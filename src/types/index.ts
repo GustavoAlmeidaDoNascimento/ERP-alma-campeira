@@ -1,8 +1,20 @@
+export type TipoDocumentoFornecedor = 'cnpj' | 'cpf'
+
 export type Fornecedor = {
   id: string
   nome: string
   telefone: string | null
   email: string | null
+  /** Padrão CNPJ; armazenado só com dígitos em `documento`. */
+  tipo_documento: TipoDocumentoFornecedor
+  documento: string | null
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
   created_at: string
 }
 

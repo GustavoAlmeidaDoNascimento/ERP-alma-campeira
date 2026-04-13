@@ -4,7 +4,8 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import type { Fornecedor } from '@/types'
+import type { Fornecedor, TipoDocumentoFornecedor } from '@/types'
+import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
 
 const getFornecedoresCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Fornecedor[]> => {
@@ -30,16 +31,52 @@ type FornecedorInput = {
   nome: string
   telefone: string
   email: string
+  tipo_documento: TipoDocumentoFornecedor
+  documento: string
+  cep: string
+  logradouro: string
+  numero: string
+  complemento: string
+  bairro: string
+  cidade: string
+  uf: string
+}
+
+function normalizarFornecedorPayload(input: FornecedorInput) {
+  const doc = apenasDigitos(input.documento)
+  if (doc) {
+    if (input.tipo_documento === 'cpf') {
+      if (!validarCpf(doc)) throw new Error('CPF inválido.')
+    } else if (!validarCnpj(doc)) {
+      throw new Error('CNPJ inválido.')
+    }
+  }
+  const cep = apenasDigitos(input.cep)
+  if (cep && cep.length !== 8) throw new Error('CEP deve ter 8 dígitos.')
+  const uf = input.uf.trim().toUpperCase()
+  if (uf && uf.length !== 2) throw new Error('UF deve ter 2 letras.')
+
+  return {
+    nome: input.nome.trim(),
+    telefone: input.telefone.trim() || null,
+    email: input.email.trim() || null,
+    tipo_documento: input.tipo_documento,
+    documento: doc || null,
+    cep: cep || null,
+    logradouro: input.logradouro.trim() || null,
+    numero: input.numero.trim() || null,
+    complemento: input.complemento.trim() || null,
+    bairro: input.bairro.trim() || null,
+    cidade: input.cidade.trim() || null,
+    uf: uf || null,
+  }
 }
 
 export async function criarFornecedor(input: FornecedorInput) {
   await assertPermissao('fornecedores', 'criar')
   const supabase = await createClient()
-  const { error } = await supabase.from('fornecedores').insert({
-    nome: input.nome.trim(),
-    telefone: input.telefone.trim() || null,
-    email: input.email.trim() || null,
-  })
+  const row = normalizarFornecedorPayload(input)
+  const { error } = await supabase.from('fornecedores').insert(row)
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
   revalidateTag('fornecedores-list', 'max')
@@ -48,14 +85,8 @@ export async function criarFornecedor(input: FornecedorInput) {
 export async function atualizarFornecedor(id: string, input: FornecedorInput) {
   await assertPermissao('fornecedores', 'editar')
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('fornecedores')
-    .update({
-      nome: input.nome.trim(),
-      telefone: input.telefone.trim() || null,
-      email: input.email.trim() || null,
-    })
-    .eq('id', id)
+  const row = normalizarFornecedorPayload(input)
+  const { error } = await supabase.from('fornecedores').update(row).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/fornecedores')
   revalidateTag('fornecedores-list', 'max')

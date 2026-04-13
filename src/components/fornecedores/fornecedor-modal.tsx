@@ -5,7 +5,9 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { criarFornecedor, atualizarFornecedor } from '@/lib/actions/fornecedores'
-import type { Fornecedor } from '@/types'
+import type { Fornecedor, TipoDocumentoFornecedor } from '@/types'
+import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
+import { buscarEnderecoPorCep } from '@/lib/br/viacep'
 
 type Props = {
   open: boolean
@@ -14,21 +16,74 @@ type Props = {
   onSaved?: () => void
 }
 
-type Form = { nome: string; telefone: string; email: string }
+const ESTADOS_BR = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
+  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+]
 
-const formVazio: Form = { nome: '', telefone: '', email: '' }
+const inputStyle = {
+  background: 'var(--ac-card)',
+  border: '1px solid var(--ac-border)',
+  color: 'var(--ac-text)',
+}
+
+type Form = {
+  nome: string
+  telefone: string
+  email: string
+  tipo_documento: TipoDocumentoFornecedor
+  documento: string
+  cep: string
+  logradouro: string
+  numero: string
+  complemento: string
+  bairro: string
+  cidade: string
+  uf: string
+}
+
+const formVazio: Form = {
+  nome: '',
+  telefone: '',
+  email: '',
+  tipo_documento: 'cnpj',
+  documento: '',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  cidade: '',
+  uf: '',
+}
+
+function tipoDocDeFornecedor(f: Fornecedor): TipoDocumentoFornecedor {
+  return f.tipo_documento === 'cpf' ? 'cpf' : 'cnpj'
+}
 
 export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
   const [form, setForm] = useState<Form>(formVazio)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
+  const [buscandoCep, setBuscandoCep] = useState(false)
 
   useEffect(() => {
     if (editando) {
+      const tipo = tipoDocDeFornecedor(editando)
+      const doc = editando.documento ?? ''
       setForm({
         nome: editando.nome,
         telefone: editando.telefone ?? '',
         email: editando.email ?? '',
+        tipo_documento: tipo,
+        documento: tipo === 'cpf' ? formatarCpf(doc) : formatarCnpj(doc),
+        cep: formatarCep(editando.cep ?? ''),
+        logradouro: editando.logradouro ?? '',
+        numero: editando.numero ?? '',
+        complemento: editando.complemento ?? '',
+        bairro: editando.bairro ?? '',
+        cidade: editando.cidade ?? '',
+        uf: editando.uf ?? '',
       })
     } else {
       setForm(formVazio)
@@ -38,6 +93,56 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
 
   function set(field: keyof Form, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  function onTipoDocumentoChange(tipo: TipoDocumentoFornecedor) {
+    setForm((f) => {
+      const d = apenasDigitos(f.documento)
+      return {
+        ...f,
+        tipo_documento: tipo,
+        documento: tipo === 'cpf' ? formatarCpf(d) : formatarCnpj(d),
+      }
+    })
+  }
+
+  function onDocumentoInput(v: string) {
+    const tipo = form.tipo_documento
+    const d = apenasDigitos(v)
+    set('documento', tipo === 'cpf' ? formatarCpf(d) : formatarCnpj(d))
+  }
+
+  function onCepInput(v: string) {
+    set('cep', formatarCep(v))
+  }
+
+  async function handleBuscarCep() {
+    setErro('')
+    const limpo = apenasDigitos(form.cep)
+    if (limpo.length !== 8) {
+      setErro('Informe um CEP com 8 dígitos.')
+      return
+    }
+    setBuscandoCep(true)
+    try {
+      const end = await buscarEnderecoPorCep(limpo)
+      if (!end) {
+        setErro('CEP não encontrado. Verifique o número ou preencha o endereço manualmente.')
+        return
+      }
+      setForm((f) => ({
+        ...f,
+        logradouro: end.logradouro || f.logradouro,
+        complemento: end.complemento || f.complemento,
+        bairro: end.bairro || f.bairro,
+        cidade: end.cidade || f.cidade,
+        uf: end.uf || f.uf,
+      }))
+    } catch {
+      setErro('Não foi possível consultar o CEP. Tente novamente.')
+    } finally {
+      setBuscandoCep(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -51,10 +156,24 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
 
     setLoading(true)
     try {
+      const payload = {
+        nome: form.nome,
+        telefone: form.telefone,
+        email: form.email,
+        tipo_documento: form.tipo_documento,
+        documento: form.documento,
+        cep: form.cep,
+        logradouro: form.logradouro,
+        numero: form.numero,
+        complemento: form.complemento,
+        bairro: form.bairro,
+        cidade: form.cidade,
+        uf: form.uf,
+      }
       if (editando) {
-        await atualizarFornecedor(editando.id, form)
+        await atualizarFornecedor(editando.id, payload)
       } else {
-        await criarFornecedor(form)
+        await criarFornecedor(payload)
       }
       onClose()
       onSaved?.()
@@ -66,8 +185,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={editando ? `Editar — ${editando.nome}` : 'Novo Fornecedor'}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <Modal open={open} onClose={onClose} title={editando ? `Editar — ${editando.nome}` : 'Novo Fornecedor'} width="640px">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 overflow-y-auto px-6 py-4 max-h-[min(72vh,560px)]">
         <Input
           id="nome"
           label="Nome *"
@@ -75,6 +194,38 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           value={form.nome}
           onChange={(e) => set('nome', e.target.value)}
         />
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento</label>
+            <select
+              value={form.tipo_documento}
+              onChange={(e) => onTipoDocumentoChange(e.target.value as TipoDocumentoFornecedor)}
+              className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+              style={{
+                ...inputStyle,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', paddingRight: '36px',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+            >
+              <option value="cnpj">CNPJ (padrão)</option>
+              <option value="cpf">CPF</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <Input
+              id="documento"
+              label={form.tipo_documento === 'cpf' ? 'CPF' : 'CNPJ'}
+              placeholder={form.tipo_documento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+              value={form.documento}
+              onChange={(e) => onDocumentoInput(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <Input
             id="telefone"
@@ -97,13 +248,93 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           />
         </div>
 
+        <div
+          className="rounded-lg p-3 flex flex-col gap-3"
+          style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Endereço</p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+            <div className="flex-1 min-w-0">
+              <Input
+                id="cep"
+                label="CEP"
+                placeholder="00000-000"
+                value={form.cep}
+                onChange={(e) => onCepInput(e.target.value)}
+                inputMode="numeric"
+              />
+            </div>
+            <Button type="button" variant="secondary" loading={buscandoCep} onClick={handleBuscarCep} className="shrink-0 w-full sm:w-auto">
+              Buscar pelo CEP
+            </Button>
+          </div>
+          <Input
+            id="logradouro"
+            label="Logradouro"
+            placeholder="Rua, avenida..."
+            value={form.logradouro}
+            onChange={(e) => set('logradouro', e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="numero"
+              label="Número"
+              placeholder="123"
+              value={form.numero}
+              onChange={(e) => set('numero', e.target.value)}
+            />
+            <Input
+              id="complemento"
+              label="Complemento"
+              placeholder="Sala, bloco..."
+              value={form.complemento}
+              onChange={(e) => set('complemento', e.target.value)}
+            />
+          </div>
+          <Input
+            id="bairro"
+            label="Bairro"
+            value={form.bairro}
+            onChange={(e) => set('bairro', e.target.value)}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              id="cidade"
+              label="Cidade"
+              value={form.cidade}
+              onChange={(e) => set('cidade', e.target.value)}
+            />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="uf" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>UF</label>
+              <select
+                id="uf"
+                value={form.uf}
+                onChange={(e) => set('uf', e.target.value)}
+                className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+                style={{
+                  ...inputStyle,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', paddingRight: '36px',
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+              >
+                <option value="">—</option>
+                {ESTADOS_BR.map((uf) => (
+                  <option key={uf} value={uf}>{uf}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
         {erro && (
           <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
             {erro}
           </p>
         )}
 
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex justify-end gap-2 pt-1 pb-1">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button type="submit" loading={loading}>
             {editando ? 'Salvar alterações' : 'Criar fornecedor'}

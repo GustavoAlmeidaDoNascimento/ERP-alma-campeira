@@ -13,7 +13,9 @@ const getMateriasPrimasCached = unstable_cache(
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('materias_primas')
-      .select('*, fornecedor:fornecedores(id, nome, telefone, email, created_at)')
+      .select(
+        '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
+      )
       .order('codigo')
       .limit(limit)
     if (error) throw new Error(error.message)
@@ -245,7 +247,9 @@ const getMPDetalheCached = unstable_cache(
     const [mpRes, bomRes, movRes] = await Promise.all([
       supabase
         .from('materias_primas')
-        .select('*, fornecedor:fornecedores(id, nome, telefone, email, created_at)')
+        .select(
+          '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
+        )
         .eq('id', mpId)
         .single(),
       supabase
