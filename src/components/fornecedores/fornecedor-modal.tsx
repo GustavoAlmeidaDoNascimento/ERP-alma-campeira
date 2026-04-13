@@ -270,7 +270,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           </div>
           <Input
             id="logradouro"
-            label="Logradouro"
+            label="Logradouro (rua)"
             placeholder="Rua, avenida..."
             value={form.logradouro}
             onChange={(e) => set('logradouro', e.target.value)}
