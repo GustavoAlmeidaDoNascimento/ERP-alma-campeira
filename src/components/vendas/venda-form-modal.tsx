@@ -113,6 +113,28 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   async function salvar() {
     const itensValidos = itens.filter((i) => i.faca_id)
     if (itensValidos.length === 0) { setErro('Adicione ao menos um item com faca selecionada.'); return }
+
+    // Validação local de estoque para evitar erro genérico de Server Action em produção.
+    const quantidadePorFaca = new Map<string, number>()
+    for (const item of itensValidos) {
+      const qtd = Number(item.quantidade) || 0
+      quantidadePorFaca.set(item.faca_id, (quantidadePorFaca.get(item.faca_id) ?? 0) + qtd)
+    }
+
+    const insuficientes: string[] = []
+    for (const [facaId, qtdTotal] of quantidadePorFaca.entries()) {
+      const faca = facas.find((f) => f.id === facaId)
+      const estoqueAtual = Number(faca?.estoque_atual ?? 0)
+      if (!faca || qtdTotal > estoqueAtual) {
+        insuficientes.push(`${faca?.codigo ?? 'Faca'} — solicitado: ${qtdTotal}, disponível: ${estoqueAtual}`)
+      }
+    }
+
+    if (insuficientes.length > 0) {
+      setErro(`Estoque insuficiente: ${insuficientes.join('; ')}`)
+      return
+    }
+
     setErro(''); setLoading(true)
     try {
       const input = {
