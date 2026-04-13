@@ -15,15 +15,18 @@ import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
+type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
+
 type Props = {
   detalhe: FacaDetalheData
   materiasPrimas: MateriaPrima[]
   categorias: CategoriaFacaDB[]
   perm: Perm
   verPrecoVenda: boolean
+  taxasLucro?: TaxasLucro
 }
 
-export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda }: Props) {
+export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda, taxasLucro }: Props) {
   const { faca, bom, vendas, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
@@ -417,7 +420,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
         editando={faca}
         categorias={categorias}
         materiasPrimas={materiasPrimas}
-        verPrecoVenda={verPrecoVenda}
+        taxasLucro={taxasLucro ?? { taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }}
         onSaved={refreshActiveTab}
       />
 

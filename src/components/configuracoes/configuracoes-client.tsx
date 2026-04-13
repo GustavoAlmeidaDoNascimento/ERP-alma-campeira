@@ -273,6 +273,7 @@ export function ConfiguracoesClient({
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [tp, setTp] = useState(String(taxasLucro.taxa_producao))
+  const [ml, setMl] = useState(String(taxasLucro.margem_lucro))
   const [tc, setTc] = useState(String(taxasLucro.taxa_comissao))
   const [taxasMsg, setTaxasMsg] = useState<string | null>(null)
   const [taxasErr, setTaxasErr] = useState<string | null>(null)
@@ -298,8 +299,9 @@ export function ConfiguracoesClient({
 
   useEffect(() => {
     setTp(String(taxasLucro.taxa_producao))
+    setMl(String(taxasLucro.margem_lucro))
     setTc(String(taxasLucro.taxa_comissao))
-  }, [taxasLucro.taxa_producao, taxasLucro.taxa_comissao])
+  }, [taxasLucro.taxa_producao, taxasLucro.margem_lucro, taxasLucro.taxa_comissao])
 
   async function handleSignOut() {
     setSignOutError(null)
@@ -383,9 +385,14 @@ export function ConfiguracoesClient({
     setTaxasMsg(null)
     setTaxasErr(null)
     const taxa_producao = parseFloat(tp.replace(',', '.'))
+    const margem_lucro = parseFloat(ml.replace(',', '.'))
     const taxa_comissao = parseFloat(tc.replace(',', '.'))
-    if (!Number.isFinite(taxa_producao) || taxa_producao < 0 || taxa_producao > 100) {
-      setTaxasErr('Informe a taxa de produção entre 0 e 100%.')
+    if (!Number.isFinite(taxa_producao) || taxa_producao < 0) {
+      setTaxasErr('Informe um valor válido para a taxa de produção (R$ ≥ 0).')
+      return
+    }
+    if (!Number.isFinite(margem_lucro) || margem_lucro < 0) {
+      setTaxasErr('Informe uma margem de lucro válida (% ≥ 0).')
       return
     }
     if (!Number.isFinite(taxa_comissao) || taxa_comissao < 0 || taxa_comissao > 100) {
@@ -394,7 +401,7 @@ export function ConfiguracoesClient({
     }
     startTaxas(async () => {
       try {
-        await updateTaxasLucroConfig({ taxa_producao, taxa_comissao })
+        await updateTaxasLucroConfig({ taxa_producao, margem_lucro, taxa_comissao })
         setTaxasMsg('Taxas salvas.')
       } catch (e: unknown) {
         setTaxasErr(e instanceof Error ? e.message : 'Erro ao salvar.')
@@ -536,18 +543,27 @@ export function ConfiguracoesClient({
                     Taxas para cálculo de lucro
                   </h2>
                   <p className="text-sm mt-1 leading-relaxed max-w-2xl" style={{ color: 'var(--ac-muted)' }}>
-                    O lucro na lista de facas é: preço de venda − (produção % sobre a venda) − (comissão % sobre a venda) − preço de custo.
+                    Custo de produção = custo BOM + taxa de produção (R$ fixo). Preço de venda = custo de produção × (1 + margem de lucro). Lucro = preço de venda − comissão − custo de produção.
                     {!permTaxasLucro.editar && ' Você pode visualizar os valores; apenas quem tem permissão de edição altera as taxas.'}
                   </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
                   <Input
                     id="taxa_producao_lucro"
-                    label="Taxa de produção (%)"
+                    label="Taxa de produção (R$)"
                     type="text"
                     inputMode="decimal"
                     value={tp}
                     onChange={(e) => setTp(e.target.value)}
+                    disabled={!permTaxasLucro.editar || pendingTaxas}
+                  />
+                  <Input
+                    id="margem_lucro"
+                    label="Margem de lucro (%)"
+                    type="text"
+                    inputMode="decimal"
+                    value={ml}
+                    onChange={(e) => setMl(e.target.value)}
                     disabled={!permTaxasLucro.editar || pendingTaxas}
                   />
                   <Input

@@ -4,9 +4,12 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 
-/** Taxas em % do preço de venda (ex.: 10 = 10%). */
 export type TaxasLucroConfig = {
+  /** Valor fixo em R$ adicionado ao custo de materiais (ex.: 27.00). */
   taxa_producao: number
+  /** Margem de lucro em % sobre o custo de produção (ex.: 60 = 60%). */
+  margem_lucro: number
+  /** Comissão em % descontada do preço de venda (ex.: 10 = 10%). */
   taxa_comissao: number
 }
 
@@ -29,19 +32,20 @@ export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('app_config')
-    .select('taxa_producao_lucro, taxa_comissao_lucro')
+    .select('taxa_producao_lucro, margem_lucro, taxa_comissao_lucro')
     .eq('id', 1)
     .maybeSingle()
 
   if (error) {
     if (isAppConfigUnavailable(error)) {
-      return { taxa_producao: 0, taxa_comissao: 0 }
+      return { taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }
     }
     throw new Error(error.message)
   }
-  if (!data) return { taxa_producao: 0, taxa_comissao: 0 }
+  if (!data) return { taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }
   return {
     taxa_producao: Number(data.taxa_producao_lucro ?? 0),
+    margem_lucro: Number(data.margem_lucro ?? 0),
     taxa_comissao: Number(data.taxa_comissao_lucro ?? 0),
   }
 }
@@ -49,9 +53,13 @@ export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
 export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
   await assertPermissao('taxas_lucro', 'editar')
   const tp = Number(input.taxa_producao)
+  const ml = Number(input.margem_lucro)
   const tc = Number(input.taxa_comissao)
-  if (!Number.isFinite(tp) || tp < 0 || tp > 100) {
-    throw new Error('Taxa de produção inválida (use 0 a 100%).')
+  if (!Number.isFinite(tp) || tp < 0) {
+    throw new Error('Taxa de produção inválida (informe um valor em R$ maior ou igual a 0).')
+  }
+  if (!Number.isFinite(ml) || ml < 0) {
+    throw new Error('Margem de lucro inválida (use 0% ou mais).')
   }
   if (!Number.isFinite(tc) || tc < 0 || tc > 100) {
     throw new Error('Taxa de comissão inválida (use 0 a 100%).')
@@ -62,6 +70,7 @@ export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
     {
       id: 1,
       taxa_producao_lucro: tp,
+      margem_lucro: ml,
       taxa_comissao_lucro: tc,
       updated_at: new Date().toISOString(),
     },

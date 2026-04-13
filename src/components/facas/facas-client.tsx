@@ -14,7 +14,7 @@ import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
-type TaxasLucro = { taxa_producao: number; taxa_comissao: number }
+type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
 
 type Props = {
   facas: Faca[]
@@ -371,7 +371,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
         editando={editando}
         categorias={categorias}
         materiasPrimas={materiasPrimas}
-        verPrecoVenda={verPrecoVenda}
+        taxasLucro={taxasLucro}
         onSaved={refreshActiveTab}
       />
 

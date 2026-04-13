@@ -7,7 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { salvarFacaComFoto, getFacaBOM } from '@/lib/actions/facas'
 import type { Faca, CategoriaFacaDB, MateriaPrima, FacaMateriaPrima } from '@/types'
+import { calcularPrecoVendaFaca } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+
+type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
 
 type Props = {
   open: boolean
@@ -15,14 +18,13 @@ type Props = {
   editando?: Faca | null
   categorias: CategoriaFacaDB[]
   materiasPrimas: MateriaPrima[]
-  verPrecoVenda: boolean
+  taxasLucro: TaxasLucro
   onSaved?: () => void
 }
 
 type Form = {
   nome: string
   categoria: string
-  preco_venda: string
   estoque_atual: string
   estoque_minimo: string
 }
@@ -32,12 +34,11 @@ type BomItem = {
   quantidade: string
 }
 
-export function FacaModal({ open, onClose, editando, categorias, materiasPrimas, verPrecoVenda, onSaved }: Props) {
+export function FacaModal({ open, onClose, editando, categorias, materiasPrimas, taxasLucro, onSaved }: Props) {
   const defaultCategoria = categorias[0]?.nome ?? ''
   const [form, setForm] = useState<Form>({
     nome: '',
     categoria: defaultCategoria,
-    preco_venda: '0',
     estoque_atual: '0',
     estoque_minimo: '0',
   })
@@ -78,7 +79,6 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       setForm({
         nome: editando.nome,
         categoria: editando.categoria,
-        preco_venda: String(editando.preco_venda ?? 0),
         estoque_atual: String(editando.estoque_atual),
         estoque_minimo: String(editando.estoque_minimo),
       })
@@ -87,7 +87,6 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       setForm({
         nome: '',
         categoria: categorias[0]?.nome ?? '',
-        preco_venda: '0',
         estoque_atual: '0',
         estoque_minimo: '0',
       })
@@ -167,14 +166,6 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
 
     if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
 
-    const precoVendaNum = verPrecoVenda
-      ? Math.max(0, Number(form.preco_venda) || 0)
-      : Math.max(0, Number(editando?.preco_venda) || 0)
-    if (verPrecoVenda && (!Number.isFinite(Number(form.preco_venda)) || Number(form.preco_venda) < 0)) {
-      setErro('Preço de venda inválido.')
-      return
-    }
-
     // Validar BOM
     if (bomItens.length === 0) { setErro('Adicione pelo menos 1 matéria-prima.'); return }
     for (const item of bomItens) {
@@ -190,7 +181,6 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       if (editando?.id) fd.append('id', editando.id)
       fd.append('nome', form.nome)
       fd.append('categoria', form.categoria)
-      fd.append('preco_venda', String(precoVendaNum))
       fd.append('estoque_atual', String(parseInt(form.estoque_atual) || 0))
       fd.append('estoque_minimo', String(parseInt(form.estoque_minimo) || 0))
       if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
@@ -267,19 +257,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           </select>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {verPrecoVenda && (
-            <Input
-              id="preco_venda"
-              label="Preço de venda *"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0"
-              value={form.preco_venda}
-              onChange={(e) => set('preco_venda', e.target.value)}
-            />
-          )}
+        <div className="grid grid-cols-2 gap-3">
           <Input
             id="estoque_atual"
             label="Estoque Atual"
@@ -299,19 +277,31 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         </div>
 
         <div
-          className="rounded-xl p-3"
+          className="rounded-xl p-3 grid grid-cols-2 gap-3"
           style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
         >
-          <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
-            Preço de custo (referência)
-          </p>
-          <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-            {custoReferencia.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-          </p>
-          <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--ac-muted)' }}>
-            Soma dos preços de custo das matérias-primas × quantidade. O lucro na lista usa esse valor e as taxas em
-            Configurações.
-          </p>
+          <div>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
+              Custo de produção
+            </p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+              {(custoReferencia + taxasLucro.taxa_producao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--ac-muted)' }}>
+              BOM + taxa de produção (R$ {taxasLucro.taxa_producao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
+              Preço de venda calculado
+            </p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ac-accent)' }}>
+              {calcularPrecoVendaFaca(custoReferencia, taxasLucro).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+            <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--ac-muted)' }}>
+              Custo × (1 + {taxasLucro.margem_lucro}% margem)
+            </p>
+          </div>
         </div>
 
         {/* ========== SEÇÃO BOM (Matérias-Primas) ========== */}

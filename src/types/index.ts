@@ -51,19 +51,41 @@ export function statusEstoqueFaca(faca: Faca): StatusEstoque {
 }
 
 /**
- * Lucro unitário: preço venda
- * − (% produção sobre venda) − (% comissão sobre venda) − custo.
- * taxas em percentual (ex.: 5 = 5%).
+ * Custo de produção unitário:
+ *   custo BOM (matérias-primas) + taxa de produção (valor fixo em R$).
+ */
+export function custoProducaoFaca(
+  preco_custo_bom: number,
+  taxa_producao_fixa: number
+): number {
+  return Math.max(0, Number(preco_custo_bom) || 0) + Math.max(0, Number(taxa_producao_fixa) || 0)
+}
+
+/**
+ * Preço de venda calculado automaticamente:
+ *   custo_producao × (1 + margem_lucro / 100).
+ */
+export function calcularPrecoVendaFaca(
+  preco_custo_bom: number,
+  taxas: { taxa_producao: number; margem_lucro: number }
+): number {
+  const custo = custoProducaoFaca(preco_custo_bom, taxas.taxa_producao)
+  const ml = Math.max(0, Number(taxas.margem_lucro) || 0) / 100
+  return custo * (1 + ml)
+}
+
+/**
+ * Lucro unitário:
+ *   preço_venda × (1 − comissão%) − custo_producao.
  */
 export function lucroUnitarioFaca(
   faca: Pick<Faca, 'preco_venda' | 'preco_custo'>,
-  taxas: { taxa_producao: number; taxa_comissao: number }
+  taxas: { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
 ): number {
-  const custo = Number(faca.preco_custo ?? 0)
+  const custoProd = custoProducaoFaca(Number(faca.preco_custo ?? 0), taxas.taxa_producao)
   const venda = Number(faca.preco_venda ?? 0)
-  const p = Math.max(0, Number(taxas.taxa_producao) || 0) / 100
   const c = Math.max(0, Number(taxas.taxa_comissao) || 0) / 100
-  return venda * (1 - p - c) - custo
+  return venda * (1 - c) - custoProd
 }
 
 export type FacaMateriaPrima = {

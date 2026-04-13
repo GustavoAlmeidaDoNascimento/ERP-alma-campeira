@@ -6,6 +6,8 @@ import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
+import { calcularPrecoVendaFaca } from '@/types'
+import { getTaxasLucroConfig } from '@/lib/actions/app-config'
 
 const getFacasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Faca[]> => {
@@ -117,7 +119,6 @@ export async function salvarFacaComFoto(formData: FormData) {
   const id = formData.get('id')
   const nome = String(formData.get('nome') ?? '').trim()
   const categoria = String(formData.get('categoria') ?? '').trim()
-  const preco_venda = Number(formData.get('preco_venda'))
   const estoque_atual = Number(formData.get('estoque_atual'))
   const estoque_minimo = Number(formData.get('estoque_minimo'))
   const foto = formData.get('foto')
@@ -125,7 +126,6 @@ export async function salvarFacaComFoto(formData: FormData) {
 
   if (!nome) throw new Error('Nome é obrigatório.')
   if (!categoria) throw new Error('Categoria é obrigatória.')
-  if (!Number.isFinite(preco_venda) || preco_venda < 0) throw new Error('Preço de venda inválido.')
   if (!Number.isFinite(estoque_atual)) throw new Error('Estoque atual inválido.')
   if (!Number.isFinite(estoque_minimo)) throw new Error('Estoque mínimo inválido.')
 
@@ -145,6 +145,18 @@ export async function salvarFacaComFoto(formData: FormData) {
   const isEdit = typeof id === 'string' && id.length > 0
 
   await assertPermissao('facas', isEdit ? 'editar' : 'criar')
+
+  // Calcular custo BOM para auto-calcular preço de venda
+  const mpIds = bomItens.map((i) => i.materia_prima_id)
+  const { data: mpsData } = await supabase
+    .from('materias_primas')
+    .select('id, preco_custo')
+    .in('id', mpIds)
+  const precoCustoById = new Map((mpsData ?? []).map((m: { id: string; preco_custo: number }) => [m.id, Number(m.preco_custo ?? 0)]))
+  const custoBom = bomItens.reduce((acc, item) => acc + (precoCustoById.get(item.materia_prima_id) ?? 0) * item.quantidade, 0)
+
+  const taxas = await getTaxasLucroConfig()
+  const preco_venda = calcularPrecoVendaFaca(custoBom, taxas)
 
   let facaId: string
 
