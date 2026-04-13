@@ -6,7 +6,6 @@ import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
-import { calcularPrecoVendaFaca } from '@/types'
 
 const getFacasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Faca[]> => {
@@ -163,7 +162,8 @@ export async function salvarFacaComFoto(formData: FormData) {
     taxa_producao: Number(configData?.taxa_producao_lucro ?? 0),
     margem_lucro: Number(configData?.margem_lucro ?? 0),
   }
-  const preco_venda = calcularPrecoVendaFaca(custoBom, taxas)
+  const custoProd = custoBom + taxas.taxa_producao
+  const preco_venda = custoProd * (1 + taxas.margem_lucro / 100)
 
   let facaId: string
 
