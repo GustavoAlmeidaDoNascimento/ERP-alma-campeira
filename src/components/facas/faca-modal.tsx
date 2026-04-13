@@ -288,7 +288,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
               {(custoReferencia + taxasLucro.taxa_producao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
             <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--ac-muted)' }}>
-              BOM + taxa de produção (R$ {taxasLucro.taxa_producao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+              Matérias-primas + taxa de produção (R$ {taxasLucro.taxa_producao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
             </p>
           </div>
           <div>

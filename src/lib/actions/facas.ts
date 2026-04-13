@@ -7,7 +7,6 @@ import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
 import { calcularPrecoVendaFaca } from '@/types'
-import { getTaxasLucroConfig } from '@/lib/actions/app-config'
 
 const getFacasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Faca[]> => {
@@ -155,7 +154,15 @@ export async function salvarFacaComFoto(formData: FormData) {
   const precoCustoById = new Map((mpsData ?? []).map((m: { id: string; preco_custo: number }) => [m.id, Number(m.preco_custo ?? 0)]))
   const custoBom = bomItens.reduce((acc, item) => acc + (precoCustoById.get(item.materia_prima_id) ?? 0) * item.quantidade, 0)
 
-  const taxas = await getTaxasLucroConfig()
+  const { data: configData } = await supabase
+    .from('app_config')
+    .select('taxa_producao_lucro, margem_lucro')
+    .eq('id', 1)
+    .maybeSingle()
+  const taxas = {
+    taxa_producao: Number(configData?.taxa_producao_lucro ?? 0),
+    margem_lucro: Number(configData?.margem_lucro ?? 0),
+  }
   const preco_venda = calcularPrecoVendaFaca(custoBom, taxas)
 
   let facaId: string
