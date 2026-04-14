@@ -5,7 +5,7 @@ import { KpiCard } from './kpi-card'
 import { BarHorizontal } from './bar-horizontal'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { STATUS_OC } from '@/types'
-import type { MetricasEstoqueData, ConsumoBom } from '@/lib/actions/metricas'
+import type { MetricasEstoqueData, ConsumoBom, RankingUsuarioEstoque } from '@/lib/actions/metricas'
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -92,7 +92,7 @@ function BomRow({ bom }: { bom: ConsumoBom }) {
 }
 
 export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
-  const { kpi, saudeFacas, saudeMp, movimentacoesRecentes, consumoBom, resumoOC, alertas } = data
+  const { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas } = data
 
   const totalCriticos = kpi.facasCriticas + kpi.mpCriticas
   const totalAtencao = kpi.facasAtencao + kpi.mpAtencao
@@ -234,6 +234,7 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
                   <th className="text-left py-2 pr-3 font-medium">Data</th>
                   <th className="text-left py-2 px-3 font-medium">Tipo</th>
                   <th className="text-left py-2 px-3 font-medium">Item</th>
+                  <th className="text-left py-2 px-3 font-medium">Usuário</th>
                   <th className="text-right py-2 pl-3 font-medium">Qtd</th>
                 </tr>
               </thead>
@@ -255,10 +256,43 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
                         <span className="font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{m.itemCodigo}</span>{' '}
                         {m.itemNome}
                       </td>
+                      <td className="py-2 px-3 text-xs" style={{ color: 'var(--ac-muted)' }}>
+                        {m.usuarioNome ?? '—'}
+                      </td>
                       <td className="py-2 pl-3 text-right font-semibold" style={{ color: 'var(--ac-text)' }}>{fmtN(m.quantidade)}</td>
                     </tr>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {/* Ranking de Usuários por Movimentações */}
+      {rankingUsuarios.length > 0 && (
+        <Section title="Ranking de Movimentações por Usuário">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ color: 'var(--ac-muted)' }}>
+                  <th className="text-left py-2 pr-3 font-medium">#</th>
+                  <th className="text-left py-2 px-3 font-medium">Usuário</th>
+                  <th className="text-right py-2 px-3 font-medium">Total</th>
+                  <th className="text-right py-2 px-3 font-medium">Entradas</th>
+                  <th className="text-right py-2 pl-3 font-medium">Saídas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankingUsuarios.map((u: RankingUsuarioEstoque, i: number) => (
+                  <tr key={u.usuarioId} className="border-t" style={{ borderColor: 'var(--ac-border)' }}>
+                    <td className="py-2 pr-3 font-bold text-xs" style={{ color: 'var(--ac-muted)' }}>{i + 1}</td>
+                    <td className="py-2 px-3 font-medium" style={{ color: 'var(--ac-text)' }}>{u.usuarioNome}</td>
+                    <td className="py-2 px-3 text-right font-bold" style={{ color: 'var(--ac-text)' }}>{u.totalMovimentacoes}</td>
+                    <td className="py-2 px-3 text-right text-xs font-semibold" style={{ color: '#15803d' }}>+{u.entradas}</td>
+                    <td className="py-2 pl-3 text-right text-xs font-semibold" style={{ color: '#b45309' }}>-{u.saidas}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

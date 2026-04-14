@@ -28,7 +28,7 @@ const tipoMovLabel: Record<string, { label: string; color: string; bg: string }>
 }
 
 export function MPDetalheClient({ detalhe, perm }: Props) {
-  const { mp, facasQueUsam, movimentacoes } = detalhe
+  const { mp, facasQueUsam, movimentacoes, usuariosRegistro } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -37,6 +37,7 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
   const [entradaModalOpen, setEntradaModalOpen] = useState(false)
   const [quantidade, setQuantidade] = useState('1')
   const [observacao, setObservacao] = useState('')
+  const [usuarioRegistroId, setUsuarioRegistroId] = useState('')
   const [entradaLoading, setEntradaLoading] = useState(false)
   const [entradaErro, setEntradaErro] = useState('')
 
@@ -51,12 +52,17 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
 
   async function handleEntrada() {
     if (qtd <= 0) return
+    if (!usuarioRegistroId) {
+      setEntradaErro('Selecione quem está registrando a entrada.')
+      return
+    }
     setEntradaErro('')
     setEntradaLoading(true)
     try {
-      await entradaEstoqueMP(mp.id, qtd, observacao)
+      await entradaEstoqueMP(mp.id, qtd, observacao, usuarioRegistroId)
       setQuantidade('1')
       setObservacao('')
+      setUsuarioRegistroId('')
       setEntradaModalOpen(false)
       refreshActiveTab()
     } catch (e: unknown) {
@@ -69,6 +75,7 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
   function abrirEntrada() {
     setQuantidade('1')
     setObservacao('')
+    setUsuarioRegistroId(usuariosRegistro[0]?.id ?? '')
     setEntradaErro('')
     setEntradaModalOpen(true)
   }
@@ -274,6 +281,7 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Tipo</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Faca</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Registrado por</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Quantidade</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</th>
                   </tr>
@@ -299,6 +307,9 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
                           {mov.faca ? `${mov.faca.codigo} — ${mov.faca.nome}` : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
+                          {mov.usuario?.nome ?? '—'}
                         </td>
                         <td
                           className="px-4 py-2.5 text-right tabular-nums font-semibold"
@@ -378,6 +389,37 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
               setEntradaErro('')
             }}
           />
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              Registrado por *
+            </label>
+            <select
+              value={usuarioRegistroId}
+              onChange={(e) => {
+                setUsuarioRegistroId(e.target.value)
+                setEntradaErro('')
+              }}
+              className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+              style={{
+                background: 'var(--ac-bg)',
+                border: '1px solid var(--ac-border)',
+                color: 'var(--ac-text)',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 10px center',
+                backgroundSize: '16px',
+                paddingRight: '36px',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+            >
+              <option value="">Selecione um usuário...</option>
+              {usuariosRegistro.map((u) => (
+                <option key={u.id} value={u.id}>{u.nome}</option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>

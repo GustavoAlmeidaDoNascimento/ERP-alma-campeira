@@ -229,13 +229,15 @@ export type MPDetalheData = {
   mp: MateriaPrima
   facasQueUsam: FacaComQuantidade[]
   movimentacoes: MovimentacaoEstoque[]
+  usuariosRegistro: { id: string; nome: string }[]
 }
 
 const getMPDetalheCached = unstable_cache(
   async (_userId: string, mpId: string): Promise<MPDetalheData> => {
     const supabase = await createClient()
+    const admin = createAdminClient()
 
-    const [mpRes, bomRes, movRes] = await Promise.all([
+    const [mpRes, bomRes, movRes, usuariosRes] = await Promise.all([
       supabase
         .from('materias_primas')
         .select(
@@ -248,26 +250,44 @@ const getMPDetalheCached = unstable_cache(
         .select('quantidade, faca:facas(id, codigo, nome, categoria, estoque_atual)')
         .eq('materia_prima_id', mpId)
         .order('faca_id'),
-      supabase
+      // Não usa join para usuario_id → usuarios_perfis para evitar falha silenciosa
+      // caso a FK não esteja declarada no banco. O merge é feito manualmente abaixo.
+      admin
         .from('movimentacoes_estoque')
         .select('*, faca:facas(id, codigo, nome)')
         .eq('materia_prima_id', mpId)
         .order('created_at', { ascending: false })
         .limit(100),
+      supabase
+        .from('usuarios_perfis')
+        .select('id, nome')
+        .eq('ativo', true)
+        .order('nome'),
     ])
 
     if (mpRes.error) throw new Error(mpRes.error.message)
     if (!mpRes.data) throw new Error('Matéria-prima não encontrada.')
+    if (movRes.error) throw new Error(`Erro ao buscar movimentações: ${movRes.error.message}`)
 
     const facasQueUsam: FacaComQuantidade[] = (bomRes.data ?? []).map((row) => {
       const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'>
       return { ...faca, quantidade: Number(row.quantidade) || 0 }
     })
 
+    // Monta mapa de usuários para enriquecer movimentações sem depender de FK no banco
+    const usuariosMap = new Map(
+      (usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }])
+    )
+    const movimentacoes = (movRes.data ?? []).map((mov) => ({
+      ...mov,
+      usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
+    })) as MovimentacaoEstoque[]
+
     return {
       mp: mpRes.data as MateriaPrima,
       facasQueUsam,
-      movimentacoes: (movRes.data ?? []) as MovimentacaoEstoque[],
+      movimentacoes,
+      usuariosRegistro: (usuariosRes.data ?? []) as { id: string; nome: string }[],
     }
   },
   ['mp-detalhe'],
@@ -304,15 +324,20 @@ export async function getMPEditModalData(): Promise<MPEditModalData> {
 export async function entradaEstoqueMP(
   mpId: string,
   quantidade: number,
-  observacao?: string
+  observacao: string | undefined,
+  usuarioRegistroId: string
 ): Promise<void> {
   await assertPermissao('materias_primas', 'editar')
 
   if (!Number.isFinite(quantidade) || quantidade <= 0) {
     throw new Error('Quantidade deve ser maior que zero.')
   }
+  if (!usuarioRegistroId) {
+    throw new Error('Selecione o usuário que está registrando a entrada.')
+  }
 
   const supabase = await createClient()
+  const admin = createAdminClient()
 
   const { data: mp, error: mpErr } = await supabase
     .from('materias_primas')
@@ -324,18 +349,25 @@ export async function entradaEstoqueMP(
 
   const novoEstoque = Math.round((Number(mp.estoque_atual) + quantidade) * 1000) / 1000
 
-  const userId = await requireAuthenticatedUserId()
+  const { data: usuarioRegistro, error: usuarioErr } = await admin
+    .from('usuarios_perfis')
+    .select('id')
+    .eq('id', usuarioRegistroId)
+    .eq('ativo', true)
+    .single()
+  if (usuarioErr) throw new Error(usuarioErr.message)
+  if (!usuarioRegistro) throw new Error('Usuário selecionado não encontrado ou inativo.')
 
-  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+  const { error: movErr } = await admin.from('movimentacoes_estoque').insert({
     tipo: 'entrada',
     materia_prima_id: mpId,
     quantidade,
     observacao: observacao?.trim() || null,
-    usuario_id: userId,
+    usuario_id: usuarioRegistroId,
   })
   if (movErr) throw new Error(movErr.message)
 
-  const { error: updErr } = await supabase
+  const { error: updErr } = await admin
     .from('materias_primas')
     .update({ estoque_atual: novoEstoque })
     .eq('id', mpId)

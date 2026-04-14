@@ -132,6 +132,7 @@ export type MovimentacaoEstoque = {
   materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'> | null
   faca?: Pick<Faca, 'id' | 'codigo' | 'nome'> | null
   consumivel?: Pick<Consumivel, 'id' | 'codigo' | 'nome'> | null
+  usuario?: { id: string; nome: string } | null
 }
 
 export type MaterialInsuficiente = {

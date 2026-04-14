@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { StatusPedido, StatusOC } from '@/types'
 import type { PeriodoId } from '@/lib/metricas-periodos'
@@ -136,6 +137,7 @@ export type MovimentacaoRecente = {
   itemCodigo: string
   quantidade: number
   createdAt: string
+  usuarioNome: string | null
 }
 
 export type ConsumoBom = {
@@ -168,11 +170,20 @@ export type AlertaEstoque = {
   detalhe: string
 }
 
+export type RankingUsuarioEstoque = {
+  usuarioId: string
+  usuarioNome: string
+  totalMovimentacoes: number
+  entradas: number
+  saidas: number
+}
+
 export type MetricasEstoqueData = {
   kpi: KpiEstoque
   saudeFacas: SaudeEstoqueFaca[]
   saudeMp: SaudeEstoqueMp[]
   movimentacoesRecentes: MovimentacaoRecente[]
+  rankingUsuarios: RankingUsuarioEstoque[]
   consumoBom: ConsumoBom[]
   resumoOC: ResumoOC[]
   alertas: AlertaEstoque[]
@@ -203,6 +214,7 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
 
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
+    const admin = createAdminClient()
     const { desde, ate } = calcularDatasPerido(periodo)
 
     let pedidosQuery = supabase
@@ -389,13 +401,15 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
 
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
+    const admin = createAdminClient()
     const { desde, ate } = calcularDatasPerido(periodo)
 
-    // Movimentações filtradas por período (mp/faca via embeds; consumíveis exigem coluna consumivel_id — ver `supabase/migration_movimentacoes_consumivel.sql`)
-    let movQuery = supabase
+    // Movimentações filtradas por período. Sem join de usuario_id para evitar falha
+    // silenciosa caso a FK não esteja declarada no banco; o nome é resolvido manualmente.
+    let movQuery = admin
       .from('movimentacoes_estoque')
       .select(
-        'id, tipo, quantidade, created_at, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)',
+        'id, tipo, quantidade, created_at, usuario_id, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)',
       )
       .order('created_at', { ascending: false })
 
@@ -410,12 +424,13 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
     if (desde) ocQuery = ocQuery.gte('created_at', desde)
     if (ate) ocQuery = ocQuery.lt('created_at', ate)
 
-    const [facasRes, mpRes, movRes, bomRes, ocRes] = await Promise.all([
+    const [facasRes, mpRes, movRes, bomRes, ocRes, usuariosRes] = await Promise.all([
       supabase.from('facas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_venda'),
       supabase.from('materias_primas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_custo, fornecedor:fornecedores(nome)'),
-      movQuery.limit(50),
+      movQuery.limit(500),
       supabase.from('faca_materias_primas').select('faca_id, materia_prima_id, quantidade, faca:facas(id, codigo, nome), mp:materias_primas(id, codigo, nome, preco_custo)'),
       ocQuery,
+      admin.from('usuarios_perfis').select('id, nome').order('nome'),
     ])
 
     if (facasRes.error) throw new Error(facasRes.error.message)
@@ -426,6 +441,7 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
 
     const facas = facasRes.data ?? []
     const mps = mpRes.data ?? []
+    const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, u.nome as string]))
     const movs = movRes.data ?? []
     const boms = bomRes.data ?? []
     const ocs = ocRes.data ?? []
@@ -489,6 +505,7 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
         itemCodigo: item?.codigo ?? '-',
         quantidade: Number(m.quantidade),
         createdAt: m.created_at,
+        usuarioNome: (m as any).usuario_id ? (usuariosMap.get((m as any).usuario_id) ?? null) : null,
       }
     })
 
@@ -561,6 +578,28 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
       }
     }
 
-    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, consumoBom, resumoOC, alertas, periodo }
+    // ── Ranking de usuários por movimentações de estoque ──
+    const usuarioMovMap = new Map<string, { nome: string; total: number; entradas: number; saidas: number }>()
+    for (const m of movs) {
+      const uid = (m as any).usuario_id as string | null
+      if (!uid) continue
+      const nome = usuariosMap.get(uid) ?? 'Desconhecido'
+      const entry = usuarioMovMap.get(uid) ?? { nome, total: 0, entradas: 0, saidas: 0 }
+      entry.total += 1
+      if ((m as any).tipo === 'entrada') entry.entradas += 1
+      else entry.saidas += 1
+      usuarioMovMap.set(uid, entry)
+    }
+    const rankingUsuarios: RankingUsuarioEstoque[] = Array.from(usuarioMovMap.entries())
+      .map(([uid, v]) => ({
+        usuarioId: uid,
+        usuarioNome: v.nome,
+        totalMovimentacoes: v.total,
+        entradas: v.entradas,
+        saidas: v.saidas,
+      }))
+      .sort((a, b) => b.totalMovimentacoes - a.totalMovimentacoes)
+
+    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas, periodo }
   })
 }
