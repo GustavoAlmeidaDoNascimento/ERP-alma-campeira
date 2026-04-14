@@ -26,6 +26,7 @@ export type ErpTabData =
       kind: 'mp-detalhe'
       detalhe: MPDetalheData
       perm: Perm
+      permEditarMov: boolean
     }
   | {
       kind: 'materias-primas'
@@ -137,7 +138,8 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     ])
     const perm = perms.materias_primas as Perm
     assertAllowed(perm, 'materias_primas')
-    return { kind: 'mp-detalhe', detalhe, perm }
+    const permEditarMov = !!(perms as any).movimentacoes_estoque?.editar
+    return { kind: 'mp-detalhe', detalhe, perm, permEditarMov }
   }
 
   if (path === '/materias-primas') {

@@ -378,3 +378,119 @@ export async function entradaEstoqueMP(
   revalidateTag('mp-detalhe', 'max')
   revalidateTag('metricas-estoque', 'max')
 }
+
+// ============================================================
+// Edição de Movimentação de Estoque
+// ============================================================
+
+type AtualizarMovInput = {
+  movimentacaoId: string
+  quantidade: number
+  usuarioId: string
+  observacao?: string | null
+}
+
+/**
+ * Atualiza uma movimentação de estoque existente (quantidade, usuário, observação)
+ * e reajusta o `estoque_atual` da matéria-prima relacionada para manter
+ * a consistência do saldo — aplicando apenas o DELTA entre o valor antigo e o novo.
+ *
+ * Regras por tipo:
+ *   - `entrada`  → estoque += (nova - antiga)
+ *   - `ajuste`   → estoque += (nova - antiga)
+ *   - `saida_*`  → estoque -= (nova - antiga)
+ *
+ * Requer permissão `movimentacoes_estoque.editar`.
+ */
+export async function atualizarMovimentacaoMP(input: AtualizarMovInput): Promise<void> {
+  await assertPermissao('movimentacoes_estoque', 'editar')
+
+  const { movimentacaoId, quantidade, usuarioId, observacao } = input
+
+  if (!movimentacaoId) throw new Error('ID da movimentação é obrigatório.')
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    throw new Error('Quantidade deve ser maior que zero.')
+  }
+  if (!usuarioId) throw new Error('Selecione o usuário responsável.')
+
+  const admin = createAdminClient()
+
+  // 1. Busca movimentação atual
+  const { data: movAtual, error: movErr } = await admin
+    .from('movimentacoes_estoque')
+    .select('id, tipo, quantidade, materia_prima_id')
+    .eq('id', movimentacaoId)
+    .single()
+  if (movErr) throw new Error(movErr.message)
+  if (!movAtual) throw new Error('Movimentação não encontrada.')
+  if (!movAtual.materia_prima_id) {
+    throw new Error('Esta movimentação não está ligada a uma matéria-prima.')
+  }
+
+  // 2. Valida usuário
+  const { data: usuario, error: userErr } = await admin
+    .from('usuarios_perfis')
+    .select('id')
+    .eq('id', usuarioId)
+    .single()
+  if (userErr) throw new Error(userErr.message)
+  if (!usuario) throw new Error('Usuário não encontrado.')
+
+  // 3. Busca estoque atual da MP
+  const { data: mp, error: mpErr } = await admin
+    .from('materias_primas')
+    .select('id, estoque_atual')
+    .eq('id', movAtual.materia_prima_id)
+    .single()
+  if (mpErr) throw new Error(mpErr.message)
+  if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
+
+  // 4. Calcula delta e novo estoque de acordo com o tipo
+  const quantidadeAntiga = Number(movAtual.quantidade)
+  const delta = quantidade - quantidadeAntiga
+
+  let novoEstoque: number
+  const tipo = movAtual.tipo as string
+  if (tipo === 'entrada' || tipo === 'ajuste') {
+    novoEstoque = Number(mp.estoque_atual) + delta
+  } else if (tipo.startsWith('saida')) {
+    novoEstoque = Number(mp.estoque_atual) - delta
+  } else {
+    // tipo desconhecido — mantém o estoque, só altera a movimentação
+    novoEstoque = Number(mp.estoque_atual)
+  }
+
+  novoEstoque = Math.round(novoEstoque * 1000) / 1000
+  if (novoEstoque < 0) {
+    throw new Error(
+      `Operação inválida: o novo estoque ficaria negativo (${novoEstoque}). ` +
+        `Ajuste antes o estoque manualmente ou corrija outra movimentação primeiro.`
+    )
+  }
+
+  // 5. Atualiza a movimentação
+  const { error: updMovErr } = await admin
+    .from('movimentacoes_estoque')
+    .update({
+      quantidade,
+      usuario_id: usuarioId,
+      observacao: observacao?.trim() || null,
+    })
+    .eq('id', movimentacaoId)
+  if (updMovErr) throw new Error(updMovErr.message)
+
+  // 6. Atualiza o estoque (se houve delta)
+  if (delta !== 0 && novoEstoque !== Number(mp.estoque_atual)) {
+    const { error: updMpErr } = await admin
+      .from('materias_primas')
+      .update({ estoque_atual: novoEstoque })
+      .eq('id', mp.id)
+    if (updMpErr) throw new Error(updMpErr.message)
+  }
+
+  // 7. Invalida caches relacionados
+  revalidatePath('/materias-primas')
+  revalidateTag('materias-primas-list', 'max')
+  revalidateTag('mp-detalhe', 'max')
+  revalidateTag('metricas-estoque', 'max')
+}
