@@ -6,9 +6,10 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { MPModal } from './mp-modal'
-import { entradaEstoqueMP, getMPEditModalData } from '@/lib/actions/materias-primas'
+import { entradaEstoqueMP, getMPEditModalData, atualizarMovimentacaoMP } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
 import type { MPDetalheData, MPEditModalData } from '@/lib/actions/materias-primas'
+import type { MovimentacaoEstoque } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
@@ -18,6 +19,7 @@ type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type Props = {
   detalhe: MPDetalheData
   perm: Perm
+  permEditarMov?: boolean
 }
 
 const tipoMovLabel: Record<string, { label: string; color: string; bg: string }> = {
@@ -27,7 +29,7 @@ const tipoMovLabel: Record<string, { label: string; color: string; bg: string }>
   ajuste:       { label: 'Ajuste',    color: '#6b7280', bg: '#f3f4f6' },
 }
 
-export function MPDetalheClient({ detalhe, perm }: Props) {
+export function MPDetalheClient({ detalhe, perm, permEditarMov = false }: Props) {
   const { mp, facasQueUsam, movimentacoes, usuariosRegistro } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
@@ -40,6 +42,51 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
   const [usuarioRegistroId, setUsuarioRegistroId] = useState('')
   const [entradaLoading, setEntradaLoading] = useState(false)
   const [entradaErro, setEntradaErro] = useState('')
+
+  // Edição de movimentação existente
+  const [movEditando, setMovEditando] = useState<MovimentacaoEstoque | null>(null)
+  const [movEditQtd, setMovEditQtd] = useState('1')
+  const [movEditObs, setMovEditObs] = useState('')
+  const [movEditUserId, setMovEditUserId] = useState('')
+  const [movEditLoading, setMovEditLoading] = useState(false)
+  const [movEditErro, setMovEditErro] = useState('')
+
+  function abrirEdicaoMov(mov: MovimentacaoEstoque) {
+    setMovEditando(mov)
+    setMovEditQtd(String(mov.quantidade))
+    setMovEditObs(mov.observacao ?? '')
+    setMovEditUserId(mov.usuario_id ?? usuariosRegistro[0]?.id ?? '')
+    setMovEditErro('')
+  }
+
+  async function handleSalvarEdicaoMov() {
+    if (!movEditando) return
+    const qtd = Number(movEditQtd)
+    if (!Number.isFinite(qtd) || qtd <= 0) {
+      setMovEditErro('Quantidade deve ser maior que zero.')
+      return
+    }
+    if (!movEditUserId) {
+      setMovEditErro('Selecione o usuário responsável.')
+      return
+    }
+    setMovEditErro('')
+    setMovEditLoading(true)
+    try {
+      await atualizarMovimentacaoMP({
+        movimentacaoId: movEditando.id,
+        quantidade: qtd,
+        usuarioId: movEditUserId,
+        observacao: movEditObs,
+      })
+      setMovEditando(null)
+      refreshActiveTab()
+    } catch (e: unknown) {
+      setMovEditErro(e instanceof Error ? e.message : 'Erro ao salvar movimentação.')
+    } finally {
+      setMovEditLoading(false)
+    }
+  }
 
   const fotoUrl = mp.foto_url
     ? getOptimizedSupabaseImageUrl(mp.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
@@ -284,6 +331,9 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Registrado por</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Quantidade</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</th>
+                    {permEditarMov && (
+                      <th className="text-center px-4 py-2.5 font-semibold text-xs uppercase tracking-wide w-16" style={{ color: 'var(--ac-muted)' }}>Ações</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -321,6 +371,30 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-muted)' }}>
                           {mov.observacao ?? '—'}
                         </td>
+                        {permEditarMov && (
+                          <td className="px-4 py-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => abrirEdicaoMov(mov)}
+                              className="inline-flex items-center justify-center size-7 rounded-md transition-all"
+                              style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)', color: 'var(--ac-muted)' }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--ac-accent)'
+                                e.currentTarget.style.borderColor = 'var(--ac-accent)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--ac-muted)'
+                                e.currentTarget.style.borderColor = 'var(--ac-border)'
+                              }}
+                              title="Editar movimentação"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3.5">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -458,6 +532,104 @@ export function MPDetalheClient({ detalhe, perm }: Props) {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal Editar Movimentação */}
+      <Modal
+        open={movEditando !== null}
+        onClose={() => setMovEditando(null)}
+        title={movEditando ? `Editar Movimentação — ${tipoMovLabel[movEditando.tipo]?.label ?? 'Ajuste'}` : 'Editar Movimentação'}
+        width="440px"
+      >
+        {movEditando && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
+              Alterações serão aplicadas ao estoque em tempo real.
+            </p>
+
+            <Input
+              id="mov-edit-qtd"
+              label="Quantidade *"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={movEditQtd}
+              onChange={(e) => {
+                const raw = e.target.value
+                if (raw === '') { setMovEditQtd(''); setMovEditErro(''); return }
+                const n = Number.parseInt(raw, 10)
+                if (Number.isNaN(n) || n < 0) return
+                setMovEditQtd(String(n))
+                setMovEditErro('')
+              }}
+            />
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+                Registrado por *
+              </label>
+              <select
+                value={movEditUserId}
+                onChange={(e) => { setMovEditUserId(e.target.value); setMovEditErro('') }}
+                className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                style={{
+                  background: 'var(--ac-bg)',
+                  border: '1px solid var(--ac-border)',
+                  color: 'var(--ac-text)',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 10px center',
+                  backgroundSize: '16px',
+                  paddingRight: '36px',
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+              >
+                <option value="">Selecione um usuário...</option>
+                {usuariosRegistro.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+                Observação (opcional)
+              </label>
+              <input
+                type="text"
+                value={movEditObs}
+                onChange={(e) => setMovEditObs(e.target.value)}
+                className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-all"
+                style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--ac-accent)'
+                  e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--ac-accent) 20%, transparent)'
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--ac-border)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+              />
+            </div>
+
+            {movEditErro && (
+              <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
+                {movEditErro}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="secondary" onClick={() => setMovEditando(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSalvarEdicaoMov} loading={movEditLoading}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   )

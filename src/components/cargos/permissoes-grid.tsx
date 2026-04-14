@@ -136,7 +136,8 @@ export function PermissoesGrid({ value, onChange, readonly = false }: Props) {
                       </td>
                     )
                   }
-                  const needVer = c.key !== 'ver' && !perm.ver
+                  // Só exige 'ver' habilitado se 'ver' for uma coluna válida desse módulo.
+                  const needVer = c.key !== 'ver' && !perm.ver && activeCols.includes('ver')
                   const toggleTitle = readonly
                     ? 'Somente leitura'
                     : needVer
