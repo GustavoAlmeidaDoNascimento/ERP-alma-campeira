@@ -405,6 +405,7 @@ export function MPDetalheClient({ detalhe, perm, permEditarMov = false, permVerM
             </div>
           )}
         </section>
+        )}
       </div>
 
       {/* Modal Editar */}
