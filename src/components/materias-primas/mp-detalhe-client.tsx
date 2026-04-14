@@ -20,6 +20,7 @@ type Props = {
   detalhe: MPDetalheData
   perm: Perm
   permEditarMov?: boolean
+  permVerMov?: boolean
 }
 
 const tipoMovLabel: Record<string, { label: string; color: string; bg: string }> = {
@@ -29,7 +30,7 @@ const tipoMovLabel: Record<string, { label: string; color: string; bg: string }>
   ajuste:       { label: 'Ajuste',    color: '#6b7280', bg: '#f3f4f6' },
 }
 
-export function MPDetalheClient({ detalhe, perm, permEditarMov = false }: Props) {
+export function MPDetalheClient({ detalhe, perm, permEditarMov = false, permVerMov = false }: Props) {
   const { mp, facasQueUsam, movimentacoes, usuariosRegistro } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
@@ -314,6 +315,7 @@ export function MPDetalheClient({ detalhe, perm, permEditarMov = false }: Props)
         </section>
 
         {/* ========== Movimentações ========== */}
+        {permVerMov && (
         <section>
           <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>
             Movimentações de Estoque
