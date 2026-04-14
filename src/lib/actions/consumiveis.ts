@@ -5,6 +5,7 @@ import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Consumivel } from '@/types'
+import { gerarCodigoForte } from '@/lib/utils/codigo'
 
 const getConsumiveisCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Consumivel[]> => {
@@ -29,17 +30,7 @@ export async function getConsumiveis(limit = 120): Promise<Consumivel[]> {
 }
 
 export async function gerarCodigoConsumivel(): Promise<string> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('consumiveis')
-    .select('codigo')
-    .order('codigo', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (!data) return 'CN-0001'
-  const num = parseInt(data.codigo.replace('CN-', ''), 10)
-  return `CN-${String(num + 1).padStart(4, '0')}`
+  return gerarCodigoForte('CN')
 }
 
 const FOTO_BUCKET_CONSUMIVEL = 'consumiveis-fotos'

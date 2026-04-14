@@ -6,6 +6,7 @@ import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
+import { gerarCodigoForte } from '@/lib/utils/codigo'
 
 const getFacasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<Faca[]> => {
@@ -30,17 +31,7 @@ export async function getFacas(limit = 80): Promise<Faca[]> {
 }
 
 export async function gerarCodigoFaca(): Promise<string> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('facas')
-    .select('codigo')
-    .order('codigo', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (!data) return 'FK-0001'
-  const num = parseInt(data.codigo.replace('FK-', ''), 10)
-  return `FK-${String(num + 1).padStart(4, '0')}`
+  return gerarCodigoForte('FK')
 }
 
 type FacaInput = {

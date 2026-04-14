@@ -6,6 +6,7 @@ import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
 import { executarGerarTodasOCsDesdeFilaAutomatico } from '@/lib/ordens-compra/gerar-oc-fila'
 import type { Pedido, StatusPedido } from '@/types'
+import { gerarCodigoForte } from '@/lib/utils/codigo'
 
 function normalizeStatusPedido(status: string): StatusPedido {
   if (status === 'em_espera' || status === 'em_producao' || status === 'entregue') return status
@@ -62,17 +63,7 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
 }
 
 export async function gerarCodigoPedido(): Promise<string> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('pedidos')
-    .select('codigo')
-    .order('codigo', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (!data) return 'PD-0001'
-  const num = parseInt(data.codigo.replace('PD-', ''), 10)
-  return `PD-${String(num + 1).padStart(4, '0')}`
+  return gerarCodigoForte('PD')
 }
 
 export type VendaItemInput = {

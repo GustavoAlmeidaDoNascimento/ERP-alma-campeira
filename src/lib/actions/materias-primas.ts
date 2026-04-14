@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { MateriaPrima, MovimentacaoEstoque, Faca, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
+import { gerarCodigoForte } from '@/lib/utils/codigo'
 
 const getMateriasPrimasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<MateriaPrima[]> => {
@@ -31,17 +32,7 @@ export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
 }
 
 export async function gerarCodigoMP(): Promise<string> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('materias_primas')
-    .select('codigo')
-    .order('codigo', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (!data) return 'MP-0001'
-  const num = parseInt(data.codigo.replace('MP-', ''), 10)
-  return `MP-${String(num + 1).padStart(4, '0')}`
+  return gerarCodigoForte('MP')
 }
 
 type MPInput = {

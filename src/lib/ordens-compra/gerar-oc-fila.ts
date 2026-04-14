@@ -1,19 +1,11 @@
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { gerarCodigoForte } from '@/lib/utils/codigo'
 
 type Supabase = Awaited<ReturnType<typeof createClient>>
 
-export async function gerarCodigoOC(supabase: Supabase): Promise<string> {
-  const { data } = await supabase
-    .from('ordens_compra')
-    .select('codigo')
-    .order('codigo', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (!data) return 'OC-0001'
-  const num = parseInt(data.codigo.replace('OC-', ''), 10)
-  return `OC-${String(num + 1).padStart(4, '0')}`
+export async function gerarCodigoOC(_supabase: Supabase): Promise<string> {
+  return gerarCodigoForte('OC')
 }
 
 /**

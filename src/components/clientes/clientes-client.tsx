@@ -18,7 +18,7 @@ const TIPO_STYLE: Record<string, React.CSSProperties> = {
 }
 
 export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: Perm }) {
-  const { refreshActiveTab } = useErpTabs()
+  const { refreshActiveTab, refreshTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Cliente | null>(null)
   const [deletando, setDeletando] = useState<Cliente | null>(null)
@@ -58,11 +58,17 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
       await deletarCliente(deletando.id)
       setDeletando(null)
       refreshActiveTab()
+      refreshTab('/vendas')
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
       setLoadingDelete(false)
     }
+  }
+
+  function handleClienteSaved() {
+    refreshActiveTab()
+    refreshTab('/vendas')
   }
 
   return (
@@ -189,7 +195,7 @@ export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: 
         open={modalAberto}
         onClose={() => setModalAberto(false)}
         editando={editando}
-        onSaved={refreshActiveTab}
+        onSaved={handleClienteSaved}
       />
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir cliente">
