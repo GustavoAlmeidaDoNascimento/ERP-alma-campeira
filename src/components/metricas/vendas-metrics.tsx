@@ -221,109 +221,6 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         </Section>
       )}
 
-      {/* Relatório completo por Vendedor */}
-      {relatorioVendedores.length > 0 && (
-        <Section title="Relatório por Vendedor">
-          <div className="space-y-2">
-            {relatorioVendedores.map((v, i) => (
-              <VendedorRow
-                key={v.vendedorId ?? i}
-                v={v}
-                taxaComissao={taxaComissao}
-                defaultOpen={i === 0}
-              />
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Resumo de Comissões a Pagar */}
-      {taxaComissao > 0 && relatorioVendedores.length > 0 && (
-        <Section title={`Comissões a Pagar — Taxa: ${taxaComissao}%`}>
-          <div className="space-y-4">
-            {/* Total geral */}
-            <div
-              className="flex items-center justify-between rounded-lg px-4 py-3"
-              style={{ background: 'color-mix(in srgb, #16a34a 10%, transparent)', border: '1px solid #16a34a40' }}
-            >
-              <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                Total de comissões no período
-              </span>
-              <span className="text-xl font-bold" style={{ color: '#16a34a' }}>{fmt(comissaoTotal)}</span>
-            </div>
-
-            {/* Por mês */}
-            {comissaoPorMes.length > 1 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--ac-border)' }}>
-                      <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Mês</th>
-                      {relatorioVendedores.map((v, i) => (
-                        <th key={v.vendedorId ?? i} className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                          {v.vendedorNome}
-                        </th>
-                      ))}
-                      <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total mês</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comissaoPorMes.map((m, i) => (
-                      <tr key={m.mes} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
-                        <td className="py-2.5 pr-3 font-medium text-xs" style={{ color: 'var(--ac-text)' }}>{m.mesLabel}</td>
-                        {relatorioVendedores.map((v, vi) => {
-                          const mesData = v.porMes.find((pm) => pm.mes === m.mes)
-                          return (
-                            <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums text-xs" style={{ color: '#16a34a' }}>
-                              {mesData ? fmt(mesData.comissao) : '—'}
-                            </td>
-                          )
-                        })}
-                        <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
-                          {fmt(m.total)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
-                      <td className="py-2.5 pr-3 font-bold text-xs" style={{ color: 'var(--ac-text)' }}>Total</td>
-                      {relatorioVendedores.map((v, vi) => (
-                        <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
-                          {fmt(v.totalComissao)}
-                        </td>
-                      ))}
-                      <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
-                        {fmt(comissaoTotal)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-
-            {/* Comissão individual quando só um mês */}
-            {comissaoPorMes.length <= 1 && (
-              <div className="space-y-2">
-                {relatorioVendedores.map((v, i) => (
-                  <div
-                    key={v.vendedorId ?? i}
-                    className="flex items-center justify-between rounded-lg px-4 py-3"
-                    style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
-                  >
-                    <div>
-                      <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</p>
-                      <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtN(v.totalPedidos)} pedidos · {fmt(v.totalValor)} em vendas</p>
-                    </div>
-                    <span className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(v.totalComissao)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Section>
-      )}
-
       {/* Ranking Clientes */}
       {rankingClientes.length > 0 && (
         <Section title="Top Clientes por Faturamento">
@@ -351,34 +248,6 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(c.totalValor)}</p>
                   <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(c.participacao)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Ranking Vendedores (resumo) */}
-      {rankingVendedores.length > 0 && (
-        <Section title="Top Vendedores por Faturamento">
-          <div className="space-y-2">
-            {rankingVendedores.map((v, i) => (
-              <div key={v.vendedorId ?? i} className="flex items-center gap-3">
-                <span
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                  style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
-                >
-                  {i + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</span>
-                  </div>
-                  <BarHorizontal percentage={v.participacao} height={5} />
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</p>
-                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(v.participacao)} &middot; {v.totalPedidos} pedidos</p>
                 </div>
               </div>
             ))}
@@ -436,6 +305,156 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
             ))}
           </div>
         </Section>
+      )}
+
+      {/* Bloco separado de gestão comercial por vendedor */}
+      {(relatorioVendedores.length > 0 || rankingVendedores.length > 0) && (
+        <section
+          className="rounded-xl border p-4 sm:p-5 space-y-4"
+          style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
+        >
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+              Gestão de Vendedores
+            </h3>
+            <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>
+              Área dedicada para desempenho comercial e comissões.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {relatorioVendedores.length > 0 && (
+              <div className="xl:col-span-2">
+                <Section title="Relatório por Vendedor">
+                  <div className="space-y-2">
+                    {relatorioVendedores.map((v, i) => (
+                      <VendedorRow
+                        key={v.vendedorId ?? i}
+                        v={v}
+                        taxaComissao={taxaComissao}
+                        defaultOpen={i === 0}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Ranking Vendedores (resumo) */}
+              {rankingVendedores.length > 0 && (
+                <Section title="Top Vendedores por Faturamento">
+                  <div className="space-y-2">
+                    {rankingVendedores.map((v, i) => (
+                      <div key={v.vendedorId ?? i} className="flex items-center gap-3">
+                        <span
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                          style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
+                        >
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</span>
+                          </div>
+                          <BarHorizontal percentage={v.participacao} height={5} />
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</p>
+                          <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(v.participacao)} &middot; {v.totalPedidos} pedidos</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {/* Resumo de Comissões a Pagar */}
+              {taxaComissao > 0 && relatorioVendedores.length > 0 && (
+                <Section title={`Comissões a Pagar — Taxa: ${taxaComissao}%`}>
+                  <div className="space-y-4">
+                    <div
+                      className="flex items-center justify-between rounded-lg px-4 py-3"
+                      style={{ background: 'color-mix(in srgb, #16a34a 10%, transparent)', border: '1px solid #16a34a40' }}
+                    >
+                      <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                        Total de comissões no período
+                      </span>
+                      <span className="text-xl font-bold" style={{ color: '#16a34a' }}>{fmt(comissaoTotal)}</span>
+                    </div>
+
+                    {comissaoPorMes.length > 1 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--ac-border)' }}>
+                              <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Mês</th>
+                              {relatorioVendedores.map((v, i) => (
+                                <th key={v.vendedorId ?? i} className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                                  {v.vendedorNome}
+                                </th>
+                              ))}
+                              <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total mês</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {comissaoPorMes.map((m, i) => (
+                              <tr key={m.mes} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
+                                <td className="py-2.5 pr-3 font-medium text-xs" style={{ color: 'var(--ac-text)' }}>{m.mesLabel}</td>
+                                {relatorioVendedores.map((v, vi) => {
+                                  const mesData = v.porMes.find((pm) => pm.mes === m.mes)
+                                  return (
+                                    <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums text-xs" style={{ color: '#16a34a' }}>
+                                      {mesData ? fmt(mesData.comissao) : '—'}
+                                    </td>
+                                  )
+                                })}
+                                <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                                  {fmt(m.total)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
+                              <td className="py-2.5 pr-3 font-bold text-xs" style={{ color: 'var(--ac-text)' }}>Total</td>
+                              {relatorioVendedores.map((v, vi) => (
+                                <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                                  {fmt(v.totalComissao)}
+                                </td>
+                              ))}
+                              <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                                {fmt(comissaoTotal)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+
+                    {comissaoPorMes.length <= 1 && (
+                      <div className="space-y-2">
+                        {relatorioVendedores.map((v, i) => (
+                          <div
+                            key={v.vendedorId ?? i}
+                            className="flex items-center justify-between rounded-lg px-4 py-3"
+                            style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+                          >
+                            <div>
+                              <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</p>
+                              <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtN(v.totalPedidos)} pedidos · {fmt(v.totalValor)} em vendas</p>
+                            </div>
+                            <span className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(v.totalComissao)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Section>
+              )}
+            </div>
+          </div>
+        </section>
       )}
     </div>
   )
