@@ -15,6 +15,7 @@ import { getCargos } from '@/lib/actions/cargos'
 import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
+import { defaultDateRange } from '@/lib/metricas-periodos'
 import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
 import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
@@ -293,7 +294,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     const perms = await getPermissoesEfetivas()
     const perm = perms.metricas as Perm
     assertAllowed(perm, 'metricas')
-    const data = await getMetricasVendas()
+    const data = await getMetricasVendas(defaultDateRange())
     return { kind: 'metricas-vendas', data }
   }
 
@@ -301,7 +302,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     const perms = await getPermissoesEfetivas()
     const perm = perms.metricas as Perm
     assertAllowed(perm, 'metricas')
-    const data = await getMetricasEstoque()
+    const data = await getMetricasEstoque(defaultDateRange())
     return { kind: 'metricas-estoque', data }
   }
 

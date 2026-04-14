@@ -4,31 +4,7 @@ import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { StatusPedido, StatusOC } from '@/types'
-import type { PeriodoId } from '@/lib/metricas-periodos'
-
-function calcularDatasPerido(periodo: PeriodoId): { desde: string | null; ate: string | null } {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = now.getMonth()
-  const d = now.getDate()
-
-  switch (periodo) {
-    case 'este_mes':
-      return { desde: new Date(y, m, 1).toISOString(), ate: null }
-    case 'mes_passado':
-      return { desde: new Date(y, m - 1, 1).toISOString(), ate: new Date(y, m, 1).toISOString() }
-    case '30d':
-      return { desde: new Date(y, m, d - 30).toISOString(), ate: null }
-    case '60d':
-      return { desde: new Date(y, m, d - 60).toISOString(), ate: null }
-    case '90d':
-      return { desde: new Date(y, m, d - 90).toISOString(), ate: null }
-    case '1ano':
-      return { desde: new Date(y - 1, m, d).toISOString(), ate: null }
-    case 'tudo':
-      return { desde: null, ate: null }
-  }
-}
+import { type DateRange, defaultDateRange } from '@/lib/metricas-periodos'
 
 // ── Vendas Types ──────────────────────────────────────────────────────────────
 
@@ -88,6 +64,23 @@ export type VendedorRanking = {
   participacao: number
 }
 
+export type RelatorioMesVendedor = {
+  mes: string
+  mesLabel: string
+  totalValor: number
+  totalPedidos: number
+  comissao: number
+}
+
+export type RelatorioVendedor = {
+  vendedorId: string | null
+  vendedorNome: string
+  totalValor: number
+  totalPedidos: number
+  totalComissao: number
+  porMes: RelatorioMesVendedor[]
+}
+
 export type MetricasVendasData = {
   kpi: KpiVendas
   vendasPorMes: VendasPorMes[]
@@ -96,7 +89,9 @@ export type MetricasVendasData = {
   pipeline: StatusPipeline[]
   vendasPorTipo: VendasPorTipoCliente[]
   rankingVendedores: VendedorRanking[]
-  periodo: PeriodoId
+  relatorioVendedores: RelatorioVendedor[]
+  taxaComissao: number
+  dateRange: DateRange
 }
 
 // ── Estoque Types ─────────────────────────────────────────────────────────────
@@ -187,7 +182,7 @@ export type MetricasEstoqueData = {
   consumoBom: ConsumoBom[]
   resumoOC: ResumoOC[]
   alertas: AlertaEstoque[]
-  periodo: PeriodoId
+  dateRange: DateRange
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -208,27 +203,27 @@ function mesLabel(yyyymm: string): string {
 
 // ── Vendas Queries ────────────────────────────────────────────────────────────
 
-export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<MetricasVendasData> {
+export async function getMetricasVendas(dateRange: DateRange = defaultDateRange()): Promise<MetricasVendasData> {
   await requireAuthenticatedUserId()
   await assertPermissao('metricas', 'ver')
 
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
     const admin = createAdminClient()
-    const { desde, ate } = calcularDatasPerido(periodo)
 
+    // ate é inclusivo: vamos até o fim do dia (usa lte com a data)
     let pedidosQuery = supabase
       .from('pedidos')
       .select('id, codigo, cliente_id, vendedor_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado), vendedor:usuarios_perfis(id, nome)')
+      .gte('data_pedido', dateRange.desde)
+      .lte('data_pedido', dateRange.ate)
 
-    if (desde) pedidosQuery = pedidosQuery.gte('data_pedido', desde.split('T')[0])
-    if (ate) pedidosQuery = pedidosQuery.lt('data_pedido', ate.split('T')[0])
-
-    const [pedidosRes, itensRes] = await Promise.all([
+    const [pedidosRes, itensRes, configRes] = await Promise.all([
       pedidosQuery,
       supabase
         .from('pedido_itens')
         .select('id, pedido_id, faca_id, quantidade, preco_unitario, subtotal, faca:facas(id, codigo, nome)'),
+      admin.from('app_config').select('taxa_comissao_lucro').limit(1).maybeSingle(),
     ])
 
     if (pedidosRes.error) throw new Error(pedidosRes.error.message)
@@ -236,6 +231,7 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
 
     const pedidos = pedidosRes.data ?? []
     const allItens = itensRes.data ?? []
+    const taxaComissao = Number(configRes.data?.taxa_comissao_lucro ?? 0)
 
     // Filter itens to only those belonging to fetched pedidos
     const pedidoIds = new Set(pedidos.map((p) => p.id))
@@ -322,6 +318,56 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
       .sort((a, b) => b.totalValor - a.totalValor)
       .slice(0, 10)
 
+    // ── Relatório completo por Vendedor (com breakdown mensal + comissões) ──
+    const relatorioMap = new Map<string, {
+      nome: string
+      meses: Map<string, { totalValor: number; totalPedidos: number }>
+    }>()
+
+    for (const p of pedidos) {
+      const vid = (p as any).vendedor_id ?? '__sem_vendedor__'
+      const vend = Array.isArray((p as any).vendedor) ? (p as any).vendedor[0] : (p as any).vendedor
+      const nome = (vend as any)?.nome ?? 'Sem vendedor'
+
+      if (!relatorioMap.has(vid)) {
+        relatorioMap.set(vid, { nome, meses: new Map() })
+      }
+      const entry = relatorioMap.get(vid)!
+      const d = new Date(p.data_pedido)
+      const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const mesEntry = entry.meses.get(mesKey) ?? { totalValor: 0, totalPedidos: 0 }
+      mesEntry.totalValor += Number(p.valor_total ?? 0)
+      mesEntry.totalPedidos += 1
+      entry.meses.set(mesKey, mesEntry)
+    }
+
+    const relatorioVendedores: RelatorioVendedor[] = Array.from(relatorioMap.entries())
+      .map(([vid, v]) => {
+        const porMes: RelatorioMesVendedor[] = Array.from(v.meses.entries())
+          .sort(([a], [b]) => b.localeCompare(a))
+          .map(([mes, m]) => ({
+            mes,
+            mesLabel: mesLabel(mes),
+            totalValor: m.totalValor,
+            totalPedidos: m.totalPedidos,
+            comissao: m.totalValor * (taxaComissao / 100),
+          }))
+
+        const totalValor = porMes.reduce((s, m) => s + m.totalValor, 0)
+        const totalPedidos = porMes.reduce((s, m) => s + m.totalPedidos, 0)
+        const totalComissao = porMes.reduce((s, m) => s + m.comissao, 0)
+
+        return {
+          vendedorId: vid === '__sem_vendedor__' ? null : vid,
+          vendedorNome: v.nome,
+          totalValor,
+          totalPedidos,
+          totalComissao,
+          porMes,
+        }
+      })
+      .sort((a, b) => b.totalValor - a.totalValor)
+
     // ── Ranking Produtos ──
     const produtoMap = new Map<string, { codigo: string; nome: string; totalValor: number; totalQuantidade: number }>()
     const totalItensValor = itens.reduce((s, i) => s + Number(i.subtotal ?? 0), 0)
@@ -389,40 +435,47 @@ export async function getMetricasVendas(periodo: PeriodoId = 'tudo'): Promise<Me
       }))
       .sort((a, b) => b.totalValor - a.totalValor)
 
-    return { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, rankingVendedores, periodo }
+    return {
+      kpi,
+      vendasPorMes,
+      rankingClientes,
+      rankingProdutos,
+      pipeline,
+      vendasPorTipo,
+      rankingVendedores,
+      relatorioVendedores,
+      taxaComissao,
+      dateRange,
+    }
   })
 }
 
 // ── Estoque Queries ───────────────────────────────────────────────────────────
 
-export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<MetricasEstoqueData> {
+export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange()): Promise<MetricasEstoqueData> {
   await requireAuthenticatedUserId()
   await assertPermissao('metricas', 'ver')
 
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
     const admin = createAdminClient()
-    const { desde, ate } = calcularDatasPerido(periodo)
 
-    // Movimentações filtradas por período. Sem join de usuario_id para evitar falha
-    // silenciosa caso a FK não esteja declarada no banco; o nome é resolvido manualmente.
-    let movQuery = admin
+    // Movimentações filtradas por período
+    const movQuery = admin
       .from('movimentacoes_estoque')
       .select(
         'id, tipo, quantidade, created_at, usuario_id, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)',
       )
       .order('created_at', { ascending: false })
-
-    if (desde) movQuery = movQuery.gte('created_at', desde)
-    if (ate) movQuery = movQuery.lt('created_at', ate)
+      .gte('created_at', dateRange.desde)
+      .lte('created_at', dateRange.ate + 'T23:59:59.999Z')
 
     // OCs filtradas por período
-    let ocQuery = supabase
+    const ocQuery = supabase
       .from('ordens_compra')
       .select('id, status, created_at, itens:ordem_compra_itens(quantidade, preco_unitario)')
-
-    if (desde) ocQuery = ocQuery.gte('created_at', desde)
-    if (ate) ocQuery = ocQuery.lt('created_at', ate)
+      .gte('created_at', dateRange.desde)
+      .lte('created_at', dateRange.ate + 'T23:59:59.999Z')
 
     const [facasRes, mpRes, movRes, bomRes, ocRes, usuariosRes] = await Promise.all([
       supabase.from('facas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_venda'),
@@ -463,17 +516,15 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
 
     // ── Saúde Estoque Facas ──
     const saudeFacas: SaudeEstoqueFaca[] = facas
-      .map((f) => {
-        return {
-          id: f.id,
-          codigo: f.codigo,
-          nome: f.nome,
-          estoqueAtual: Number(f.estoque_atual),
-          estoqueMinimo: Number(f.estoque_minimo),
-          status: estoqueStatus(Number(f.estoque_atual), Number(f.estoque_minimo)),
-          coberturaDias: null,
-        }
-      })
+      .map((f) => ({
+        id: f.id,
+        codigo: f.codigo,
+        nome: f.nome,
+        estoqueAtual: Number(f.estoque_atual),
+        estoqueMinimo: Number(f.estoque_minimo),
+        status: estoqueStatus(Number(f.estoque_atual), Number(f.estoque_minimo)),
+        coberturaDias: null,
+      }))
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
 
     // ── Saúde Estoque MP ──
@@ -542,7 +593,7 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
 
     const consumoBom = Array.from(bomMap.values()).sort((a, b) => a.facaNome.localeCompare(b.facaNome))
 
-    // ── Resumo OC (já filtradas pelo período na query) ──
+    // ── Resumo OC ──
     const ocMap = new Map<StatusOC, { quantidade: number; valorTotal: number }>()
     for (const oc of ocs) {
       const st = oc.status as StatusOC
@@ -600,6 +651,6 @@ export async function getMetricasEstoque(periodo: PeriodoId = 'tudo'): Promise<M
       }))
       .sort((a, b) => b.totalMovimentacoes - a.totalMovimentacoes)
 
-    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas, periodo }
+    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas, dateRange }
   })
 }
