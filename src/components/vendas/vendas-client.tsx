@@ -140,6 +140,18 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
     }
   }
 
+  async function handleVendaSaved() {
+    // Atualiza imediatamente a tabela local para refletir a venda recém-criada/editada.
+    try {
+      const fresh = await getErpTabData('/vendas')
+      if (fresh.kind === 'vendas') setPedidos(fresh.pedidos)
+    } catch {
+      // Se falhar, ainda dispara refresh da aba ativa como fallback.
+    } finally {
+      refreshActiveTab()
+    }
+  }
+
   // Count por status para os badges nas tabs
   const counts = useMemo(() => {
     const c: Record<string, number> = { todos: pedidos.length }
@@ -373,7 +385,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
         clientes={clientes}
         facas={facas}
         usuarios={usuarios}
-        onSaved={refreshActiveTab}
+        onSaved={handleVendaSaved}
       />
 
       <VendaDetalheModal
