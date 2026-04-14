@@ -17,6 +17,7 @@ export function colunasPermissaoModulo(modulo: ModuloKey): PermColKey[] {
   if (modulo === 'lucro') return ['ver']
   if (modulo === 'taxas_lucro') return ['ver', 'editar']
   if (modulo === 'preco_venda') return ['ver', 'editar']
+  if (modulo === 'movimentacoes_estoque') return ['editar']
   return ['ver', 'criar', 'editar', 'deletar']
 }
 

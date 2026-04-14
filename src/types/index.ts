@@ -155,6 +155,7 @@ export const MODULOS = [
   { key: 'dashboard',       label: 'Dashboard' },
   { key: 'metricas',        label: 'Métricas' },
   { key: 'materias_primas', label: 'Matérias-Primas' },
+  { key: 'movimentacoes_estoque', label: 'Movimentações de Estoque' },
   { key: 'fornecedores',    label: 'Fornecedores' },
   { key: 'facas',           label: 'Facas' },
   { key: 'consumiveis',     label: 'Consumíveis' },
