@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { criarVenda, atualizarVenda } from '@/lib/actions/vendas'
@@ -185,7 +186,25 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         {/* Linha 1: Cliente + Vendedor */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cliente</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cliente</label>
+              <Link
+                href="/clientes"
+                onClick={onClose}
+                className="flex items-center gap-1 text-xs font-medium transition-colors"
+                style={{ color: 'var(--ac-muted)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ac-accent)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ac-muted)')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3.5 shrink-0" aria-hidden>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Gerenciar clientes
+              </Link>
+            </div>
             <select
               value={clienteId}
               onChange={(e) => setClienteId(e.target.value)}
