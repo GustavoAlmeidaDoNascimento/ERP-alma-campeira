@@ -443,7 +443,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
           <div className="grid grid-cols-2 gap-3">
             <Input
               id="qtd-produzir"
-              label="Quantidade a produzir"
+              label="Quantidade produzida"
               type="number"
               min="1"
               step="1"
