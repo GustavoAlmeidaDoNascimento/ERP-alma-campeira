@@ -104,9 +104,14 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
     setEntradaLoading(true)
     try {
       const result = await entradaEstoqueFaca(faca.id, qtdProduzir, usuarioEntradaId || null)
+      const usuarioSelecionado = usuarios.find((u) => u.id === usuarioEntradaId) ?? null
+      const criadasEnriquecidas = (result.movimentacoesCriadas ?? []).map((m) => ({
+        ...m,
+        usuario: m.usuario ?? (usuarioSelecionado ? { id: usuarioSelecionado.id, nome: usuarioSelecionado.nome } : null),
+      }))
       setMovimentacoesState((prev) => {
         const ids = new Set(prev.map((m) => m.id))
-        const novas = (result.movimentacoesCriadas ?? []).filter((m) => !ids.has(m.id))
+        const novas = criadasEnriquecidas.filter((m) => !ids.has(m.id))
         return [...novas, ...prev]
       })
       const resumo = result.materiaisConsumidos

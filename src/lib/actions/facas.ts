@@ -392,8 +392,9 @@ export type FacaDetalheData = {
 const getFacaDetalheCached = unstable_cache(
   async (_userId: string, facaId: string): Promise<FacaDetalheData> => {
     const supabase = await createClient()
+    const admin = createAdminClient()
 
-    const [facaRes, bomRes, vendasRes, movRes] = await Promise.all([
+    const [facaRes, bomRes, vendasRes, movRes, usuariosRes] = await Promise.all([
       supabase.from('facas').select('*').eq('id', facaId).single(),
       supabase
         .from('faca_materias_primas')
@@ -406,22 +407,36 @@ const getFacaDetalheCached = unstable_cache(
         .eq('faca_id', facaId)
         .order('id', { ascending: false })
         .limit(50),
-      supabase
+      // Não usa join para usuario_id -> usuarios_perfis para evitar falha quando
+      // a FK não estiver declarada no banco; enriquecemos manualmente abaixo.
+      admin
         .from('movimentacoes_estoque')
-        .select('*, materia_prima:materias_primas(id, codigo, nome), usuario:usuarios_perfis(id, nome)')
+        .select('*, materia_prima:materias_primas(id, codigo, nome)')
         .eq('faca_id', facaId)
         .order('created_at', { ascending: false })
         .limit(50),
+      supabase
+        .from('usuarios_perfis')
+        .select('id, nome')
+        .eq('ativo', true)
+        .order('nome'),
     ])
 
     if (facaRes.error) throw new Error(facaRes.error.message)
     if (!facaRes.data) throw new Error('Faca não encontrada.')
+    if (movRes.error) throw new Error(`Erro ao buscar movimentações da faca: ${movRes.error.message}`)
+
+    const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }]))
+    const movimentacoes = (movRes.data ?? []).map((mov) => ({
+      ...mov,
+      usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
+    })) as MovimentacaoEstoque[]
 
     return {
       faca: facaRes.data as Faca,
       bom: (bomRes.data ?? []) as FacaMateriaPrima[],
       vendas: (vendasRes.data ?? []) as PedidoItemComPedido[],
-      movimentacoes: (movRes.data ?? []) as MovimentacaoEstoque[],
+      movimentacoes,
     }
   },
   ['faca-detalhe'],
@@ -562,7 +577,7 @@ export async function entradaEstoqueFaca(
         observacao: `Produção de ${quantidadeProduzida}x ${faca.codigo}`,
         usuario_id: userId,
       })
-      .select('*, materia_prima:materias_primas(id, codigo, nome), usuario:usuarios_perfis(id, nome)')
+      .select('*, materia_prima:materias_primas(id, codigo, nome)')
       .single()
     if (movErr) throw new Error(movErr.message)
     if (movCriada) movimentacoesCriadas.push(movCriada as unknown as MovimentacaoEstoque)
