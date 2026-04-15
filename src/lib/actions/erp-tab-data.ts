@@ -54,6 +54,7 @@ export type ErpTabData =
       categorias: CategoriaFacaDB[]
       perm: Perm
       verPrecoVenda: boolean
+      usuarios: { id: string; nome: string }[]
     }
   | {
       kind: 'fornecedores'
@@ -184,15 +185,17 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   const facaDetalheMatch = path.match(/^\/facas\/([a-f0-9-]+)$/)
   if (facaDetalheMatch) {
     const facaId = facaDetalheMatch[1]
-    const [perms, detalhe, materiasPrimas, categorias] = await Promise.all([
+    const [perms, detalhe, materiasPrimas, categorias, todosUsuarios] = await Promise.all([
       getPermissoesEfetivas(),
       getFacaDetalhe(facaId),
       getMatériasPrimas(200),
       getCategoriasFaca(),
+      getUsuarios(200),
     ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
-    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm, verPrecoVenda: perms.preco_venda.ver }
+    const usuarios = todosUsuarios.map((u: Usuario) => ({ id: u.id, nome: u.nome }))
+    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm, verPrecoVenda: perms.preco_venda.ver, usuarios }
   }
 
   if (path === '/fornecedores') {

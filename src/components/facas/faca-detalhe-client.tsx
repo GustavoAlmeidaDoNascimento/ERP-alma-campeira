@@ -90,12 +90,13 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
     setEntradaSucesso('')
     setEntradaLoading(true)
     try {
-      const result = await entradaEstoqueFaca(faca.id, qtdProduzir)
+      const result = await entradaEstoqueFaca(faca.id, qtdProduzir, usuarioEntradaId || null)
       const resumo = result.materiaisConsumidos
         .map((m) => `${m.codigo}: -${m.consumido}`)
         .join(', ')
       setEntradaSucesso(`${qtdProduzir}x ${faca.codigo} produzidas. Consumo: ${resumo}`)
       setQuantidadeProduzir('1')
+      setUsuarioEntradaId('')
       setEntradaModalOpen(false)
       refreshActiveTab()
     } catch (e: unknown) {
