@@ -440,15 +440,48 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
             O sistema descontará automaticamente as matérias-primas do estoque.
           </p>
 
-          <Input
-            id="qtd-produzir"
-            label="Quantidade a produzir"
-            type="number"
-            min="1"
-            step="1"
-            value={quantidadeProduzir}
-            onChange={(e) => { setQuantidadeProduzir(e.target.value); setEntradaErro(''); setEntradaSucesso('') }}
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="qtd-produzir"
+              label="Quantidade a produzir"
+              type="number"
+              min="1"
+              step="1"
+              value={quantidadeProduzir}
+              onChange={(e) => { setQuantidadeProduzir(e.target.value); setEntradaErro(''); setEntradaSucesso('') }}
+            />
+
+            {usuarios.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="usuario-entrada" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+                  Registrado por
+                </label>
+                <select
+                  id="usuario-entrada"
+                  value={usuarioEntradaId}
+                  onChange={(e) => setUsuarioEntradaId(e.target.value)}
+                  className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-all appearance-none"
+                  style={{
+                    background: 'var(--ac-card)',
+                    border: '1px solid var(--ac-border)',
+                    color: 'var(--ac-text)',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 10px center',
+                    backgroundSize: '16px',
+                    paddingRight: '36px',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+                >
+                  <option value="">— Usuário atual —</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>{u.nome}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
 
           {/* Preview de consumo */}
           {qtdProduzir > 0 && bom.length > 0 && (
