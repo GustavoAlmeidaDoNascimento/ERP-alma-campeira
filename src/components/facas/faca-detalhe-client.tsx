@@ -97,29 +97,18 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
   const todosDisponíveis = previewConsumo.every((p) => p.suficiente)
 
   async function handleEntrada() {
+    if (entradaLoading) return
     if (qtdProduzir <= 0) return
     setEntradaErro('')
     setEntradaSucesso('')
     setEntradaLoading(true)
     try {
       const result = await entradaEstoqueFaca(faca.id, qtdProduzir, usuarioEntradaId || null)
-      const agoraIso = new Date().toISOString()
-      const usuarioSelecionado = usuarios.find((u) => u.id === usuarioEntradaId)
-      const novasMovimentacoes: MovimentacaoEstoque[] = result.materiaisConsumidos.map((m, idx) => ({
-        id: `local-${Date.now()}-${idx}`,
-        tipo: 'saida_producao',
-        materia_prima_id: null,
-        faca_id: faca.id,
-        consumivel_id: null,
-        pedido_id: null,
-        quantidade: m.consumido,
-        observacao: `Produção de ${qtdProduzir}x ${faca.codigo}`,
-        usuario_id: usuarioEntradaId || null,
-        created_at: agoraIso,
-        materia_prima: { id: `local-${idx}`, codigo: m.codigo, nome: m.nome },
-        usuario: usuarioSelecionado ? { id: usuarioSelecionado.id, nome: usuarioSelecionado.nome } : null,
-      }))
-      setMovimentacoesState((prev) => [...novasMovimentacoes, ...prev])
+      setMovimentacoesState((prev) => {
+        const ids = new Set(prev.map((m) => m.id))
+        const novas = (result.movimentacoesCriadas ?? []).filter((m) => !ids.has(m.id))
+        return [...novas, ...prev]
+      })
       const resumo = result.materiaisConsumidos
         .map((m) => `${m.codigo}: -${m.consumido}`)
         .join(', ')
@@ -495,14 +484,26 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                           {mov.observacao ?? '—'}
                         </td>
                         {permEditarMovAdmin && (
-                          <td className="px-4 py-2.5 text-right">
+                          <td className="px-4 py-2.5 text-center">
                             <button
                               type="button"
                               onClick={() => abrirEdicaoMov(mov)}
-                              className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors"
-                              style={{ color: 'var(--ac-accent)', background: 'color-mix(in srgb, var(--ac-accent) 12%, transparent)' }}
+                              className="inline-flex items-center justify-center size-7 rounded-md transition-all"
+                              style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)', color: 'var(--ac-muted)' }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--ac-accent)'
+                                e.currentTarget.style.borderColor = 'var(--ac-accent)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--ac-muted)'
+                                e.currentTarget.style.borderColor = 'var(--ac-border)'
+                              }}
+                              title="Editar movimentação"
                             >
-                              Editar
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3.5">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
                             </button>
                           </td>
                         )}

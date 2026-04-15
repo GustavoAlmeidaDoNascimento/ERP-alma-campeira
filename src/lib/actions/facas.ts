@@ -408,7 +408,7 @@ const getFacaDetalheCached = unstable_cache(
         .limit(50),
       supabase
         .from('movimentacoes_estoque')
-        .select('*, materia_prima:materias_primas(id, codigo, nome)')
+        .select('*, materia_prima:materias_primas(id, codigo, nome), usuario:usuarios_perfis(id, nome)')
         .eq('faca_id', facaId)
         .order('created_at', { ascending: false })
         .limit(50),
@@ -472,7 +472,7 @@ export async function entradaEstoqueFaca(
   facaId: string,
   quantidadeProduzida: number,
   registradoPorId?: string | null
-): Promise<{ materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] }> {
+): Promise<{ materiaisConsumidos: { codigo: string; nome: string; consumido: number }[]; movimentacoesCriadas: MovimentacaoEstoque[] }> {
   await assertPermissao('facas', 'editar')
 
   if (!Number.isFinite(quantidadeProduzida) || quantidadeProduzida <= 0) {
@@ -535,6 +535,7 @@ export async function entradaEstoqueFaca(
   const authUserId = await requireAuthenticatedUserId()
   const userId = registradoPorId || authUserId
   const materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] = []
+  const movimentacoesCriadas: MovimentacaoEstoque[] = []
 
   for (const bom of boms) {
     const mp = mpMap.get(bom.materia_prima_id)
@@ -551,15 +552,20 @@ export async function entradaEstoqueFaca(
       .eq('id', bom.materia_prima_id)
     if (updErr) throw new Error(updErr.message)
 
-    const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-      tipo: 'saida_producao',
-      materia_prima_id: bom.materia_prima_id,
-      faca_id: facaId,
-      quantidade: consumo,
-      observacao: `Produção de ${quantidadeProduzida}x ${faca.codigo}`,
-      usuario_id: userId,
-    })
+    const { data: movCriada, error: movErr } = await supabase
+      .from('movimentacoes_estoque')
+      .insert({
+        tipo: 'saida_producao',
+        materia_prima_id: bom.materia_prima_id,
+        faca_id: facaId,
+        quantidade: consumo,
+        observacao: `Produção de ${quantidadeProduzida}x ${faca.codigo}`,
+        usuario_id: userId,
+      })
+      .select('*, materia_prima:materias_primas(id, codigo, nome), usuario:usuarios_perfis(id, nome)')
+      .single()
     if (movErr) throw new Error(movErr.message)
+    if (movCriada) movimentacoesCriadas.push(movCriada as unknown as MovimentacaoEstoque)
 
     materiaisConsumidos.push({ codigo: mp.codigo, nome: mp.nome, consumido: consumo })
   }
@@ -577,7 +583,7 @@ export async function entradaEstoqueFaca(
   revalidateTag('materias-primas-list', 'max')
   revalidateTag('faca-detalhe', 'max')
 
-  return { materiaisConsumidos }
+  return { materiaisConsumidos, movimentacoesCriadas }
 }
 
 export async function atualizarMovimentacaoFacaProducao(input: {
