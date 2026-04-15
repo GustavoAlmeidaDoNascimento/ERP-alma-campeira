@@ -55,6 +55,7 @@ export type ErpTabData =
       perm: Perm
       verPrecoVenda: boolean
       usuarios: { id: string; nome: string }[]
+      permEditarMovAdmin: boolean
     }
   | {
       kind: 'fornecedores'
@@ -195,7 +196,8 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
     const usuarios = todosUsuarios.map((u: Usuario) => ({ id: u.id, nome: u.nome }))
-    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm, verPrecoVenda: perms.preco_venda.ver, usuarios }
+    const permEditarMovAdmin = !!(perms as any).usuarios?.editar
+    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm, verPrecoVenda: perms.preco_venda.ver, usuarios, permEditarMovAdmin }
   }
 
   if (path === '/fornecedores') {

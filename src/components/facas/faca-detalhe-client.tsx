@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { FacaModal } from './faca-modal'
-import { entradaEstoqueFaca } from '@/lib/actions/facas'
+import { entradaEstoqueFaca, atualizarMovimentacaoFacaProducao } from '@/lib/actions/facas'
 import { statusEstoqueFaca, STATUS_PEDIDO } from '@/types'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, CategoriaFacaDB, MateriaPrima } from '@/types'
 import type { FacaDetalheData } from '@/lib/actions/facas'
@@ -25,9 +25,10 @@ type Props = {
   verPrecoVenda: boolean
   taxasLucro?: TaxasLucro
   usuarios?: { id: string; nome: string }[]
+  permEditarMovAdmin?: boolean
 }
 
-export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda, taxasLucro, usuarios = [] }: Props) {
+export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda, taxasLucro, usuarios = [], permEditarMovAdmin = false }: Props) {
   const { faca, bom, vendas, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
@@ -39,6 +40,12 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
   const [entradaErro, setEntradaErro] = useState('')
   const [entradaSucesso, setEntradaSucesso] = useState('')
   const [movimentacoesState, setMovimentacoesState] = useState<MovimentacaoEstoque[]>(movimentacoes)
+  const [movEdicao, setMovEdicao] = useState<MovimentacaoEstoque | null>(null)
+  const [movQtd, setMovQtd] = useState('')
+  const [movUsuarioId, setMovUsuarioId] = useState('')
+  const [movObs, setMovObs] = useState('')
+  const [movSalvarLoading, setMovSalvarLoading] = useState(false)
+  const [movSalvarErro, setMovSalvarErro] = useState('')
 
   useEffect(() => {
     setMovimentacoesState(movimentacoes)
@@ -125,6 +132,58 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
       setEntradaErro(e instanceof Error ? e.message : 'Erro ao registrar entrada.')
     } finally {
       setEntradaLoading(false)
+    }
+  }
+
+  function abrirEdicaoMov(mov: MovimentacaoEstoque) {
+    if (!permEditarMovAdmin) return
+    setMovSalvarErro('')
+    setMovEdicao(mov)
+    setMovQtd(String(mov.quantidade))
+    setMovUsuarioId(mov.usuario_id ?? '')
+    setMovObs(mov.observacao ?? '')
+  }
+
+  async function salvarEdicaoMov() {
+    if (!movEdicao) return
+    setMovSalvarErro('')
+    const qtd = Number(movQtd)
+    if (!Number.isFinite(qtd) || qtd <= 0) {
+      setMovSalvarErro('Quantidade deve ser maior que zero.')
+      return
+    }
+    if (!movUsuarioId) {
+      setMovSalvarErro('Selecione o usuário responsável.')
+      return
+    }
+    setMovSalvarLoading(true)
+    try {
+      await atualizarMovimentacaoFacaProducao({
+        movimentacaoId: movEdicao.id,
+        quantidade: qtd,
+        usuarioId: movUsuarioId,
+        observacao: movObs || null,
+      })
+      const usuario = usuarios.find((u) => u.id === movUsuarioId) ?? null
+      setMovimentacoesState((prev) =>
+        prev.map((m) =>
+          m.id === movEdicao.id
+            ? {
+                ...m,
+                quantidade: qtd,
+                usuario_id: movUsuarioId,
+                usuario: usuario ? { id: usuario.id, nome: usuario.nome } : null,
+                observacao: movObs || null,
+              }
+            : m
+        )
+      )
+      setMovEdicao(null)
+      refreshActiveTab()
+    } catch (e: unknown) {
+      setMovSalvarErro(e instanceof Error ? e.message : 'Erro ao salvar movimentação.')
+    } finally {
+      setMovSalvarLoading(false)
     }
   }
 
@@ -399,8 +458,12 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Tipo</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Matéria-Prima</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Usuário</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Quantidade</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</th>
+                    {permEditarMovAdmin && (
+                      <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Ações</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -422,12 +485,27 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
                           {mov.materia_prima ? `${mov.materia_prima.codigo} — ${mov.materia_prima.nome}` : '—'}
                         </td>
+                        <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
+                          {mov.usuario?.nome ?? '—'}
+                        </td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                           {mov.quantidade}
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-muted)' }}>
                           {mov.observacao ?? '—'}
                         </td>
+                        {permEditarMovAdmin && (
+                          <td className="px-4 py-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => abrirEdicaoMov(mov)}
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                              style={{ color: 'var(--ac-accent)', background: 'color-mix(in srgb, var(--ac-accent) 12%, transparent)' }}
+                            >
+                              Editar
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -568,6 +646,82 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
               disabled={!todosDisponíveis || qtdProduzir <= 0}
             >
               Confirmar Produção
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!movEdicao}
+        onClose={() => !movSalvarLoading && setMovEdicao(null)}
+        title="Editar movimentação de estoque"
+        width="560px"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              id="mov-qtd"
+              label="Quantidade"
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={movQtd}
+              onChange={(e) => setMovQtd(e.target.value)}
+            />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="mov-usuario" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+                Usuário responsável
+              </label>
+              <select
+                id="mov-usuario"
+                value={movUsuarioId}
+                onChange={(e) => setMovUsuarioId(e.target.value)}
+                className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-all appearance-none"
+                style={{
+                  background: 'var(--ac-card)',
+                  border: '1px solid var(--ac-border)',
+                  color: 'var(--ac-text)',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 10px center',
+                  backgroundSize: '16px',
+                  paddingRight: '36px',
+                }}
+              >
+                <option value="">Selecione...</option>
+                {usuarios.map((u) => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="mov-obs" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              Observação
+            </label>
+            <textarea
+              id="mov-obs"
+              rows={3}
+              value={movObs}
+              onChange={(e) => setMovObs(e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[3rem]"
+              style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+            />
+          </div>
+
+          {movSalvarErro && (
+            <p className="text-sm rounded-lg px-3 py-2 whitespace-pre-line" style={{ color: '#dc2626', background: '#fee2e2' }}>
+              {movSalvarErro}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setMovEdicao(null)} disabled={movSalvarLoading}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={salvarEdicaoMov} loading={movSalvarLoading}>
+              Salvar
             </Button>
           </div>
         </div>

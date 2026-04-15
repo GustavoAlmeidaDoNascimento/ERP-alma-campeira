@@ -579,3 +579,75 @@ export async function entradaEstoqueFaca(
 
   return { materiaisConsumidos }
 }
+
+export async function atualizarMovimentacaoFacaProducao(input: {
+  movimentacaoId: string
+  quantidade: number
+  usuarioId: string
+  observacao?: string | null
+}): Promise<void> {
+  await assertPermissao('movimentacoes_estoque', 'editar')
+  await assertPermissao('usuarios', 'editar')
+
+  const { movimentacaoId, quantidade, usuarioId, observacao } = input
+  if (!movimentacaoId) throw new Error('ID da movimentação é obrigatório.')
+  if (!Number.isFinite(quantidade) || quantidade <= 0) throw new Error('Quantidade deve ser maior que zero.')
+  if (!usuarioId) throw new Error('Selecione o usuário responsável.')
+
+  const admin = createAdminClient()
+
+  const { data: movAtual, error: movErr } = await admin
+    .from('movimentacoes_estoque')
+    .select('id, tipo, quantidade, materia_prima_id, faca_id')
+    .eq('id', movimentacaoId)
+    .single()
+  if (movErr) throw new Error(movErr.message)
+  if (!movAtual) throw new Error('Movimentação não encontrada.')
+  if (movAtual.tipo !== 'saida_producao') throw new Error('Somente movimentações de produção podem ser editadas aqui.')
+  if (!movAtual.materia_prima_id) throw new Error('Movimentação sem matéria-prima vinculada.')
+
+  const { data: usuario, error: userErr } = await admin
+    .from('usuarios_perfis')
+    .select('id')
+    .eq('id', usuarioId)
+    .single()
+  if (userErr) throw new Error(userErr.message)
+  if (!usuario) throw new Error('Usuário não encontrado.')
+
+  const { data: mp, error: mpErr } = await admin
+    .from('materias_primas')
+    .select('id, estoque_atual')
+    .eq('id', movAtual.materia_prima_id)
+    .single()
+  if (mpErr) throw new Error(mpErr.message)
+  if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
+
+  const quantidadeAntiga = Number(movAtual.quantidade)
+  const delta = quantidade - quantidadeAntiga
+  const novoEstoque = round3(Number(mp.estoque_atual) - delta)
+  if (novoEstoque < 0) throw new Error('Operação inválida: o estoque da matéria-prima ficaria negativo.')
+
+  const { error: updMovErr } = await admin
+    .from('movimentacoes_estoque')
+    .update({
+      quantidade,
+      usuario_id: usuarioId,
+      observacao: observacao?.trim() || null,
+    })
+    .eq('id', movimentacaoId)
+  if (updMovErr) throw new Error(updMovErr.message)
+
+  if (delta !== 0) {
+    const { error: updMpErr } = await admin
+      .from('materias_primas')
+      .update({ estoque_atual: novoEstoque })
+      .eq('id', mp.id)
+    if (updMpErr) throw new Error(updMpErr.message)
+  }
+
+  revalidatePath('/facas')
+  if (movAtual.faca_id) revalidatePath(`/facas/${movAtual.faca_id}`)
+  revalidatePath('/materias-primas')
+  revalidateTag('faca-detalhe', 'max')
+  revalidateTag('materias-primas-list', 'max')
+}
