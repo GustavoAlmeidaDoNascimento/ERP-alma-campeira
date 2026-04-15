@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
@@ -38,6 +38,11 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
   const [entradaLoading, setEntradaLoading] = useState(false)
   const [entradaErro, setEntradaErro] = useState('')
   const [entradaSucesso, setEntradaSucesso] = useState('')
+  const [movimentacoesState, setMovimentacoesState] = useState<MovimentacaoEstoque[]>(movimentacoes)
+
+  useEffect(() => {
+    setMovimentacoesState(movimentacoes)
+  }, [movimentacoes])
 
   const fotoUrl = faca.foto_url
     ? getOptimizedSupabaseImageUrl(faca.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
@@ -91,6 +96,23 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
     setEntradaLoading(true)
     try {
       const result = await entradaEstoqueFaca(faca.id, qtdProduzir, usuarioEntradaId || null)
+      const agoraIso = new Date().toISOString()
+      const usuarioSelecionado = usuarios.find((u) => u.id === usuarioEntradaId)
+      const novasMovimentacoes: MovimentacaoEstoque[] = result.materiaisConsumidos.map((m, idx) => ({
+        id: `local-${Date.now()}-${idx}`,
+        tipo: 'saida_producao',
+        materia_prima_id: null,
+        faca_id: faca.id,
+        consumivel_id: null,
+        pedido_id: null,
+        quantidade: m.consumido,
+        observacao: `Produção de ${qtdProduzir}x ${faca.codigo}`,
+        usuario_id: usuarioEntradaId || null,
+        created_at: agoraIso,
+        materia_prima: { id: `local-${idx}`, codigo: m.codigo, nome: m.nome },
+        usuario: usuarioSelecionado ? { id: usuarioSelecionado.id, nome: usuarioSelecionado.nome } : null,
+      }))
+      setMovimentacoesState((prev) => [...novasMovimentacoes, ...prev])
       const resumo = result.materiaisConsumidos
         .map((m) => `${m.codigo}: -${m.consumido}`)
         .join(', ')
@@ -367,7 +389,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
         {/* ========== Movimentações ========== */}
         <section>
           <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>Movimentações de Estoque</h3>
-          {movimentacoes.length === 0 ? (
+          {movimentacoesState.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentação registrada.</p>
           ) : (
             <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
@@ -382,7 +404,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                   </tr>
                 </thead>
                 <tbody>
-                  {movimentacoes.map((mov, i) => {
+                  {movimentacoesState.map((mov, i) => {
                     const tl = tipoMovLabel[mov.tipo] ?? tipoMovLabel['ajuste']
                     return (
                       <tr key={mov.id} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
