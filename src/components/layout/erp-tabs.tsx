@@ -363,7 +363,7 @@ function TabPane({
         />
       )
     case 'faca-detalhe':
-      return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} verPrecoVenda={data.verPrecoVenda} />
+      return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} verPrecoVenda={data.verPrecoVenda} usuarios={data.usuarios} />
     case 'fornecedores':
       return <FornecedoresClient fornecedores={data.fornecedores} perm={data.perm} />
     case 'ordens-compra':
