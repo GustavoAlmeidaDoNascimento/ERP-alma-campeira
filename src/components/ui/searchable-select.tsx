@@ -77,6 +77,7 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
+  const [openUpward, setOpenUpward] = useState(false)
 
   const selectedOption = useMemo(() => options.find((o) => o.value === value), [options, value])
   const selectedLabel = selectedOption?.label ?? ''
@@ -106,6 +107,17 @@ export function SearchableSelect({
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const root = rootRef.current
+    if (!root) return
+    const rect = root.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    const expectedListHeight = 320
+    setOpenUpward(spaceBelow < expectedListHeight && spaceAbove > spaceBelow)
   }, [open])
 
   const pick = useCallback(
@@ -203,7 +215,9 @@ export function SearchableSelect({
           id={`${id}-listbox`}
           ref={listRef}
           role="listbox"
-          className="absolute z-[60] mt-1 max-h-60 w-full overflow-auto rounded-lg border py-1 shadow-lg sm:max-h-72"
+          className={`absolute left-0 z-[60] w-full overflow-auto rounded-lg border py-1 shadow-lg ${
+            openUpward ? 'bottom-full mb-1 max-h-52 sm:max-h-60' : 'top-full mt-1 max-h-60 sm:max-h-72'
+          }`}
           style={{
             background: 'var(--ac-card)',
             borderColor: 'var(--ac-border)',
