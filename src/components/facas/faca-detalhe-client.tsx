@@ -24,15 +24,17 @@ type Props = {
   perm: Perm
   verPrecoVenda: boolean
   taxasLucro?: TaxasLucro
+  usuarios?: { id: string; nome: string }[]
 }
 
-export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda, taxasLucro }: Props) {
+export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda, taxasLucro, usuarios = [] }: Props) {
   const { faca, bom, vendas, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [entradaModalOpen, setEntradaModalOpen] = useState(false)
   const [quantidadeProduzir, setQuantidadeProduzir] = useState('1')
+  const [usuarioEntradaId, setUsuarioEntradaId] = useState('')
   const [entradaLoading, setEntradaLoading] = useState(false)
   const [entradaErro, setEntradaErro] = useState('')
   const [entradaSucesso, setEntradaSucesso] = useState('')

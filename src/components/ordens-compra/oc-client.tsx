@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { Select } from '@/components/ui/select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import {
   getFilaReposicao,
@@ -641,14 +642,6 @@ function OcCriarModal({
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const opcoesFornecedor = useMemo(
-    () => [
-      { value: '', label: 'Sem fornecedor' },
-      ...fornecedores.map((f) => ({ value: f.id, label: f.nome })),
-    ],
-    [fornecedores]
-  )
-
   const mpById = useMemo(() => new Map(materiasPrimas.map((m) => [m.id, m])), [materiasPrimas])
 
   const opcoesMateria = useMemo(
@@ -802,15 +795,18 @@ function OcCriarModal({
           <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
             Fornecedor
           </label>
-          <SearchableSelect
+          <Select
             value={fornecedorId}
-            onChange={setFornecedorId}
-            options={opcoesFornecedor}
-            placeholder="Pesquisar fornecedor…"
+            onChange={(e) => setFornecedorId(e.target.value)}
             disabled={carregando}
-            loading={carregando}
-            emptyMessage="Nenhum fornecedor"
-          />
+          >
+            <option value="">Sem fornecedor</option>
+            {fornecedores.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.nome}
+              </option>
+            ))}
+          </Select>
         </div>
 
         <div className="space-y-1.5 shrink-0">

@@ -470,7 +470,8 @@ async function calcularPrecoCustoPorFaca(
 
 export async function entradaEstoqueFaca(
   facaId: string,
-  quantidadeProduzida: number
+  quantidadeProduzida: number,
+  registradoPorId?: string | null
 ): Promise<{ materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] }> {
   await assertPermissao('facas', 'editar')
 
@@ -531,7 +532,8 @@ export async function entradaEstoqueFaca(
     throw new Error(`Matérias-primas insuficientes:\n${detalhes}`)
   }
 
-  const userId = await requireAuthenticatedUserId()
+  const authUserId = await requireAuthenticatedUserId()
+  const userId = registradoPorId || authUserId
   const materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] = []
 
   for (const bom of boms) {
