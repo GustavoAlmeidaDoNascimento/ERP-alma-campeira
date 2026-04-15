@@ -790,7 +790,7 @@ function OcCriarModal({
   }, [linhas, mpById])
 
   return (
-    <Modal open={open} onClose={onClose} title="Nova ordem de compra">
+    <Modal open={open} onClose={onClose} title="Nova ordem de compra" width="920px">
       <div className="flex flex-col gap-4 max-h-[min(85vh,720px)]">
         {erro && (
           <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#fee2e2', color: '#dc2626' }}>
@@ -841,8 +841,8 @@ function OcCriarModal({
             </Button>
           </div>
 
-          <div className="overflow-x-auto rounded-lg -mx-1 px-1" style={{ border: '1px solid var(--ac-border)' }}>
-            <table className="w-full text-sm min-w-[640px]">
+          <div>
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
                   <th className="px-2 py-2 text-left text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
@@ -868,7 +868,7 @@ function OcCriarModal({
                         placeholder="Escolher…"
                         disabled={carregando}
                         loading={carregando}
-                        className="min-w-[200px]"
+                        className="w-full"
                       />
                     </td>
                     <td className="px-2 py-2 align-top">
