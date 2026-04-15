@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
@@ -28,7 +29,34 @@ const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'entregue', label: 'Entregue' },
 ]
 
+function normalizeDate(date: string) {
+  const d = new Date(`${date}T12:00:00`)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function parseStatusParam(value: string | null): StatusPedido | 'todos' {
+  if (value === 'em_espera' || value === 'em_producao' || value === 'entregue') return value
+  return 'todos'
+}
+
+function isFullDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
 export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuarios, perm }: Props) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const statusParam = searchParams.get('status')
+  const vendedorParam = searchParams.get('vendedor')
+  const clienteParam = searchParams.get('cliente')
+  const valorMinParam = searchParams.get('valor_min')
+  const valorMaxParam = searchParams.get('valor_max')
+  const dataInicioParam = searchParams.get('data_inicio')
+  const dataFimParam = searchParams.get('data_fim')
+  const isVendasRoute = pathname === '/vendas'
+
   const [pedidos, setPedidos] = useState<Pedido[]>(pedidosIniciais)
   const { refreshActiveTab, refreshTab } = useErpTabs()
   const [formAberto, setFormAberto] = useState(false)
@@ -38,8 +66,13 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   const [deletando, setDeletando] = useState<Pedido | null>(null)
   const [erroDelete, setErroDelete] = useState('')
   const [loadingDelete, setLoadingDelete] = useState(false)
-  const [filtroStatus, setFiltroStatus] = useState<StatusPedido | 'todos'>('todos')
-  const [busca, setBusca] = useState('')
+  const [filtroStatus, setFiltroStatus] = useState<StatusPedido | 'todos'>(() => parseStatusParam(statusParam))
+  const [filtroVendedor, setFiltroVendedor] = useState(() => vendedorParam ?? '')
+  const [filtroCliente, setFiltroCliente] = useState(() => clienteParam ?? '')
+  const [valorMin, setValorMin] = useState(() => valorMinParam ?? '')
+  const [valorMax, setValorMax] = useState(() => valorMaxParam ?? '')
+  const [dataInicio, setDataInicio] = useState(() => dataInicioParam ?? '')
+  const [dataFim, setDataFim] = useState(() => dataFimParam ?? '')
   const [confirmarAcao, setConfirmarAcao] = useState<{ pedido: Pedido; tipo: 'producao' | 'entrega' } | null>(null)
   const [loadingAcaoConfirm, setLoadingAcaoConfirm] = useState(false)
   const [erroAcaoConfirm, setErroAcaoConfirm] = useState('')
@@ -48,6 +81,38 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   useEffect(() => {
     setPedidos(pedidosIniciais)
   }, [pedidosIniciais])
+
+  useEffect(() => {
+    if (!isVendasRoute) return
+    setFiltroStatus(parseStatusParam(statusParam))
+    setFiltroVendedor(vendedorParam ?? '')
+    setFiltroCliente(clienteParam ?? '')
+    setValorMin(valorMinParam ?? '')
+    setValorMax(valorMaxParam ?? '')
+    setDataInicio(dataInicioParam ?? '')
+    setDataFim(dataFimParam ?? '')
+  }, [isVendasRoute, statusParam, vendedorParam, clienteParam, valorMinParam, valorMaxParam, dataInicioParam, dataFimParam])
+
+  useEffect(() => {
+    if (!isVendasRoute) return
+    const nextParams = new URLSearchParams(searchParams.toString())
+    const upsert = (key: string, value: string) => {
+      if (value.trim()) nextParams.set(key, value.trim())
+      else nextParams.delete(key)
+    }
+
+    upsert('status', filtroStatus === 'todos' ? '' : filtroStatus)
+    upsert('vendedor', filtroVendedor)
+    upsert('cliente', filtroCliente)
+    upsert('valor_min', valorMin)
+    upsert('valor_max', valorMax)
+    upsert('data_inicio', isFullDate(dataInicio) ? dataInicio : '')
+    upsert('data_fim', isFullDate(dataFim) ? dataFim : '')
+
+    const query = nextParams.toString()
+    if (query === searchParams.toString()) return
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [isVendasRoute, pathname, router, searchParams, filtroStatus, filtroVendedor, filtroCliente, valorMin, valorMax, dataInicio, dataFim])
 
   const handleStatusChange = useCallback(async (id: string, novoStatus: StatusPedido, entregue_at?: string) => {
     // 1. Atualiza na hora (optimistic update)
@@ -72,14 +137,35 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   }, [refreshTab])
 
   const filtrados = useMemo(() => {
+    const vendedorNorm = filtroVendedor.trim().toLowerCase()
+    const clienteNorm = filtroCliente.trim().toLowerCase()
+    const valorMinNum = valorMin.trim() ? Number(valorMin) : null
+    const valorMaxNum = valorMax.trim() ? Number(valorMax) : null
+    const dataInicioNorm = dataInicio ? normalizeDate(dataInicio) : null
+    const dataFimNorm = dataFim ? normalizeDate(dataFim) : null
+
     return pedidos.filter((p) => {
       const matchStatus = filtroStatus === 'todos' || p.status === filtroStatus
-      const matchBusca = !busca.trim() ||
-        p.codigo.toLowerCase().includes(busca.toLowerCase()) ||
-        p.cliente?.nome?.toLowerCase().includes(busca.toLowerCase())
-      return matchStatus && matchBusca
+      const matchVendedor = !vendedorNorm || p.vendedor?.nome?.toLowerCase().includes(vendedorNorm)
+      const matchCliente = !clienteNorm || p.cliente?.nome?.toLowerCase().includes(clienteNorm)
+      const total = p.valor_total ?? 0
+      const matchValorMin = valorMinNum == null || (!Number.isNaN(valorMinNum) && total >= valorMinNum)
+      const matchValorMax = valorMaxNum == null || (!Number.isNaN(valorMaxNum) && total <= valorMaxNum)
+      const dataPedido = normalizeDate(p.data_pedido)
+      const matchDataInicio = !dataInicioNorm || dataPedido >= dataInicioNorm
+      const matchDataFim = !dataFimNorm || dataPedido <= dataFimNorm
+
+      return (
+        matchStatus &&
+        matchVendedor &&
+        matchCliente &&
+        matchValorMin &&
+        matchValorMax &&
+        matchDataInicio &&
+        matchDataFim
+      )
     })
-  }, [pedidos, filtroStatus, busca])
+  }, [pedidos, filtroStatus, filtroVendedor, filtroCliente, valorMin, valorMax, dataInicio, dataFim])
 
   function abrirNovo() { setEditando(null); setFormAberto(true) }
   function abrirEditar(p: Pedido) { setEditando(p); setFormAberto(true) }
@@ -159,6 +245,18 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
     return c
   }, [pedidos])
 
+  const temFiltrosAtivos = filtroStatus !== 'todos' || !!filtroVendedor.trim() || !!filtroCliente.trim() || !!valorMin.trim() || !!valorMax.trim() || !!dataInicio || !!dataFim
+
+  function limparFiltros() {
+    setFiltroStatus('todos')
+    setFiltroVendedor('')
+    setFiltroCliente('')
+    setValorMin('')
+    setValorMax('')
+    setDataInicio('')
+    setDataFim('')
+  }
+
   return (
     <>
       {/* Header */}
@@ -208,22 +306,79 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
             )
           })}
         </div>
+      </div>
 
-        {/* Busca */}
-        <div className="relative ml-auto">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
-            className="absolute left-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none"
-            style={{ color: 'var(--ac-muted)' }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input type="text" placeholder="Buscar código ou cliente..."
-            value={busca} onChange={(e) => setBusca(e.target.value)}
-            className="pl-9 pr-3 py-2 rounded-lg text-sm outline-none transition-all"
-            style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)', width: '220px' }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
-          />
-        </div>
+      <div className="px-8 pb-2 flex items-center gap-3 flex-wrap">
+        <input
+          type="text"
+          placeholder="Vendedor"
+          value={filtroVendedor}
+          onChange={(e) => setFiltroVendedor(e.target.value)}
+          list="vendedores-vendas"
+          className="px-3 py-2 rounded-lg text-sm outline-none transition-all"
+          style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)', width: '180px' }}
+        />
+        <datalist id="vendedores-vendas">
+          {usuarios.map((u) => (
+            <option key={u.id} value={u.nome} />
+          ))}
+        </datalist>
+
+        <input
+          type="text"
+          placeholder="Cliente"
+          value={filtroCliente}
+          onChange={(e) => setFiltroCliente(e.target.value)}
+          list="clientes-vendas"
+          className="px-3 py-2 rounded-lg text-sm outline-none transition-all"
+          style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)', width: '220px' }}
+        />
+        <datalist id="clientes-vendas">
+          {clientes.map((c) => (
+            <option key={c.id} value={c.nome} />
+          ))}
+        </datalist>
+
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Valor mín."
+          value={valorMin}
+          onChange={(e) => setValorMin(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm outline-none transition-all"
+          style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)', width: '130px' }}
+        />
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="Valor máx."
+          value={valorMax}
+          onChange={(e) => setValorMax(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm outline-none transition-all"
+          style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)', width: '130px' }}
+        />
+        <input
+          type="date"
+          value={dataInicio}
+          onChange={(e) => setDataInicio(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm outline-none transition-all"
+          style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+        />
+        <input
+          type="date"
+          value={dataFim}
+          onChange={(e) => setDataFim(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm outline-none transition-all"
+          style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+        />
+
+        {temFiltrosAtivos && (
+          <Button variant="secondary" onClick={limparFiltros}>
+            Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Tabela */}
@@ -246,7 +401,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
               {filtrados.length === 0 && (
                 <tr>
                   <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
-                    {busca || filtroStatus !== 'todos' ? 'Nenhuma venda para esse filtro.' : 'Nenhuma venda cadastrada ainda.'}
+                    {temFiltrosAtivos ? 'Nenhuma venda para esse filtro.' : 'Nenhuma venda cadastrada ainda.'}
                   </td>
                 </tr>
               )}
