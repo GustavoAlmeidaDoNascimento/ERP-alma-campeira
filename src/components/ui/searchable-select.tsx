@@ -82,6 +82,7 @@ export function SearchableSelect({
   const selectedOption = useMemo(() => options.find((o) => o.value === value), [options, value])
   const selectedLabel = selectedOption?.label ?? ''
   const selectedImageUrl = selectedOption?.imageUrl
+  const selectedIndex = useMemo(() => options.findIndex((o) => o.value === value), [options, value])
 
   const filtered = useMemo(() => {
     const q = normalize(query.trim())
@@ -190,8 +191,9 @@ export function SearchableSelect({
             if (value) onChange('')
           }}
           onFocus={() => {
-            setQuery(selectedLabel)
-            setHighlight(0)
+            // Ao abrir, mostramos toda a lista em vez de filtrar pelo valor selecionado.
+            setQuery('')
+            setHighlight(selectedIndex >= 0 ? selectedIndex : 0)
             setOpen(true)
           }}
           onKeyDown={onInputKeyDown}
