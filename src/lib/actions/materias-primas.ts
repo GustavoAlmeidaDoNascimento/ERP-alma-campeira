@@ -491,7 +491,7 @@ export async function atualizarMovimentacaoMP(input: AtualizarMovInput): Promise
   // 7. Invalida caches relacionados
   revalidatePath('/materias-primas')
   revalidatePath(`/materias-primas/${movAtual.materia_prima_id}`)
-  revalidateTag('materias-primas-list')
-  revalidateTag('mp-detalhe')
-  revalidateTag('metricas-estoque')
+  revalidateTag('materias-primas-list', 'max')
+  revalidateTag('mp-detalhe', 'max')
+  revalidateTag('metricas-estoque', 'max')
 }
