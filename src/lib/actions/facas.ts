@@ -413,6 +413,7 @@ const getFacaDetalheCached = unstable_cache(
         .from('movimentacoes_estoque')
         .select('*, materia_prima:materias_primas(id, codigo, nome)')
         .eq('faca_id', facaId)
+        .is('materia_prima_id', null)
         .order('created_at', { ascending: false })
         .limit(50),
       supabase
@@ -550,7 +551,7 @@ export async function entradaEstoqueFaca(
   const authUserId = await requireAuthenticatedUserId()
   const userId = registradoPorId || authUserId
   const materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] = []
-  const movimentacoesCriadas: MovimentacaoEstoque[] = []
+  let movimentacaoEntradaFaca: MovimentacaoEstoque | null = null
 
   for (const bom of boms) {
     const mp = mpMap.get(bom.materia_prima_id)
@@ -567,7 +568,7 @@ export async function entradaEstoqueFaca(
       .eq('id', bom.materia_prima_id)
     if (updErr) throw new Error(updErr.message)
 
-    const { data: movCriada, error: movErr } = await supabase
+    const { error: movErr } = await supabase
       .from('movimentacoes_estoque')
       .insert({
         tipo: 'saida_producao',
@@ -577,10 +578,7 @@ export async function entradaEstoqueFaca(
         observacao: `Produção de ${quantidadeProduzida}x ${faca.codigo}`,
         usuario_id: userId,
       })
-      .select('*, materia_prima:materias_primas(id, codigo, nome)')
-      .single()
     if (movErr) throw new Error(movErr.message)
-    if (movCriada) movimentacoesCriadas.push(movCriada as unknown as MovimentacaoEstoque)
 
     materiaisConsumidos.push({ codigo: mp.codigo, nome: mp.nome, consumido: consumo })
   }
@@ -592,13 +590,34 @@ export async function entradaEstoqueFaca(
     .eq('id', facaId)
   if (updFacaErr) throw new Error(updFacaErr.message)
 
+  const { data: movEntrada, error: movEntradaErr } = await supabase
+    .from('movimentacoes_estoque')
+    .insert({
+      tipo: 'entrada',
+      faca_id: facaId,
+      quantidade: quantidadeProduzida,
+      observacao: `Produção de ${quantidadeProduzida}x ${faca.codigo}`,
+      usuario_id: userId,
+      materia_prima_id: null,
+    })
+    .select('*')
+    .single()
+  if (movEntradaErr) throw new Error(movEntradaErr.message)
+  if (movEntrada) {
+    movimentacaoEntradaFaca = {
+      ...(movEntrada as unknown as MovimentacaoEstoque),
+      materia_prima: null,
+      usuario: null,
+    }
+  }
+
   revalidatePath('/facas')
   revalidatePath('/materias-primas')
   revalidateTag('facas-list', 'max')
   revalidateTag('materias-primas-list', 'max')
   revalidateTag('faca-detalhe', 'max')
 
-  return { materiaisConsumidos, movimentacoesCriadas }
+  return { materiaisConsumidos, movimentacoesCriadas: movimentacaoEntradaFaca ? [movimentacaoEntradaFaca] : [] }
 }
 
 export async function atualizarMovimentacaoFacaProducao(input: {
@@ -624,8 +643,10 @@ export async function atualizarMovimentacaoFacaProducao(input: {
     .single()
   if (movErr) throw new Error(movErr.message)
   if (!movAtual) throw new Error('Movimentação não encontrada.')
-  if (movAtual.tipo !== 'saida_producao') throw new Error('Somente movimentações de produção podem ser editadas aqui.')
-  if (!movAtual.materia_prima_id) throw new Error('Movimentação sem matéria-prima vinculada.')
+  const tipo = String(movAtual.tipo)
+  if (tipo !== 'saida_producao' && tipo !== 'entrada') {
+    throw new Error('Somente movimentações de produção (entrada/consumo) podem ser editadas aqui.')
+  }
 
   const { data: usuario, error: userErr } = await admin
     .from('usuarios_perfis')
@@ -635,18 +656,51 @@ export async function atualizarMovimentacaoFacaProducao(input: {
   if (userErr) throw new Error(userErr.message)
   if (!usuario) throw new Error('Usuário não encontrado.')
 
-  const { data: mp, error: mpErr } = await admin
-    .from('materias_primas')
-    .select('id, estoque_atual')
-    .eq('id', movAtual.materia_prima_id)
-    .single()
-  if (mpErr) throw new Error(mpErr.message)
-  if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
-
   const quantidadeAntiga = Number(movAtual.quantidade)
   const delta = quantidade - quantidadeAntiga
-  const novoEstoque = round3(Number(mp.estoque_atual) - delta)
-  if (novoEstoque < 0) throw new Error('Operação inválida: o estoque da matéria-prima ficaria negativo.')
+  if (tipo === 'saida_producao') {
+    if (!movAtual.materia_prima_id) throw new Error('Movimentação sem matéria-prima vinculada.')
+    const { data: mp, error: mpErr } = await admin
+      .from('materias_primas')
+      .select('id, estoque_atual')
+      .eq('id', movAtual.materia_prima_id)
+      .single()
+    if (mpErr) throw new Error(mpErr.message)
+    if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
+
+    const novoEstoque = round3(Number(mp.estoque_atual) - delta)
+    if (novoEstoque < 0) throw new Error('Operação inválida: o estoque da matéria-prima ficaria negativo.')
+
+    if (delta !== 0) {
+      const { error: updMpErr } = await admin
+        .from('materias_primas')
+        .update({ estoque_atual: novoEstoque })
+        .eq('id', mp.id)
+      if (updMpErr) throw new Error(updMpErr.message)
+    }
+  }
+
+  if (tipo === 'entrada') {
+    if (!movAtual.faca_id) throw new Error('Movimentação sem faca vinculada.')
+    const { data: faca, error: facaErr } = await admin
+      .from('facas')
+      .select('id, estoque_atual')
+      .eq('id', movAtual.faca_id)
+      .single()
+    if (facaErr) throw new Error(facaErr.message)
+    if (!faca) throw new Error('Faca vinculada não encontrada.')
+
+    const novoEstoqueFaca = round3(Number(faca.estoque_atual) + delta)
+    if (novoEstoqueFaca < 0) throw new Error('Operação inválida: o estoque da faca ficaria negativo.')
+
+    if (delta !== 0) {
+      const { error: updFacaErr } = await admin
+        .from('facas')
+        .update({ estoque_atual: novoEstoqueFaca })
+        .eq('id', faca.id)
+      if (updFacaErr) throw new Error(updFacaErr.message)
+    }
+  }
 
   const { error: updMovErr } = await admin
     .from('movimentacoes_estoque')
@@ -657,14 +711,6 @@ export async function atualizarMovimentacaoFacaProducao(input: {
     })
     .eq('id', movimentacaoId)
   if (updMovErr) throw new Error(updMovErr.message)
-
-  if (delta !== 0) {
-    const { error: updMpErr } = await admin
-      .from('materias_primas')
-      .update({ estoque_atual: novoEstoque })
-      .eq('id', mp.id)
-    if (updMpErr) throw new Error(updMpErr.message)
-  }
 
   revalidatePath('/facas')
   if (movAtual.faca_id) revalidatePath(`/facas/${movAtual.faca_id}`)

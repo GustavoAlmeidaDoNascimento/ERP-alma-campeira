@@ -16,7 +16,7 @@ import {
   mudarStatusOC,
   deletarOC,
 } from '@/lib/actions/ordens-compra'
-import { getFornecedores } from '@/lib/actions/fornecedores'
+import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
 import type { FilaFornecedor, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
@@ -675,7 +675,7 @@ function OcCriarModal({
     async function load() {
       setCarregando(true)
       try {
-        const [f, m] = await Promise.all([getFornecedores(150), getMatériasPrimas(300)])
+        const [f, m] = await Promise.all([getFornecedoresSemCache(150), getMatériasPrimas(300)])
         if (!cancelled) {
           setFornecedores(f)
           setMateriasPrimas(m)

@@ -488,7 +488,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-muted)' }}>
                           {mov.observacao ?? '—'}
                         </td>
-                        {permEditarMovAdmin && (
+                        {permEditarMovAdmin && mov.tipo === 'entrada' && (
                           <td className="px-4 py-2.5 text-center">
                             <button
                               type="button"
@@ -510,6 +510,11 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
                             </button>
+                          </td>
+                        )}
+                        {permEditarMovAdmin && mov.tipo !== 'entrada' && (
+                          <td className="px-4 py-2.5 text-center text-xs" style={{ color: 'var(--ac-muted)' }}>
+                            —
                           </td>
                         )}
                       </tr>

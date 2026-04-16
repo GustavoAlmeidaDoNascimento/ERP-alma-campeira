@@ -27,6 +27,22 @@ export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
   return withSupabaseCookieContext(() => getFornecedoresCached(userId, limit))
 }
 
+/**
+ * Lista fornecedores sem camada de cache.
+ * Use em fluxos que precisam refletir cadastro recente imediatamente.
+ */
+export async function getFornecedoresSemCache(limit = 50): Promise<Fornecedor[]> {
+  await requireAuthenticatedUserId()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('fornecedores')
+    .select('*')
+    .order('nome')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data as Fornecedor[]
+}
+
 type FornecedorInput = {
   nome: string
   telefone: string
