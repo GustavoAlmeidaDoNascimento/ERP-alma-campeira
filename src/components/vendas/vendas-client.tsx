@@ -441,8 +441,26 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                 const podeEditar = p.status !== 'entregue' && perm.editar
                 const podeDeletar = p.status === 'em_espera' && perm.deletar
                 return (
-                  <tr key={p.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
+                  <tr
+                    key={p.id}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        if ((e.target as HTMLElement).closest('button')) return
+                        void abrirDetalhe(p)
+                      }
+                    }}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button')) return
+                      void abrirDetalhe(p)
+                    }}
+                    style={{
+                      borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined,
+                      background: 'var(--ac-card)',
+                      cursor: loadingDetalheId === p.id ? 'wait' : 'pointer',
+                    }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
@@ -479,27 +497,8 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                     <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {(p.valor_total ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
-                        {/* Ver detalhe */}
-                        <button onClick={() => abrirDetalhe(p)} className="p-1.5 rounded-lg transition-colors"
-                          disabled={loadingDetalheId === p.id}
-                          style={{ color: 'var(--ac-muted)' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ac-border)'; e.currentTarget.style.color = 'var(--ac-text)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
-                          title="Ver venda">
-                          {loadingDetalheId === p.id ? (
-                            <svg viewBox="0 0 24 24" className="size-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2}>
-                              <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
-                            </svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-4">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                          )}
-                        </button>
-
                         {/* Editar (somente não entregue) */}
                         {podeEditar && (
                           <button onClick={() => abrirEditar(p)} className="p-1.5 rounded-lg transition-colors"
