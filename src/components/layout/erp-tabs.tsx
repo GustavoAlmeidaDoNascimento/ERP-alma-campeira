@@ -16,6 +16,7 @@ import { FacaDetalheClient } from '@/components/facas/faca-detalhe-client'
 import { FornecedoresClient } from '@/components/fornecedores/fornecedores-client'
 import { OcClient } from '@/components/ordens-compra/oc-client'
 import { VendasClient } from '@/components/vendas/vendas-client'
+import { OrcamentosClient } from '@/components/orcamentos/orcamentos-client'
 import { ClientesClient } from '@/components/clientes/clientes-client'
 import { UsuariosClient } from '@/components/usuarios/usuarios-client'
 import { CargosClient } from '@/components/cargos/cargos-client'
@@ -370,6 +371,17 @@ function TabPane({
       return <OcClient fila={data.fila} ordens={data.ordens} perm={data.perm} />
     case 'vendas':
       return <VendasClient pedidos={data.pedidos} clientes={data.clientes} facas={data.facas} usuarios={data.usuarios} perm={data.perm} />
+    case 'orcamentos':
+      return (
+        <OrcamentosClient
+          orcamentos={data.orcamentos}
+          clientes={data.clientes}
+          facas={data.facas}
+          usuarios={data.usuarios}
+          perm={data.perm}
+          permVendasCriar={data.permVendasCriar}
+        />
+      )
     case 'clientes':
       return <ClientesClient clientes={data.clientes} perm={data.perm} />
     case 'usuarios':

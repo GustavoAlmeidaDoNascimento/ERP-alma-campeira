@@ -158,8 +158,10 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     })
   )
 
-  const linhasTabela = itens.map((item, idx) => [
-    fotos[idx], // Imagem (custom render abaixo)
+  // Coluna "Foto" fica em branco no body — desenhamos a imagem em `didDrawCell`
+  // (que conhece a posição final da célula). `fotos[idx]` é capturado pelo closure.
+  const linhasTabela: string[][] = itens.map((item) => [
+    '',
     `${item.faca?.codigo ?? ''}\n${item.faca?.nome ?? '—'}`,
     String(item.quantidade),
     brl(item.preco_unitario),
