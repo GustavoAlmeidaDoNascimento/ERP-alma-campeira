@@ -24,6 +24,8 @@ type ItemForm = {
   faca_id: string
   quantidade: number
   preco_unitario: number
+  desconto_pct: number
+  desconto_val: number
 }
 
 function today() {
@@ -37,7 +39,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [status, setStatus] = useState<StatusPedido>('em_espera')
   const [observacao, setObservacao] = useState('')
   const [frete, setFrete] = useState(0)
-  const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
+  const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -75,8 +77,10 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               faca_id: i.faca_id,
               quantidade: i.quantidade,
               preco_unitario: i.preco_unitario,
+              desconto_pct: 0,
+              desconto_val: 0,
             }))
-          : [{ faca_id: '', quantidade: 1, preco_unitario: 0 }]
+          : [{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }]
       )
     } else {
       setClienteId('')
@@ -85,19 +89,22 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setStatus('em_espera')
       setObservacao('')
       setFrete(0)
-      setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
+      setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
     }
   }, [open, editando])
 
   const subtotalItens = useMemo(
-    () => itens.reduce((s, i) => s + (i.quantidade || 0) * (i.preco_unitario || 0), 0),
+    () => itens.reduce((s, i) => {
+      const precoLiquido = Math.max(0, (i.preco_unitario || 0) - (i.desconto_val || 0))
+      return s + (i.quantidade || 0) * precoLiquido
+    }, 0),
     [itens]
   )
 
   const total = useMemo(() => subtotalItens + (frete || 0), [subtotalItens, frete])
 
   function addItem() {
-    setItens((prev) => [...prev, { faca_id: '', quantidade: 1, preco_unitario: 0 }])
+    setItens((prev) => [...prev, { faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
   }
 
   function removeItem(idx: number) {
@@ -107,12 +114,36 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   function updateItem(idx: number, field: keyof ItemForm, value: string | number) {
     setItens((prev) => {
       const next = [...prev]
-      next[idx] = { ...next[idx], [field]: value }
-      // Auto-fill preco_unitario when selecting faca
+      const item = { ...next[idx], [field]: value }
+
       if (field === 'faca_id') {
         const faca = facas.find((f) => f.id === value)
-        if (faca) next[idx].preco_unitario = faca.preco_venda
+        if (faca) {
+          item.preco_unitario = faca.preco_venda
+          item.desconto_pct = 0
+          item.desconto_val = 0
+        }
       }
+
+      if (field === 'preco_unitario') {
+        const preco = parseFloat(String(value)) || 0
+        const pct = item.desconto_pct || 0
+        item.desconto_val = preco > 0 ? parseFloat(((preco * pct) / 100).toFixed(2)) : 0
+      }
+
+      if (field === 'desconto_val') {
+        const val = parseFloat(String(value)) || 0
+        const preco = item.preco_unitario || 0
+        item.desconto_pct = preco > 0 ? parseFloat(((val / preco) * 100).toFixed(4)) : 0
+      }
+
+      if (field === 'desconto_pct') {
+        const pct = parseFloat(String(value)) || 0
+        const preco = item.preco_unitario || 0
+        item.desconto_val = parseFloat(((preco * pct) / 100).toFixed(2))
+      }
+
+      next[idx] = item
       return next
     })
   }
@@ -151,7 +182,11 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         status,
         observacao,
         frete: frete || 0,
-        itens: itensValidos,
+        itens: itensValidos.map((i) => ({
+          faca_id: i.faca_id,
+          quantidade: i.quantidade,
+          preco_unitario: parseFloat(Math.max(0, (i.preco_unitario || 0) - (i.desconto_val || 0)).toFixed(2)),
+        })),
       }
       if (editando) await atualizarVenda(editando.id, input)
       else await criarVenda(input)
@@ -310,20 +345,23 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
 
           {/* Header */}
           <div className="grid gap-2 text-xs font-semibold uppercase tracking-wide px-1"
-            style={{ gridTemplateColumns: '1fr 80px 110px 90px 32px', color: 'var(--ac-muted)' }}>
+            style={{ gridTemplateColumns: '1fr 70px 110px 180px 90px 32px', color: 'var(--ac-muted)' }}>
             <span>Faca</span>
             <span className="text-center">Qtd</span>
             <span className="text-right">Preço unit.</span>
+            <span className="text-center">Desconto</span>
             <span className="text-right">Subtotal</span>
             <span></span>
           </div>
 
           <div className="flex flex-col gap-1.5">
             {itens.map((item, idx) => {
-              const subtotal = (item.quantidade || 0) * (item.preco_unitario || 0)
+              const precoLiquido = Math.max(0, (item.preco_unitario || 0) - (item.desconto_val || 0))
+              const subtotal = (item.quantidade || 0) * precoLiquido
+              const temDesconto = (item.desconto_val || 0) > 0
               return (
                 <div key={idx} className="grid gap-2 items-center"
-                  style={{ gridTemplateColumns: '1fr 80px 110px 90px 32px' }}>
+                  style={{ gridTemplateColumns: '1fr 70px 110px 180px 90px 32px' }}>
                   {/* Faca */}
                   <SearchableSelect
                     value={item.faca_id}
@@ -358,10 +396,52 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                     onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
                   />
 
+                  {/* Desconto: % e R$ */}
+                  <div className="grid grid-cols-2 gap-1">
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        value={item.desconto_pct === 0 ? '' : item.desconto_pct}
+                        placeholder="0"
+                        onChange={(e) => updateItem(idx, 'desconto_pct', parseFloat(e.target.value) || 0)}
+                        className="w-full pl-2 pr-5 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
+                        style={temDesconto ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' } : inputStyle}
+                        onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = temDesconto ? '#f59e0b' : 'var(--ac-border)'}
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none" style={{ color: 'var(--ac-muted)' }}>%</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={item.desconto_val === 0 ? '' : item.desconto_val}
+                        placeholder="0,00"
+                        onChange={(e) => updateItem(idx, 'desconto_val', parseFloat(e.target.value) || 0)}
+                        className="w-full pl-6 pr-2 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
+                        style={temDesconto ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' } : inputStyle}
+                        onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = temDesconto ? '#f59e0b' : 'var(--ac-border)'}
+                      />
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none" style={{ color: 'var(--ac-muted)' }}>R$</span>
+                    </div>
+                  </div>
+
                   {/* Subtotal */}
-                  <span className="text-right text-sm tabular-nums font-medium" style={{ color: 'var(--ac-text)' }}>
-                    {subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </span>
+                  <div className="text-right">
+                    {temDesconto && (
+                      <div className="text-xs tabular-nums line-through" style={{ color: 'var(--ac-muted)' }}>
+                        {((item.quantidade || 0) * (item.preco_unitario || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </div>
+                    )}
+                    <span className="text-sm tabular-nums font-medium" style={{ color: temDesconto ? '#15803d' : 'var(--ac-text)' }}>
+                      {subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
 
                   {/* Remove */}
                   <button
