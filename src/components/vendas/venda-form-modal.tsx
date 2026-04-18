@@ -186,7 +186,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       open={open}
       onClose={onClose}
       title={editando ? `Editar venda ${editando.codigo}` : 'Nova venda'}
-      width="700px"
+      width="1000px"
     >
       <div className="flex flex-col gap-5">
 
