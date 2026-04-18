@@ -43,7 +43,9 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     }
   }
 
-  const total = pedido.itens?.reduce((s, i) => s + i.subtotal, 0) ?? pedido.valor_total ?? 0
+  const subtotalItens = pedido.itens?.reduce((s, i) => s + i.subtotal, 0) ?? (pedido.valor_total ?? 0) - (pedido.frete ?? 0)
+  const frete = pedido.frete ?? 0
+  const total = subtotalItens + frete
 
   return (
     <Modal
@@ -194,6 +196,18 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                 </tr>
               ))}
             </tbody>
+            {frete > 0 && (
+              <tfoot>
+                <tr style={{ borderTop: '1px solid var(--ac-border)' }}>
+                  <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    Frete
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    {frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

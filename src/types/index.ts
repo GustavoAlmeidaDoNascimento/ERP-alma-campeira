@@ -281,6 +281,7 @@ export type Pedido = {
   status: StatusPedido
   observacao: string | null
   valor_total: number | null
+  frete: number
   entregue_at: string | null
   created_at: string
   cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null

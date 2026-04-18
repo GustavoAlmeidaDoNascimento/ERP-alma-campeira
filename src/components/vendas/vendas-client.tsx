@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
 import { VendaDetalheModal } from './venda-detalhe-modal'
-import { avancarStatus, deletarVenda, getVendaDetalhe, marcarEntregue } from '@/lib/actions/vendas'
+import { deletarVenda, getVendaDetalhe } from '@/lib/actions/vendas'
 import { getErpTabData } from '@/lib/actions/erp-tab-data'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
@@ -73,9 +73,20 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   const [valorMax, setValorMax] = useState(() => valorMaxParam ?? '')
   const [dataInicio, setDataInicio] = useState(() => dataInicioParam ?? '')
   const [dataFim, setDataFim] = useState(() => dataFimParam ?? '')
-  const [confirmarAcao, setConfirmarAcao] = useState<{ pedido: Pedido; tipo: 'producao' | 'entrega' } | null>(null)
-  const [loadingAcaoConfirm, setLoadingAcaoConfirm] = useState(false)
-  const [erroAcaoConfirm, setErroAcaoConfirm] = useState('')
+  type OrdemColuna = 'cliente' | 'vendedor' | 'data' | 'status' | 'frete' | 'total'
+  const [ordemColuna, setOrdemColuna] = useState<OrdemColuna | null>(null)
+  const [ordemDir, setOrdemDir] = useState<'asc' | 'desc'>('asc')
+
+  function toggleOrdem(coluna: OrdemColuna) {
+    setOrdemColuna((prev) => {
+      if (prev === coluna) {
+        setOrdemDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+        return coluna
+      }
+      setOrdemDir('asc')
+      return coluna
+    })
+  }
 
   // Sincroniza quando TabPane re-busca dados (ex: ao reabrir a aba)
   useEffect(() => {
@@ -167,6 +178,35 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
     })
   }, [pedidos, filtroStatus, filtroVendedor, filtroCliente, valorMin, valorMax, dataInicio, dataFim])
 
+  const ordenados = useMemo(() => {
+    if (!ordemColuna) return filtrados
+    const dir = ordemDir === 'asc' ? 1 : -1
+    return [...filtrados].sort((a, b) => {
+      switch (ordemColuna) {
+        case 'cliente': {
+          const na = a.cliente?.nome ?? ''
+          const nb = b.cliente?.nome ?? ''
+          return na.localeCompare(nb, 'pt-BR', { sensitivity: 'base' }) * dir
+        }
+        case 'vendedor': {
+          const na = a.vendedor?.nome ?? ''
+          const nb = b.vendedor?.nome ?? ''
+          return na.localeCompare(nb, 'pt-BR', { sensitivity: 'base' }) * dir
+        }
+        case 'data':
+          return (a.data_pedido < b.data_pedido ? -1 : a.data_pedido > b.data_pedido ? 1 : 0) * dir
+        case 'status':
+          return a.status.localeCompare(b.status) * dir
+        case 'frete':
+          return ((a.frete ?? 0) - (b.frete ?? 0)) * dir
+        case 'total':
+          return ((a.valor_total ?? 0) - (b.valor_total ?? 0)) * dir
+        default:
+          return 0
+      }
+    })
+  }, [filtrados, ordemColuna, ordemDir])
+
   function abrirNovo() { setEditando(null); setFormAberto(true) }
   function abrirEditar(p: Pedido) { setEditando(p); setFormAberto(true) }
   async function abrirDetalhe(p: Pedido) {
@@ -176,39 +216,6 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
       setDetalhe(venda)
     } finally {
       setLoadingDetalheId(null)
-    }
-  }
-
-  function abrirConfirmarProducao(p: Pedido) {
-    if (!perm.editar) return
-    setErroAcaoConfirm('')
-    setConfirmarAcao({ pedido: p, tipo: 'producao' })
-  }
-
-  function abrirConfirmarEntregue(p: Pedido) {
-    if (!perm.editar) return
-    setErroAcaoConfirm('')
-    setConfirmarAcao({ pedido: p, tipo: 'entrega' })
-  }
-
-  async function executarAcaoConfirmada() {
-    if (!confirmarAcao) return
-    setErroAcaoConfirm('')
-    setLoadingAcaoConfirm(true)
-    const { pedido: p, tipo } = confirmarAcao
-    try {
-      if (tipo === 'producao') {
-        await avancarStatus(p.id, 'em_producao')
-        await handleStatusChange(p.id, 'em_producao')
-      } else {
-        await marcarEntregue(p.id)
-        await handleStatusChange(p.id, 'entregue', new Date().toISOString())
-      }
-      setConfirmarAcao(null)
-    } catch (e: unknown) {
-      setErroAcaoConfirm(e instanceof Error ? e.message : (tipo === 'producao' ? 'Erro ao iniciar produção.' : 'Erro ao marcar entrega.'))
-    } finally {
-      setLoadingAcaoConfirm(false)
     }
   }
 
@@ -388,12 +395,34 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Cliente</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>Ação</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</th>
+                {(['cliente', 'vendedor', 'data', 'status'] as const).map((col) => (
+                  <th key={col}
+                    onClick={() => toggleOrdem(col)}
+                    className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                    style={{ color: ordemColuna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col === 'cliente' ? 'Cliente' : col === 'vendedor' ? 'Vendedor' : col === 'data' ? 'Data' : 'Status'}
+                      <span style={{ opacity: ordemColuna === col ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordemColuna === col ? (ordemDir === 'asc' ? '▲' : '▼') : '▲'}
+                      </span>
+                    </span>
+                  </th>
+                ))}
+                {(['frete', 'total'] as const).map((col) => (
+                  <th key={col}
+                    onClick={() => toggleOrdem(col)}
+                    className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                    style={{ color: ordemColuna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  >
+                    <span className="inline-flex items-center justify-end gap-1">
+                      {col === 'frete' ? 'Frete' : 'Total'}
+                      <span style={{ opacity: ordemColuna === col ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordemColuna === col ? (ordemDir === 'asc' ? '▲' : '▼') : '▲'}
+                      </span>
+                    </span>
+                  </th>
+                ))}
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -405,7 +434,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                   </td>
                 </tr>
               )}
-              {filtrados.map((p, i) => {
+              {ordenados.map((p, i) => {
                 const st = STATUS_PEDIDO[p.status]
                 const podeEditar = p.status !== 'entregue' && perm.editar
                 const podeDeletar = p.status === 'em_espera' && perm.deletar
@@ -440,35 +469,10 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                         {st.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle">
-                      <div className="flex flex-col gap-1 min-w-[9rem]">
-                        {perm.editar && p.status === 'em_espera' && (
-                          <button
-                            type="button"
-                            onClick={() => abrirConfirmarProducao(p)}
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity whitespace-nowrap"
-                            style={{ background: '#b45309', color: '#fff', border: 'none' }}
-                          >
-                            Iniciar produção
-                          </button>
-                        )}
-                        {perm.editar && p.status === 'em_producao' && (
-                          <button
-                            type="button"
-                            onClick={() => abrirConfirmarEntregue(p)}
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity whitespace-nowrap"
-                            style={{ background: '#15803d', color: '#fff', border: 'none' }}
-                          >
-                            Entregue
-                          </button>
-                        )}
-                        {p.status === 'entregue' && (
-                          <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>—</span>
-                        )}
-                        {!perm.editar && (p.status === 'em_espera' || p.status === 'em_producao') && (
-                          <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>—</span>
-                        )}
-                      </div>
+                    <td className="px-4 py-3 text-right tabular-nums text-sm" style={{ color: (p.frete ?? 0) > 0 ? 'var(--ac-text)' : 'var(--ac-muted)' }}>
+                      {(p.frete ?? 0) > 0
+                        ? (p.frete ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        : '—'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {(p.valor_total ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -549,46 +553,6 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
         onStatusChange={handleStatusChange}
         perm={perm}
       />
-
-      {/* Confirmar mudança de status (lista) */}
-      <Modal
-        open={!!confirmarAcao}
-        onClose={() => !loadingAcaoConfirm && setConfirmarAcao(null)}
-        title={confirmarAcao?.tipo === 'producao' ? 'Iniciar produção' : 'Marcar como entregue'}
-      >
-        <div className="flex flex-col gap-4">
-          <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
-            {confirmarAcao?.tipo === 'producao' ? (
-              <>
-                Deseja colocar a venda <strong>{confirmarAcao.pedido.codigo}</strong> em produção? O status passará de <strong>Em espera</strong> para <strong>Em produção</strong>.
-              </>
-            ) : (
-              <>
-                Confirma a entrega da venda <strong>{confirmarAcao?.pedido.codigo}</strong>? Será dada baixa no estoque das facas, registrada a movimentação e atualizada a reposição de matérias-primas (incluindo ordens de compra quando aplicável).
-              </>
-            )}
-          </p>
-          {erroAcaoConfirm && (
-            <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroAcaoConfirm}</p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={loadingAcaoConfirm} onClick={() => setConfirmarAcao(null)}>
-              Cancelar
-            </Button>
-            <Button
-              loading={loadingAcaoConfirm}
-              onClick={executarAcaoConfirmada}
-              style={
-                confirmarAcao?.tipo === 'producao'
-                  ? { background: '#b45309', color: '#fff', border: 'none' }
-                  : { background: '#15803d', color: '#fff', border: 'none' }
-              }
-            >
-              {confirmarAcao?.tipo === 'producao' ? 'Iniciar produção' : 'Confirmar entrega'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Confirmar exclusão */}
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir venda">

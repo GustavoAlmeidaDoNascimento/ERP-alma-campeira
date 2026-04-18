@@ -78,6 +78,7 @@ export type VendaInput = {
   data_pedido: string
   observacao: string
   status: StatusPedido
+  frete: number
   itens: VendaItemInput[]
 }
 
@@ -105,9 +106,6 @@ export async function criarVenda(input: VendaInput) {
   const supabase = await createClient()
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
-  if (input.status === 'entregue') {
-    throw new Error('Crie a venda como "Em Espera" ou "Em Produção". Para concluir, use "Marcar como entregue".')
-  }
 
   // Validar estoque disponível para cada faca
   const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
@@ -134,7 +132,13 @@ export async function criarVenda(input: VendaInput) {
   }
 
   const codigo = await gerarCodigoPedido()
-  const valor_total = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
+  const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
+  const frete = Math.max(0, input.frete || 0)
+  const valor_total = subtotalItens + frete
+
+  // Se já entregue de início, inserimos como em_producao e executarEntregaPedido
+  // vai finalizar com status=entregue e entregue_at.
+  const statusInsert = input.status === 'entregue' ? 'em_producao' : input.status
 
   const { data: pedido, error } = await supabase
     .from('pedidos')
@@ -144,7 +148,8 @@ export async function criarVenda(input: VendaInput) {
       vendedor_id: input.vendedor_id || null,
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
-      status: input.status,
+      status: statusInsert,
+      frete,
       valor_total,
     })
     .select('id')
@@ -162,6 +167,17 @@ export async function criarVenda(input: VendaInput) {
     throw e
   }
 
+  if (input.status === 'entregue') {
+    const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
+    await executarEntregaPedido(supabase, pedido.id, itensEntrega)
+    revalidatePath('/facas')
+    revalidatePath('/ordens-compra')
+    revalidateTag('facas-list', 'max')
+    revalidateTag('metricas-estoque', 'max')
+    revalidateTag('ordens-compra-historico', 'max')
+    revalidateTag('ordens-compra-fila', 'max')
+  }
+
   revalidatePath('/vendas')
   revalidateTag('vendas-list', 'max')
   revalidateTag('metricas-vendas', 'max')
@@ -172,16 +188,13 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   const supabase = await createClient()
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
-  if (input.status === 'entregue') {
-    throw new Error('Para entregar a venda, use a ação "Marcar como entregue" na tela de detalhes.')
-  }
 
-  const { data: pedido } = await supabase
+  const { data: pedidoAtual } = await supabase
     .from('pedidos')
     .select('status')
     .eq('id', id)
     .single()
-  if (!pedido || normalizeStatusPedido(String(pedido.status)) === 'entregue') {
+  if (!pedidoAtual || normalizeStatusPedido(String(pedidoAtual.status)) === 'entregue') {
     throw new Error('Vendas entregues não podem ser editadas.')
   }
 
@@ -231,7 +244,13 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     }
   }
 
-  const valor_total = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
+  const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
+  const frete = Math.max(0, input.frete || 0)
+  const valor_total = subtotalItens + frete
+
+  // Se o usuário quer marcar como entregue, o update inicial usa em_producao;
+  // executarEntregaPedido fará o update final com status=entregue e entregue_at.
+  const statusUpdate = input.status === 'entregue' ? 'em_producao' : input.status
 
   const { error } = await supabase
     .from('pedidos')
@@ -240,7 +259,8 @@ export async function atualizarVenda(id: string, input: VendaInput) {
       vendedor_id: input.vendedor_id || null,
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
-      status: input.status,
+      status: statusUpdate,
+      frete,
       valor_total,
     })
     .eq('id', id)
@@ -254,6 +274,17 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     // Não deixa itens parcialmente gravados.
     await supabase.from('pedido_itens').delete().eq('pedido_id', id)
     throw e
+  }
+
+  if (input.status === 'entregue') {
+    const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
+    await executarEntregaPedido(supabase, id, itensEntrega)
+    revalidatePath('/facas')
+    revalidatePath('/ordens-compra')
+    revalidateTag('facas-list', 'max')
+    revalidateTag('metricas-estoque', 'max')
+    revalidateTag('ordens-compra-historico', 'max')
+    revalidateTag('ordens-compra-fila', 'max')
   }
 
   revalidatePath('/vendas')
@@ -276,23 +307,11 @@ export async function avancarStatus(id: string, novoStatus: 'em_producao') {
   revalidateTag('metricas-vendas', 'max')
 }
 
-export async function marcarEntregue(id: string) {
-  await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
-
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('*, itens:pedido_itens(*)')
-    .eq('id', id)
-    .single()
-
-  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
-  if (normalizeStatusPedido(String(pedido.status)) !== 'em_producao') {
-    throw new Error('A venda precisa estar "Em Produção" para ser entregue.')
-  }
-
-  const itens = pedido.itens as { faca_id: string; quantidade: number }[]
-
+async function executarEntregaPedido(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  itens: { faca_id: string; quantidade: number }[]
+) {
   const facaIds = [...new Set(itens.map((i) => i.faca_id))]
   const { data: facas } = await supabase
     .from('facas')
@@ -365,8 +384,27 @@ export async function marcarEntregue(id: string) {
   try {
     await executarGerarTodasOCsDesdeFilaAutomatico()
   } catch {
-    // Fila já foi preenchida; OC pode ser gerada manualmente (ex.: já existe OC pendente para um fornecedor).
+    // Fila já foi preenchida; OC pode ser gerada manualmente.
   }
+}
+
+export async function marcarEntregue(id: string) {
+  await assertPermissao('vendas', 'editar')
+  const supabase = await createClient()
+
+  const { data: pedido, error: pedidoErr } = await supabase
+    .from('pedidos')
+    .select('*, itens:pedido_itens(*)')
+    .eq('id', id)
+    .single()
+
+  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
+  if (normalizeStatusPedido(String(pedido.status)) !== 'em_producao') {
+    throw new Error('A venda precisa estar "Em Produção" para ser entregue.')
+  }
+
+  const itens = pedido.itens as { faca_id: string; quantidade: number }[]
+  await executarEntregaPedido(supabase, id, itens)
 
   revalidatePath('/vendas')
   revalidatePath('/facas')

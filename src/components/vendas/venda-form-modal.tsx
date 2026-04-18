@@ -36,6 +36,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [dataPedido, setDataPedido] = useState(today())
   const [status, setStatus] = useState<StatusPedido>('em_espera')
   const [observacao, setObservacao] = useState('')
+  const [frete, setFrete] = useState(0)
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
@@ -67,6 +68,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setDataPedido(editando.data_pedido)
       setStatus(editando.status)
       setObservacao(editando.observacao ?? '')
+      setFrete(editando.frete ?? 0)
       setItens(
         editando.itens && editando.itens.length > 0
           ? editando.itens.map((i) => ({
@@ -82,14 +84,17 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setDataPedido(today())
       setStatus('em_espera')
       setObservacao('')
+      setFrete(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0 }])
     }
   }, [open, editando])
 
-  const total = useMemo(
+  const subtotalItens = useMemo(
     () => itens.reduce((s, i) => s + (i.quantidade || 0) * (i.preco_unitario || 0), 0),
     [itens]
   )
+
+  const total = useMemo(() => subtotalItens + (frete || 0), [subtotalItens, frete])
 
   function addItem() {
     setItens((prev) => [...prev, { faca_id: '', quantidade: 1, preco_unitario: 0 }])
@@ -145,6 +150,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         data_pedido: dataPedido,
         status,
         observacao,
+        frete: frete || 0,
         itens: itensValidos,
       }
       if (editando) await atualizarVenda(editando.id, input)
@@ -264,6 +270,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             >
               <option value="em_espera">{STATUS_PEDIDO.em_espera.label}</option>
               <option value="em_producao">{STATUS_PEDIDO.em_producao.label}</option>
+              <option value="entregue">{STATUS_PEDIDO.entregue.label}</option>
             </select>
           </div>
         </div>
@@ -375,9 +382,32 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             })}
           </div>
 
-          {/* Total */}
-          <div className="flex justify-end pt-2 mt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
-            <div className="flex items-center gap-3">
+          {/* Frete + Total */}
+          <div className="flex flex-col gap-2 pt-2 mt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
+            {/* Linha de frete */}
+            <div className="flex items-center justify-end gap-3">
+              <label className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                Frete
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm tabular-nums pointer-events-none" style={{ color: 'var(--ac-muted)' }}>R$</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={frete === 0 ? '' : frete}
+                  placeholder="0,00"
+                  onChange={(e) => setFrete(parseFloat(e.target.value) || 0)}
+                  className="pl-9 pr-3 py-1.5 rounded-lg text-sm outline-none text-right tabular-nums w-32"
+                  style={inputStyle}
+                  onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+                  onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+                />
+              </div>
+            </div>
+
+            {/* Total geral */}
+            <div className="flex items-center justify-end gap-3">
               <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</span>
               <span className="text-xl font-bold" style={{ color: 'var(--ac-accent)' }}>
                 {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
