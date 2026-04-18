@@ -398,7 +398,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
 
                   {/* Desconto: % e R$ */}
                   <div className="grid grid-cols-2 gap-1">
-                    <div className="relative">
+                    {/* Porcentagem: sufixo % fora do input */}
+                    <div className="flex items-center gap-1">
                       <input
                         type="number"
                         min={0}
@@ -407,14 +408,16 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                         value={item.desconto_pct === 0 ? '' : item.desconto_pct}
                         placeholder="0"
                         onChange={(e) => updateItem(idx, 'desconto_pct', parseFloat(e.target.value) || 0)}
-                        className="w-full pl-2 pr-5 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
+                        className="w-full px-2 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
                         style={temDesconto ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' } : inputStyle}
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = temDesconto ? '#f59e0b' : 'var(--ac-border)'}
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none" style={{ color: 'var(--ac-muted)' }}>%</span>
+                      <span className="text-xs shrink-0" style={{ color: 'var(--ac-muted)' }}>%</span>
                     </div>
-                    <div className="relative">
+                    {/* Valor: prefixo R$ fora do input */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs shrink-0" style={{ color: 'var(--ac-muted)' }}>R$</span>
                       <input
                         type="number"
                         min={0}
@@ -422,12 +425,11 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                         value={item.desconto_val === 0 ? '' : item.desconto_val}
                         placeholder="0,00"
                         onChange={(e) => updateItem(idx, 'desconto_val', parseFloat(e.target.value) || 0)}
-                        className="w-full pl-6 pr-2 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
+                        className="w-full px-2 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
                         style={temDesconto ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' } : inputStyle}
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = temDesconto ? '#f59e0b' : 'var(--ac-border)'}
                       />
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none" style={{ color: 'var(--ac-muted)' }}>R$</span>
                     </div>
                   </div>
 
