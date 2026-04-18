@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select'
 import { criarOrcamento, atualizarOrcamento } from '@/lib/actions/orcamentos'
-import type { Orcamento, Cliente, Faca } from '@/types'
+import type { Orcamento, Cliente, Faca, OrcamentoItem } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
@@ -30,6 +30,48 @@ type ItemForm = {
 
 function today() {
   return new Date().toISOString().split('T')[0]
+}
+
+function moeda2(n: number) {
+  return Math.round(n * 100) / 100
+}
+
+/**
+ * O banco guarda só o preço líquido por item. Ao reabrir o formulário, recompomos
+ * "preço de tabela" (catálogo atual da faca) + desconto unitário para não aplicar
+ * desconto duas vezes nem perder a visualização do desconto.
+ */
+function itemFormDesdePersistido(i: OrcamentoItem, facas: Faca[]): ItemForm {
+  const net = moeda2(Number(i.preco_unitario))
+  const faca = facas.find((f) => f.id === i.faca_id)
+  if (!faca) {
+    return {
+      faca_id: i.faca_id,
+      quantidade: i.quantidade,
+      preco_unitario: net,
+      desconto_pct: 0,
+      desconto_val: 0,
+    }
+  }
+  const catalogo = moeda2(Number(faca.preco_venda))
+  if (catalogo - net <= 0.009) {
+    return {
+      faca_id: i.faca_id,
+      quantidade: i.quantidade,
+      preco_unitario: net,
+      desconto_pct: 0,
+      desconto_val: 0,
+    }
+  }
+  const descontoVal = moeda2(catalogo - net)
+  const descontoPct = catalogo > 0 ? parseFloat(((descontoVal / catalogo) * 100).toFixed(4)) : 0
+  return {
+    faca_id: i.faca_id,
+    quantidade: i.quantidade,
+    preco_unitario: catalogo,
+    desconto_pct: descontoPct,
+    desconto_val: descontoVal,
+  }
 }
 
 export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, usuarios, onSaved }: Props) {
@@ -77,13 +119,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
       }
       setItens(
         editando.itens && editando.itens.length > 0
-          ? editando.itens.map((i) => ({
-              faca_id: i.faca_id,
-              quantidade: i.quantidade,
-              preco_unitario: i.preco_unitario,
-              desconto_pct: 0,
-              desconto_val: 0,
-            }))
+          ? editando.itens.map((i) => itemFormDesdePersistido(i, facas))
           : [{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }]
       )
     } else {
@@ -95,7 +131,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
       setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
     }
-  }, [open, editando])
+  }, [open, editando, facas])
 
   const subtotalItens = useMemo(
     () =>
@@ -222,7 +258,9 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
 
   const selectStyle: React.CSSProperties = {
     background: 'var(--ac-card)',
-    border: '1px solid var(--ac-border)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--ac-border)',
     color: 'var(--ac-text)',
     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
     backgroundRepeat: 'no-repeat',
@@ -231,9 +269,12 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
     paddingRight: '32px',
   }
 
+  /** Só borda em forma longa — evita conflito com onFocus que altera `borderColor` (warning do React). */
   const inputStyle: React.CSSProperties = {
     background: 'var(--ac-card)',
-    border: '1px solid var(--ac-border)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--ac-border)',
     color: 'var(--ac-text)',
   }
 

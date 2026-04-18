@@ -23,6 +23,19 @@ type Props = {
   perm: { editar: boolean; deletar: boolean; converterEmVenda: boolean }
 }
 
+function descontoUnitarioLinha(
+  precoVenda: number | null | undefined,
+  precoLiquido: number
+): { catalogo: number; desconto: number; pct: number } | null {
+  if (precoVenda == null || Number.isNaN(precoVenda)) return null
+  const cat = Math.round(precoVenda * 100) / 100
+  const liq = Math.round(precoLiquido * 100) / 100
+  if (cat - liq <= 0.009) return null
+  const desconto = Math.round((cat - liq) * 100) / 100
+  const pct = cat > 0 ? parseFloat(((desconto / cat) * 100).toFixed(2)) : 0
+  return { catalogo: cat, desconto, pct }
+}
+
 function SkeletonBar({ className }: { className?: string }) {
   return (
     <div
@@ -239,14 +252,15 @@ export function OrcamentoDetalheModal({
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Faca</th>
                 <th className="text-center px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd</th>
-                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço unit.</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Desc. unit.</th>
                 <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Subtotal</th>
               </tr>
             </thead>
             <tbody>
               {(!orcamento.itens || orcamento.itens.length === 0) && (
                 <tr>
-                  <td colSpan={4} className="text-center py-8 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={5} className="text-center py-8 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     Nenhum item.
                   </td>
                 </tr>
@@ -255,6 +269,7 @@ export function OrcamentoDetalheModal({
                 const thumbUrl = getOptimizedSupabaseImageUrl(item.faca?.foto_url, {
                   width: 36, height: 36, quality: 60, resize: 'cover', fallbackUrl: '',
                 })
+                const linhaDesc = descontoUnitarioLinha(item.faca?.preco_venda, item.preco_unitario)
                 return (
                   <tr key={item.id}
                     style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
@@ -290,8 +305,33 @@ export function OrcamentoDetalheModal({
                     <td className="px-3 py-2.5 text-center tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {item.quantidade}
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--ac-muted)' }}>
-                      {item.preco_unitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    <td className="px-3 py-2.5 text-right tabular-nums align-top" style={{ color: 'var(--ac-text)' }}>
+                      {linhaDesc ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-xs line-through" style={{ color: 'var(--ac-muted)' }}>
+                            {linhaDesc.catalogo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                          <span className="font-medium">
+                            {item.preco_unitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--ac-muted)' }}>
+                          {item.preco_unitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums align-top" style={{ color: 'var(--ac-muted)' }}>
+                      {linhaDesc ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-sm font-medium" style={{ color: '#b45309' }}>
+                            −{linhaDesc.desconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                          <span className="text-xs">−{linhaDesc.pct}%</span>
+                        </div>
+                      ) : (
+                        <span>—</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                       {item.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -304,7 +344,7 @@ export function OrcamentoDetalheModal({
               <tfoot>
                 {frete > 0 && (
                   <tr style={{ borderTop: '1px solid var(--ac-border)' }}>
-                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    <td colSpan={4} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                       Frete
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
@@ -314,7 +354,7 @@ export function OrcamentoDetalheModal({
                 )}
                 {descontoTotal > 0 && (
                   <tr style={{ borderTop: frete > 0 ? undefined : '1px solid var(--ac-border)' }}>
-                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    <td colSpan={4} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                       Desconto no total
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: '#b45309' }}>
@@ -413,7 +453,7 @@ export function OrcamentoDetalheModal({
                 <Button
                   variant="secondary"
                   onClick={() => setConfirmandoDelete(true)}
-                  style={{ color: '#dc2626', borderColor: '#fecaca' }}
+                  style={{ color: '#dc2626', borderWidth: '1px', borderStyle: 'solid', borderColor: '#fecaca' }}
                 >
                   Excluir
                 </Button>

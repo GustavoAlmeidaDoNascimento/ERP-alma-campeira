@@ -200,7 +200,9 @@ export function SearchableSelect({
           className={`min-w-0 flex-1 px-3 py-2 rounded-lg text-sm outline-none transition-[box-shadow] focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--ac-muted)_35%,transparent)] focus-visible:ring-offset-0 ${inputClassName}`}
           style={{
             background: 'var(--ac-bg)',
-            border: '1px solid var(--ac-border)',
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'var(--ac-border)',
             color: 'var(--ac-text)',
           }}
         />
@@ -217,11 +219,13 @@ export function SearchableSelect({
           id={`${id}-listbox`}
           ref={listRef}
           role="listbox"
-          className={`absolute left-0 z-[60] w-full overflow-auto rounded-lg border py-1 shadow-lg ${
+          className={`absolute left-0 z-[60] w-full overflow-auto rounded-lg py-1 shadow-lg ${
             openUpward ? 'bottom-full mb-1 max-h-52 sm:max-h-60' : 'top-full mt-1 max-h-60 sm:max-h-72'
           }`}
           style={{
             background: 'var(--ac-card)',
+            borderWidth: '1px',
+            borderStyle: 'solid',
             borderColor: 'var(--ac-border)',
           }}
         >
