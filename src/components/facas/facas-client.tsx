@@ -7,8 +7,7 @@ import { Modal } from '@/components/ui/modal'
 import { FacaModal } from './faca-modal'
 import { deletarFaca, type DeletarFacaModo } from '@/lib/actions/facas'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
-import { statusEstoqueFaca, type StatusEstoque } from '@/types'
-import type { Faca, CategoriaFacaDB, MateriaPrima } from '@/types'
+import { statusEstoqueFaca, type Faca, type CategoriaFacaDB, type MateriaPrima, type StatusEstoque } from '@/types'
 import { lucroUnitarioFaca } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
@@ -251,16 +250,85 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Foto</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
-                {verPrecoVenda && <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Venda</th>}
-                {verLucro && verPrecoVenda && (
-                  <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Lucro</th>
+                {(['codigo', 'nome', 'categoria'] as const).map((col) => (
+                  <th
+                    key={col}
+                    onClick={() => toggleOrdem(col)}
+                    className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                    style={{ color: ordenacao.coluna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col === 'codigo' ? 'Código' : col === 'nome' ? 'Nome' : 'Categoria'}
+                      <span style={{ opacity: ordenacao.coluna === col ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordenacao.coluna === col ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                      </span>
+                    </span>
+                  </th>
+                ))}
+                <th
+                  onClick={() => toggleOrdem('preco_custo')}
+                  className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                  style={{ color: ordenacao.coluna === 'preco_custo' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                >
+                  <span className="inline-flex w-full items-center justify-end gap-1">
+                    Preço Custo
+                    <span style={{ opacity: ordenacao.coluna === 'preco_custo' ? 1 : 0.3, fontSize: '10px' }}>
+                      {ordenacao.coluna === 'preco_custo' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                    </span>
+                  </span>
+                </th>
+                {verPrecoVenda && (
+                  <th
+                    onClick={() => toggleOrdem('preco_venda')}
+                    className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                    style={{ color: ordenacao.coluna === 'preco_venda' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  >
+                    <span className="inline-flex w-full items-center justify-end gap-1">
+                      Preço Venda
+                      <span style={{ opacity: ordenacao.coluna === 'preco_venda' ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordenacao.coluna === 'preco_venda' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                      </span>
+                    </span>
+                  </th>
                 )}
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
+                {verLucro && verPrecoVenda && (
+                  <th
+                    onClick={() => toggleOrdem('lucro')}
+                    className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                    style={{ color: ordenacao.coluna === 'lucro' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  >
+                    <span className="inline-flex w-full items-center justify-end gap-1">
+                      Lucro
+                      <span style={{ opacity: ordenacao.coluna === 'lucro' ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordenacao.coluna === 'lucro' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                      </span>
+                    </span>
+                  </th>
+                )}
+                <th
+                  onClick={() => toggleOrdem('estoque')}
+                  className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                  style={{ color: ordenacao.coluna === 'estoque' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                >
+                  <span className="inline-flex w-full items-center justify-end gap-1">
+                    Estoque / Mín.
+                    <span style={{ opacity: ordenacao.coluna === 'estoque' ? 1 : 0.3, fontSize: '10px' }}>
+                      {ordenacao.coluna === 'estoque' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                    </span>
+                  </span>
+                </th>
+                <th
+                  onClick={() => toggleOrdem('status')}
+                  className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
+                  style={{ color: ordenacao.coluna === 'status' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                >
+                  <span className="inline-flex w-full items-center justify-center gap-1">
+                    Status
+                    <span style={{ opacity: ordenacao.coluna === 'status' ? 1 : 0.3, fontSize: '10px' }}>
+                      {ordenacao.coluna === 'status' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                    </span>
+                  </span>
+                </th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -276,7 +344,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
                   </td>
                 </tr>
               )}
-              {filtradas.map((faca, i) => {
+              {ordenadas.map((faca, i) => {
                 const catStyle = badgeCategoria[faca.categoria] ?? badgeCategoria['Outro']
                 const statusEstoque = statusEstoqueFaca(faca)
                 return (
