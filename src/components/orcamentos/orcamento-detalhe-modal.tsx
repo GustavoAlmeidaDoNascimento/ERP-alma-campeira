@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { STATUS_PEDIDO } from '@/types'
@@ -12,6 +12,10 @@ import { gerarPdfOrcamento } from './orcamento-pdf'
 
 type Props = {
   orcamento: Orcamento | null
+  /** Detalhe completo ainda sendo buscado no servidor — mostra skeleton no corpo do modal. */
+  carregando?: boolean
+  /** Erro ao buscar detalhe completo (dados parciais da lista podem permanecer visíveis). */
+  erroCarregar?: string | null
   onClose: () => void
   onEditar?: (o: Orcamento) => void
   onConvertido?: (o: Orcamento, pedidoId: string) => void
@@ -19,16 +23,85 @@ type Props = {
   perm: { editar: boolean; deletar: boolean; converterEmVenda: boolean }
 }
 
+function SkeletonBar({ className }: { className?: string }) {
+  return (
+    <div
+      className={`rounded-md animate-pulse ${className ?? ''}`}
+      style={{ background: 'color-mix(in srgb, var(--ac-border) 60%, transparent)' }}
+      aria-hidden
+    />
+  )
+}
+
 const STATUS_DISPONIVEIS: Extract<StatusPedido, 'em_espera' | 'em_producao'>[] = ['em_espera', 'em_producao']
 
-export function OrcamentoDetalheModal({ orcamento, onClose, onEditar, onConvertido, onDeletado, perm }: Props) {
+export function OrcamentoDetalheModal({
+  orcamento,
+  carregando = false,
+  erroCarregar = null,
+  onClose,
+  onEditar,
+  onConvertido,
+  onDeletado,
+  perm,
+}: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [erro, setErro] = useState('')
   const [confirmandoConversao, setConfirmandoConversao] = useState(false)
   const [statusEscolhido, setStatusEscolhido] = useState<Extract<StatusPedido, 'em_espera' | 'em_producao'>>('em_espera')
   const [confirmandoDelete, setConfirmandoDelete] = useState(false)
 
+  useEffect(() => {
+    if (!orcamento?.id) return
+    setConfirmandoConversao(false)
+    setConfirmandoDelete(false)
+    setErro('')
+    setLoading(null)
+  }, [orcamento?.id])
+
   if (!orcamento) return null
+
+  if (carregando) {
+    return (
+      <Modal open onClose={onClose} title={`Orçamento ${orcamento.codigo}`} width="640px">
+        <div className="flex flex-col gap-5" aria-busy="true" aria-live="polite">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-1 flex-col gap-2.5 min-w-0">
+              <SkeletonBar className="h-4 w-[55%]" />
+              <SkeletonBar className="h-3 w-[40%]" />
+              <SkeletonBar className="h-3 w-[35%]" />
+              <SkeletonBar className="h-3 w-[28%]" />
+            </div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <SkeletonBar className="h-3 w-16" />
+              <SkeletonBar className="h-9 w-28" />
+            </div>
+          </div>
+          <div className="rounded-xl overflow-hidden p-4 flex flex-col gap-3" style={{ border: '1px solid var(--ac-border)' }}>
+            <SkeletonBar className="h-3 w-full max-w-[90%]" />
+            {[0, 1, 2, 3].map((k) => (
+              <div key={k} className="flex items-center gap-3 pt-1">
+                <SkeletonBar className="size-9 shrink-0 rounded-lg" />
+                <div className="flex-1 flex flex-col gap-2 min-w-0">
+                  <SkeletonBar className="h-3 w-[45%]" />
+                  <SkeletonBar className="h-3 w-[70%]" />
+                </div>
+                <SkeletonBar className="h-3 w-10 shrink-0" />
+                <SkeletonBar className="h-3 w-16 shrink-0" />
+                <SkeletonBar className="h-3 w-16 shrink-0" />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-center" style={{ color: 'var(--ac-muted)' }}>
+            Carregando itens e fotos…
+          </p>
+          <div className="flex justify-end pt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
+            <Button variant="secondary" onClick={onClose}>Fechar</Button>
+          </div>
+        </div>
+      </Modal>
+    )
+  }
 
   const subtotalItens = orcamento.itens?.reduce((s, i) => s + i.subtotal, 0) ?? 0
   const frete = orcamento.frete ?? 0
@@ -86,6 +159,11 @@ export function OrcamentoDetalheModal({ orcamento, onClose, onEditar, onConverti
   return (
     <Modal open={!!orcamento} onClose={onClose} title={`Orçamento ${orcamento.codigo}`} width="640px">
       <div className="flex flex-col gap-5">
+        {erroCarregar && (
+          <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a' }}>
+            {erroCarregar}
+          </p>
+        )}
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">

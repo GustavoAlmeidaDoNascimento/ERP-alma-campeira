@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { OrcamentoFormModal } from './orcamento-form-modal'
@@ -68,7 +68,9 @@ export function OrcamentosClient({
   const [formAberto, setFormAberto] = useState(false)
   const [editando, setEditando] = useState<Orcamento | null>(null)
   const [detalhe, setDetalhe] = useState<Orcamento | null>(null)
-  const [loadingDetalheId, setLoadingDetalheId] = useState<string | null>(null)
+  const [detalheCarregando, setDetalheCarregando] = useState(false)
+  const [detalheErroCarregar, setDetalheErroCarregar] = useState<string | null>(null)
+  const detalheFetchSeq = useRef(0)
 
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendentes' | 'convertidos'>(() => parseStatusParam(statusParam))
   const [filtroVendedor, setFiltroVendedor] = useState(() => vendedorParam ?? '')
@@ -183,14 +185,22 @@ export function OrcamentosClient({
   function abrirNovo() { setEditando(null); setFormAberto(true) }
   function abrirEditar(o: Orcamento) { setEditando(o); setFormAberto(true) }
 
-  const abrirDetalhe = useCallback(async (o: Orcamento) => {
-    setLoadingDetalheId(o.id)
-    try {
-      const completo = await getOrcamentoDetalhe(o.id)
-      setDetalhe(completo)
-    } finally {
-      setLoadingDetalheId(null)
-    }
+  const abrirDetalhe = useCallback((o: Orcamento) => {
+    setDetalhe(o)
+    setDetalheCarregando(true)
+    setDetalheErroCarregar(null)
+    const seq = ++detalheFetchSeq.current
+    void getOrcamentoDetalhe(o.id)
+      .then((completo) => {
+        if (detalheFetchSeq.current !== seq) return
+        setDetalhe(completo)
+        setDetalheCarregando(false)
+      })
+      .catch((e: unknown) => {
+        if (detalheFetchSeq.current !== seq) return
+        setDetalheCarregando(false)
+        setDetalheErroCarregar(e instanceof Error ? e.message : 'Erro ao carregar o orçamento.')
+      })
   }, [])
 
   async function handleSaved() {
@@ -426,7 +436,6 @@ export function OrcamentosClient({
               {ordenados.map((o, i) => {
                 const convertido = !!o.convertido_pedido_id
                 const podeEditar = !convertido && perm.editar
-                const carregando = loadingDetalheId === o.id
                 return (
                   <tr key={o.id}
                     onClick={() => abrirDetalhe(o)}
@@ -436,7 +445,7 @@ export function OrcamentosClient({
                     style={{
                       borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined,
                       background: 'var(--ac-card)',
-                      cursor: carregando ? 'wait' : 'pointer',
+                      cursor: 'pointer',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
@@ -487,11 +496,6 @@ export function OrcamentosClient({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {carregando && (
-                          <svg viewBox="0 0 24 24" className="size-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} style={{ color: 'var(--ac-muted)' }} aria-label="Carregando">
-                            <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
-                          </svg>
-                        )}
                         {podeEditar && (
                           <button
                             onClick={(e) => { e.stopPropagation(); abrirEditar(o) }}
@@ -528,8 +532,21 @@ export function OrcamentosClient({
 
       <OrcamentoDetalheModal
         orcamento={detalhe}
-        onClose={() => setDetalhe(null)}
-        onEditar={(o) => { setDetalhe(null); abrirEditar(o) }}
+        carregando={detalheCarregando}
+        erroCarregar={detalheErroCarregar}
+        onClose={() => {
+          detalheFetchSeq.current += 1
+          setDetalhe(null)
+          setDetalheCarregando(false)
+          setDetalheErroCarregar(null)
+        }}
+        onEditar={(o) => {
+          detalheFetchSeq.current += 1
+          setDetalhe(null)
+          setDetalheCarregando(false)
+          setDetalheErroCarregar(null)
+          abrirEditar(o)
+        }}
         onConvertido={handleConvertido}
         onDeletado={handleDeletado}
         perm={detalhePerm}
