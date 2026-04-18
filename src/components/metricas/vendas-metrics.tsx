@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { KpiCard } from './kpi-card'
 import { BarHorizontal } from './bar-horizontal'
+import { CollapseSection } from './collapse-section'
 import { STATUS_PEDIDO } from '@/types'
 import type { MetricasVendasData, RelatorioVendedor } from '@/lib/actions/metricas'
 
@@ -18,75 +20,96 @@ function fmtP(v: number) {
   return `${v.toFixed(1)}%`
 }
 
-// ── Section wrapper ──
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section
-      className="rounded-xl border p-4 sm:p-5 space-y-3"
-      style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
-    >
-      <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-        {title}
-      </h3>
-      {children}
-    </section>
-  )
-}
-
-// ── Linha de vendedor expansível ──
-function VendedorRow({ v, taxaComissao, defaultOpen }: { v: RelatorioVendedor; taxaComissao: number; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen)
+function VendedorRow({ v, taxaComissao }: { v: RelatorioVendedor; taxaComissao: number }) {
+  const [open, setOpen] = useState(false)
 
   return (
     <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
-      {/* Cabeçalho do vendedor */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors"
         style={{ background: open ? 'color-mix(in srgb, var(--ac-accent) 6%, var(--ac-bg))' : 'var(--ac-bg)' }}
-        onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = 'var(--ac-card)' }}
-        onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = 'var(--ac-bg)' }}
+        onMouseEnter={(e) => {
+          if (!open) e.currentTarget.style.background = 'var(--ac-card)'
+        }}
+        onMouseLeave={(e) => {
+          if (!open) e.currentTarget.style.background = 'var(--ac-bg)'
+        }}
       >
         <svg
-          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
           className="size-3.5 shrink-0 transition-transform"
           style={{ color: 'var(--ac-muted)', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
         >
           <polyline points="9 18 15 12 9 6" />
         </svg>
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+            {v.vendedorNome}
+          </span>
         </div>
         <div className="flex items-center gap-6 text-right shrink-0">
           <div>
-            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>Pedidos</p>
-            <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>{fmtN(v.totalPedidos)}</p>
+            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+              Pedidos
+            </p>
+            <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+              {fmtN(v.totalPedidos)}
+            </p>
           </div>
           <div>
-            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>Faturamento</p>
-            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</p>
+            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+              Faturamento
+            </p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+              {fmt(v.totalValor)}
+            </p>
           </div>
           {taxaComissao > 0 && (
             <div>
-              <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>Comissão ({taxaComissao}%)</p>
-              <p className="text-sm font-semibold" style={{ color: '#16a34a' }}>{fmt(v.totalComissao)}</p>
+              <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                Comissão ({taxaComissao}%)
+              </p>
+              <p className="text-sm font-semibold" style={{ color: '#16a34a' }}>
+                {fmt(v.totalComissao)}
+              </p>
             </div>
           )}
         </div>
       </button>
 
-      {/* Detalhamento por mês */}
       {open && v.porMes.length > 0 && (
         <div style={{ borderTop: '1px solid var(--ac-border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
-                <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Mês</th>
-                <th className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pedidos</th>
-                <th className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Faturamento</th>
+                <th
+                  className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Mês
+                </th>
+                <th
+                  className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Pedidos
+                </th>
+                <th
+                  className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Faturamento
+                </th>
                 {taxaComissao > 0 && (
-                  <th className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                  <th
+                    className="text-right px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: 'var(--ac-muted)' }}
+                  >
                     Comissão ({taxaComissao}%)
                   </th>
                 )}
@@ -94,12 +117,26 @@ function VendedorRow({ v, taxaComissao, defaultOpen }: { v: RelatorioVendedor; t
             </thead>
             <tbody>
               {v.porMes.map((m, i) => (
-                <tr key={m.mes} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
-                  <td className="px-4 py-2.5 font-medium text-xs" style={{ color: 'var(--ac-text)' }}>{m.mesLabel}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--ac-muted)' }}>{fmtN(m.totalPedidos)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-medium" style={{ color: 'var(--ac-text)' }}>{fmt(m.totalValor)}</td>
+                <tr
+                  key={m.mes}
+                  style={{
+                    borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined,
+                    background: 'var(--ac-card)',
+                  }}
+                >
+                  <td className="px-4 py-2.5 font-medium text-xs" style={{ color: 'var(--ac-text)' }}>
+                    {m.mesLabel}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--ac-muted)' }}>
+                    {fmtN(m.totalPedidos)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-medium" style={{ color: 'var(--ac-text)' }}>
+                    {fmt(m.totalValor)}
+                  </td>
                   {taxaComissao > 0 && (
-                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: '#16a34a' }}>{fmt(m.comissao)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: '#16a34a' }}>
+                      {fmt(m.comissao)}
+                    </td>
                   )}
                 </tr>
               ))}
@@ -107,11 +144,19 @@ function VendedorRow({ v, taxaComissao, defaultOpen }: { v: RelatorioVendedor; t
             {v.porMes.length > 1 && (
               <tfoot>
                 <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
-                  <td className="px-4 py-2.5 text-xs font-bold" style={{ color: 'var(--ac-text)' }}>Total</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: 'var(--ac-text)' }}>{fmtN(v.totalPedidos)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</td>
+                  <td className="px-4 py-2.5 text-xs font-bold" style={{ color: 'var(--ac-text)' }}>
+                    Total
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: 'var(--ac-text)' }}>
+                    {fmtN(v.totalPedidos)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: 'var(--ac-text)' }}>
+                    {fmt(v.totalValor)}
+                  </td>
                   {taxaComissao > 0 && (
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>{fmt(v.totalComissao)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                      {fmt(v.totalComissao)}
+                    </td>
                   )}
                 </tr>
               </tfoot>
@@ -130,11 +175,11 @@ function VendedorRow({ v, taxaComissao, defaultOpen }: { v: RelatorioVendedor; t
 }
 
 export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
-  const { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, rankingVendedores, relatorioVendedores, taxaComissao } = data
+  const { kpi, vendasPorMes, rankingClientes, rankingProdutos, pipeline, vendasPorTipo, rankingVendedores, relatorioVendedores, taxaComissao } =
+    data
 
   const maxMesValor = Math.max(...vendasPorMes.map((v) => v.totalValor), 1)
 
-  // Para resumo de comissões: total geral e breakdown por mês
   const comissaoTotal = relatorioVendedores.reduce((s, v) => s + v.totalComissao, 0)
   const comissaoPorMes = (() => {
     const map = new Map<string, { mesLabel: string; total: number }>()
@@ -150,9 +195,114 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
       .map(([mes, v]) => ({ mes, ...v }))
   })()
 
+  const comissoesNode: ReactNode =
+    taxaComissao > 0 && relatorioVendedores.length > 0 ? (
+      <div className="space-y-4">
+        <div
+          className="flex items-center justify-between rounded-lg px-4 py-3"
+          style={{ background: 'color-mix(in srgb, #16a34a 10%, transparent)', border: '1px solid #16a34a40' }}
+        >
+          <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+            Total de comissões no período
+          </span>
+          <span className="text-xl font-bold" style={{ color: '#16a34a' }}>
+            {fmt(comissaoTotal)}
+          </span>
+        </div>
+
+        {comissaoPorMes.length > 1 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--ac-border)' }}>
+                  <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    Mês
+                  </th>
+                  {relatorioVendedores.map((v, i) => (
+                    <th
+                      key={v.vendedorId ?? i}
+                      className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide"
+                      style={{ color: 'var(--ac-muted)' }}
+                    >
+                      {v.vendedorNome}
+                    </th>
+                  ))}
+                  <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    Total mês
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {comissaoPorMes.map((m, i) => (
+                  <tr key={m.mes} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
+                    <td className="py-2.5 pr-3 font-medium text-xs" style={{ color: 'var(--ac-text)' }}>
+                      {m.mesLabel}
+                    </td>
+                    {relatorioVendedores.map((v, vi) => {
+                      const mesData = v.porMes.find((pm) => pm.mes === m.mes)
+                      return (
+                        <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums text-xs" style={{ color: '#16a34a' }}>
+                          {mesData ? fmt(mesData.comissao) : '—'}
+                        </td>
+                      )
+                    })}
+                    <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                      {fmt(m.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
+                  <td className="py-2.5 pr-3 font-bold text-xs" style={{ color: 'var(--ac-text)' }}>
+                    Total
+                  </td>
+                  {relatorioVendedores.map((v, vi) => (
+                    <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                      {fmt(v.totalComissao)}
+                    </td>
+                  ))}
+                  <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
+                    {fmt(comissaoTotal)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
+        {comissaoPorMes.length <= 1 && (
+          <div className="space-y-2">
+            {relatorioVendedores.map((v, i) => (
+              <div
+                key={v.vendedorId ?? i}
+                className="flex items-center justify-between rounded-lg px-4 py-3"
+                style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+              >
+                <div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
+                    {v.vendedorNome}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    {fmtN(v.totalPedidos)} pedidos · {fmt(v.totalValor)} em vendas
+                  </p>
+                </div>
+                <span className="text-lg font-bold" style={{ color: '#16a34a' }}>
+                  {fmt(v.totalComissao)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : null
+
   return (
-    <div className="space-y-5">
-      {/* KPI Cards */}
+    <div className="space-y-4 min-w-0">
+      <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+        Resumo do período — abaixo, abra cada bloco para ver detalhes (tabelas e rankings podem ser longos).
+      </p>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Faturamento Total" value={fmt(kpi.faturamentoTotal)} />
         <KpiCard label="Total Pedidos" value={fmtN(kpi.totalPedidos)} />
@@ -165,8 +315,11 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         />
       </div>
 
-      {/* Pipeline de Status */}
-      <Section title="Pipeline de Pedidos">
+      <CollapseSection
+        title="Pipeline de pedidos"
+        description="Quantidade e valor por status no período."
+        badge={`${pipeline.length} status`}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {pipeline.map((p) => {
             const st = STATUS_PEDIDO[p.status]
@@ -177,39 +330,66 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
                 style={{ borderLeftColor: st.color, background: st.bg }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold" style={{ color: st.color }}>{st.label}</span>
-                  <span className="text-lg font-bold" style={{ color: st.color }}>{p.quantidade}</span>
+                  <span className="text-sm font-semibold" style={{ color: st.color }}>
+                    {st.label}
+                  </span>
+                  <span className="text-lg font-bold" style={{ color: st.color }}>
+                    {p.quantidade}
+                  </span>
                 </div>
-                <p className="text-xs" style={{ color: st.color }}>{fmt(p.valorTotal)}</p>
+                <p className="text-xs" style={{ color: st.color }}>
+                  {fmt(p.valorTotal)}
+                </p>
                 <BarHorizontal percentage={p.percentual} color={st.color} height={6} />
-                <p className="text-xs text-right" style={{ color: st.color }}>{fmtP(p.percentual)}</p>
+                <p className="text-xs text-right" style={{ color: st.color }}>
+                  {fmtP(p.percentual)}
+                </p>
               </div>
             )
           })}
         </div>
-      </Section>
+      </CollapseSection>
 
-      {/* Vendas por Mês */}
       {vendasPorMes.length > 0 && (
-        <Section title="Vendas por Período">
+        <CollapseSection
+          title="Vendas por período"
+          description="Pedidos, itens e faturamento mês a mês."
+          badge={`${vendasPorMes.length} meses`}
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ color: 'var(--ac-muted)' }}>
-                  <th className="text-left py-2 pr-3 font-medium">Mês</th>
-                  <th className="text-right py-2 px-3 font-medium">Pedidos</th>
-                  <th className="text-right py-2 px-3 font-medium">Itens</th>
-                  <th className="text-right py-2 px-3 font-medium">Faturamento</th>
-                  <th className="py-2 pl-3 w-32 font-medium"></th>
+                  <th className="text-left py-2 pr-3 font-medium">
+                    Mês
+                  </th>
+                  <th className="text-right py-2 px-3 font-medium">
+                    Pedidos
+                  </th>
+                  <th className="text-right py-2 px-3 font-medium">
+                    Itens
+                  </th>
+                  <th className="text-right py-2 px-3 font-medium">
+                    Faturamento
+                  </th>
+                  <th className="py-2 pl-3 w-32 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {vendasPorMes.map((v) => (
                   <tr key={v.mes} className="border-t" style={{ borderColor: 'var(--ac-border)' }}>
-                    <td className="py-2 pr-3 font-medium" style={{ color: 'var(--ac-text)' }}>{v.mesLabel}</td>
-                    <td className="py-2 px-3 text-right" style={{ color: 'var(--ac-text)' }}>{fmtN(v.totalPedidos)}</td>
-                    <td className="py-2 px-3 text-right" style={{ color: 'var(--ac-text)' }}>{fmtN(v.totalItens)}</td>
-                    <td className="py-2 px-3 text-right font-medium" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</td>
+                    <td className="py-2 pr-3 font-medium" style={{ color: 'var(--ac-text)' }}>
+                      {v.mesLabel}
+                    </td>
+                    <td className="py-2 px-3 text-right" style={{ color: 'var(--ac-text)' }}>
+                      {fmtN(v.totalPedidos)}
+                    </td>
+                    <td className="py-2 px-3 text-right" style={{ color: 'var(--ac-text)' }}>
+                      {fmtN(v.totalItens)}
+                    </td>
+                    <td className="py-2 px-3 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
+                      {fmt(v.totalValor)}
+                    </td>
                     <td className="py-2 pl-3">
                       <BarHorizontal percentage={(v.totalValor / maxMesValor) * 100} height={6} />
                     </td>
@@ -218,12 +398,15 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
               </tbody>
             </table>
           </div>
-        </Section>
+        </CollapseSection>
       )}
 
-      {/* Ranking Clientes */}
       {rankingClientes.length > 0 && (
-        <Section title="Top Clientes por Faturamento">
+        <CollapseSection
+          title="Top clientes por faturamento"
+          description="Participação no faturamento do período."
+          badge={rankingClientes.length}
+        >
           <div className="space-y-2">
             {rankingClientes.map((c, i) => (
               <div key={c.clienteId ?? i} className="flex items-center gap-3">
@@ -235,7 +418,9 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>{c.clienteNome}</span>
+                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>
+                      {c.clienteNome}
+                    </span>
                     <span
                       className="text-xs px-1.5 py-0.5 rounded shrink-0"
                       style={{ background: 'color-mix(in srgb, var(--ac-border) 60%, transparent)', color: 'var(--ac-muted)' }}
@@ -246,18 +431,25 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
                   <BarHorizontal percentage={c.participacao} height={5} />
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(c.totalValor)}</p>
-                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(c.participacao)}</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    {fmt(c.totalValor)}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    {fmtP(c.participacao)}
+                  </p>
                 </div>
               </div>
             ))}
           </div>
-        </Section>
+        </CollapseSection>
       )}
 
-      {/* Ranking Produtos */}
       {rankingProdutos.length > 0 && (
-        <Section title="Top Produtos por Faturamento">
+        <CollapseSection
+          title="Top produtos por faturamento"
+          description="Facas mais vendidas em valor no período."
+          badge={rankingProdutos.length}
+        >
           <div className="space-y-2">
             {rankingProdutos.map((p, i) => (
               <div key={p.facaId} className="flex items-center gap-3">
@@ -269,33 +461,40 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>{p.facaCodigo}</span>
-                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>{p.facaNome}</span>
+                    <span className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
+                      {p.facaCodigo}
+                    </span>
+                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>
+                      {p.facaNome}
+                    </span>
                   </div>
                   <BarHorizontal percentage={p.participacao} height={5} />
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(p.totalValor)}</p>
-                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtN(p.totalQuantidade)} unid. &middot; {fmtP(p.participacao)}</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    {fmt(p.totalValor)}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    {fmtN(p.totalQuantidade)} unid. · {fmtP(p.participacao)}
+                  </p>
                 </div>
               </div>
             ))}
           </div>
-        </Section>
+        </CollapseSection>
       )}
 
-      {/* Vendas por Tipo de Cliente */}
       {vendasPorTipo.length > 0 && (
-        <Section title="Vendas por Tipo de Cliente">
+        <CollapseSection title="Vendas por tipo de cliente" description="Distribuição entre perfis de cliente." badge={vendasPorTipo.length}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {vendasPorTipo.map((v) => (
-              <div
-                key={v.tipo}
-                className="rounded-lg border p-3 space-y-2"
-                style={{ borderColor: 'var(--ac-border)' }}
-              >
-                <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{v.tipo}</p>
-                <p className="text-lg font-bold" style={{ color: 'var(--ac-accent)' }}>{fmt(v.totalValor)}</p>
+              <div key={v.tipo} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--ac-border)' }}>
+                <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                  {v.tipo}
+                </p>
+                <p className="text-lg font-bold" style={{ color: 'var(--ac-accent)' }}>
+                  {fmt(v.totalValor)}
+                </p>
                 <BarHorizontal percentage={v.percentual} height={6} />
                 <div className="flex justify-between text-xs" style={{ color: 'var(--ac-muted)' }}>
                   <span>{v.totalPedidos} pedidos</span>
@@ -304,157 +503,64 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
               </div>
             ))}
           </div>
-        </Section>
+        </CollapseSection>
       )}
 
-      {/* Bloco separado de gestão comercial por vendedor */}
-      {(relatorioVendedores.length > 0 || rankingVendedores.length > 0) && (
-        <section
-          className="rounded-xl border p-4 sm:p-5 space-y-4"
-          style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
+      {relatorioVendedores.length > 0 && (
+        <CollapseSection
+          title="Relatório por vendedor"
+          description="Abra cada vendedor para ver o detalhamento mensal."
+          badge={relatorioVendedores.length}
         >
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-              Gestão de Vendedores
-            </h3>
-            <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>
-              Área dedicada para desempenho comercial e comissões.
-            </p>
+          <div className="space-y-2">
+            {relatorioVendedores.map((v, i) => (
+              <VendedorRow key={v.vendedorId ?? i} v={v} taxaComissao={taxaComissao} />
+            ))}
           </div>
+        </CollapseSection>
+      )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            {relatorioVendedores.length > 0 && (
-              <div className="xl:col-span-2">
-                <Section title="Relatório por Vendedor">
-                  <div className="space-y-2">
-                    {relatorioVendedores.map((v, i) => (
-                      <VendedorRow
-                        key={v.vendedorId ?? i}
-                        v={v}
-                        taxaComissao={taxaComissao}
-                        defaultOpen={i === 0}
-                      />
-                    ))}
+      {rankingVendedores.length > 0 && (
+        <CollapseSection title="Top vendedores por faturamento" description="Ranking rápido por valor vendido." badge={rankingVendedores.length}>
+          <div className="space-y-2">
+            {rankingVendedores.map((v, i) => (
+              <div key={v.vendedorId ?? i} className="flex items-center gap-3">
+                <span
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                  style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
+                >
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>
+                      {v.vendedorNome}
+                    </span>
                   </div>
-                </Section>
+                  <BarHorizontal percentage={v.participacao} height={5} />
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    {fmt(v.totalValor)}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    {fmtP(v.participacao)} · {v.totalPedidos} pedidos
+                  </p>
+                </div>
               </div>
-            )}
-
-            <div className="space-y-4">
-              {/* Ranking Vendedores (resumo) */}
-              {rankingVendedores.length > 0 && (
-                <Section title="Top Vendedores por Faturamento">
-                  <div className="space-y-2">
-                    {rankingVendedores.map((v, i) => (
-                      <div key={v.vendedorId ?? i} className="flex items-center gap-3">
-                        <span
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
-                        >
-                          {i + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium truncate" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</span>
-                          </div>
-                          <BarHorizontal percentage={v.participacao} height={5} />
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>{fmt(v.totalValor)}</p>
-                          <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtP(v.participacao)} &middot; {v.totalPedidos} pedidos</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
-
-              {/* Resumo de Comissões a Pagar */}
-              {taxaComissao > 0 && relatorioVendedores.length > 0 && (
-                <Section title={`Comissões a Pagar — Taxa: ${taxaComissao}%`}>
-                  <div className="space-y-4">
-                    <div
-                      className="flex items-center justify-between rounded-lg px-4 py-3"
-                      style={{ background: 'color-mix(in srgb, #16a34a 10%, transparent)', border: '1px solid #16a34a40' }}
-                    >
-                      <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                        Total de comissões no período
-                      </span>
-                      <span className="text-xl font-bold" style={{ color: '#16a34a' }}>{fmt(comissaoTotal)}</span>
-                    </div>
-
-                    {comissaoPorMes.length > 1 && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr style={{ borderBottom: '1px solid var(--ac-border)' }}>
-                              <th className="text-left py-2 pr-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Mês</th>
-                              {relatorioVendedores.map((v, i) => (
-                                <th key={v.vendedorId ?? i} className="text-right py-2 px-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                                  {v.vendedorNome}
-                                </th>
-                              ))}
-                              <th className="text-right py-2 pl-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total mês</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {comissaoPorMes.map((m, i) => (
-                              <tr key={m.mes} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
-                                <td className="py-2.5 pr-3 font-medium text-xs" style={{ color: 'var(--ac-text)' }}>{m.mesLabel}</td>
-                                {relatorioVendedores.map((v, vi) => {
-                                  const mesData = v.porMes.find((pm) => pm.mes === m.mes)
-                                  return (
-                                    <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums text-xs" style={{ color: '#16a34a' }}>
-                                      {mesData ? fmt(mesData.comissao) : '—'}
-                                    </td>
-                                  )
-                                })}
-                                <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
-                                  {fmt(m.total)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
-                              <td className="py-2.5 pr-3 font-bold text-xs" style={{ color: 'var(--ac-text)' }}>Total</td>
-                              {relatorioVendedores.map((v, vi) => (
-                                <td key={v.vendedorId ?? vi} className="py-2.5 px-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
-                                  {fmt(v.totalComissao)}
-                                </td>
-                              ))}
-                              <td className="py-2.5 pl-3 text-right tabular-nums font-bold text-xs" style={{ color: '#16a34a' }}>
-                                {fmt(comissaoTotal)}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
-                    )}
-
-                    {comissaoPorMes.length <= 1 && (
-                      <div className="space-y-2">
-                        {relatorioVendedores.map((v, i) => (
-                          <div
-                            key={v.vendedorId ?? i}
-                            className="flex items-center justify-between rounded-lg px-4 py-3"
-                            style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
-                          >
-                            <div>
-                              <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>{v.vendedorNome}</p>
-                              <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>{fmtN(v.totalPedidos)} pedidos · {fmt(v.totalValor)} em vendas</p>
-                            </div>
-                            <span className="text-lg font-bold" style={{ color: '#16a34a' }}>{fmt(v.totalComissao)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </Section>
-              )}
-            </div>
+            ))}
           </div>
-        </section>
+        </CollapseSection>
+      )}
+
+      {taxaComissao > 0 && relatorioVendedores.length > 0 && (
+        <CollapseSection
+          title={`Comissões a pagar — taxa ${taxaComissao}%`}
+          description="Totais e visão por mês e por vendedor."
+          badge={fmt(comissaoTotal)}
+        >
+          {comissoesNode}
+        </CollapseSection>
       )}
     </div>
   )

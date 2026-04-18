@@ -16,9 +16,7 @@ export type MetricasClientProps = {
   estoqueData: MetricasEstoqueData
 }
 
-function scrollToId(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
+type PainelId = 'vendas' | 'estoque'
 
 export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoqueInitial }: MetricasClientProps) {
   const initialRange: DateRange =
@@ -35,6 +33,7 @@ export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoque
   const [ate, setAte] = useState(initialRange.ate)
   const [vData, setVData] = useState(vendasInitial)
   const [eData, setEData] = useState(estoqueInitial)
+  const [painel, setPainel] = useState<PainelId>('vendas')
   const [isPending, startTransition] = useTransition()
 
   const fetchWithRange = useCallback((range: DateRange) => {
@@ -57,35 +56,38 @@ export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoque
     fetchWithRange({ desde, ate: value })
   }
 
+  const kpiV = vData.kpi
+  const kpiE = eData.kpi
+  const criticosE = kpiE.facasCriticas + kpiE.mpCriticas
+
   return (
-    <div className="px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 space-y-6 max-w-[1600px] mx-auto">
-      <header className="space-y-2">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 space-y-5 mx-auto">
+      <header className="space-y-2 max-w-3xl">
         <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--ac-accent)' }}>
           Relatórios
         </p>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: 'var(--ac-text)' }}>
           Visão comercial e de estoque
         </h1>
-        <p className="text-sm max-w-2xl leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
-          Acompanhe faturamento, pedidos e desempenho de vendas no mesmo painel em que acompanha saúde de SKUs,
-          movimentações e consumo de materiais — tudo filtrado pelo mesmo período.
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
+          Escolha o painel abaixo. Só um tema é exibido por vez para manter a página leve; dentro de cada painel, os detalhes ficam em blocos expansíveis.
         </p>
       </header>
 
       <div
-        className="rounded-2xl border p-4 sm:p-5 shadow-sm"
+        className="rounded-2xl border p-4 sm:p-5 shadow-sm min-w-0"
         style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
+          <div className="space-y-1 min-w-0">
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
               Período do relatório
             </span>
             <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-              Vendas usam datas de pedido; estoque considera movimentações e consumo no intervalo.
+              Vendas por data de pedido; estoque por movimentações e consumo no intervalo.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             <div className="flex items-center gap-2">
               <label className="text-xs whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
                 De
@@ -182,111 +184,107 @@ export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoque
         </div>
       </div>
 
-      <nav
-        className="flex flex-wrap gap-2 sticky top-0 z-10 py-2 -mx-1 px-1"
-        style={{ background: 'color-mix(in srgb, var(--ac-bg) 92%, transparent)', backdropFilter: 'blur(8px)' }}
-        aria-label="Ir para seção"
+      <div
+        className="rounded-2xl border overflow-hidden min-w-0"
+        style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
+        role="tablist"
+        aria-label="Tipo de relatório"
       >
-        <button
-          type="button"
-          onClick={() => scrollToId('relatorios-vendas')}
-          className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors"
-          style={{
-            background: 'var(--ac-card)',
-            border: '1px solid var(--ac-border)',
-            color: 'var(--ac-text)',
-            boxShadow: '0 1px 2px color-mix(in srgb, var(--ac-text) 6%, transparent)',
-          }}
-        >
-          <span
-            className="size-2 rounded-full"
-            style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}
-            aria-hidden
-          />
-          Vendas
-        </button>
-        <button
-          type="button"
-          onClick={() => scrollToId('relatorios-estoque')}
-          className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors"
-          style={{
-            background: 'var(--ac-card)',
-            border: '1px solid var(--ac-border)',
-            color: 'var(--ac-text)',
-            boxShadow: '0 1px 2px color-mix(in srgb, var(--ac-text) 6%, transparent)',
-          }}
-        >
-          <span
-            className="size-2 rounded-full"
-            style={{ background: 'linear-gradient(135deg, #2563eb, #6366f1)' }}
-            aria-hidden
-          />
-          Estoque
-        </button>
-      </nav>
-
-      {isPending && (
-        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--ac-muted)' }}>
-          <span
-            className="inline-block w-4 h-4 border-2 rounded-full animate-spin"
-            style={{ borderColor: 'var(--ac-border)', borderTopColor: 'var(--ac-accent)' }}
-          />
-          Atualizando relatórios…
+        <div className="flex p-1 gap-1 sm:inline-flex sm:flex-row w-full sm:w-auto rounded-xl m-2" style={{ background: 'var(--ac-bg)' }}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={painel === 'vendas'}
+            id="tab-relatorio-vendas"
+            aria-controls="panel-relatorio-vendas"
+            onClick={() => setPainel('vendas')}
+            className="flex-1 sm:flex-none min-w-0 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all"
+            style={{
+              color: painel === 'vendas' ? 'var(--ac-text)' : 'var(--ac-muted)',
+              background: painel === 'vendas' ? 'var(--ac-card)' : 'transparent',
+              boxShadow: painel === 'vendas' ? '0 1px 3px color-mix(in srgb, var(--ac-text) 12%, transparent)' : 'none',
+              border: painel === 'vendas' ? '1px solid var(--ac-border)' : '1px solid transparent',
+            }}
+          >
+            <span className="block truncate">Vendas</span>
+            <span className="block text-[11px] font-normal opacity-80 truncate" style={{ color: 'var(--ac-muted)' }}>
+              {kpiV.totalPedidos} ped. · {kpiV.faturamentoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={painel === 'estoque'}
+            id="tab-relatorio-estoque"
+            aria-controls="panel-relatorio-estoque"
+            onClick={() => setPainel('estoque')}
+            className="flex-1 sm:flex-none min-w-0 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all"
+            style={{
+              color: painel === 'estoque' ? 'var(--ac-text)' : 'var(--ac-muted)',
+              background: painel === 'estoque' ? 'var(--ac-card)' : 'transparent',
+              boxShadow: painel === 'estoque' ? '0 1px 3px color-mix(in srgb, var(--ac-text) 12%, transparent)' : 'none',
+              border: painel === 'estoque' ? '1px solid var(--ac-border)' : '1px solid transparent',
+            }}
+          >
+            <span className="block truncate">Estoque</span>
+            <span className="block text-[11px] font-normal opacity-80 truncate" style={{ color: 'var(--ac-muted)' }}>
+              {criticosE} crít. · {kpiE.totalSkusFacas + kpiE.totalSkusMp} SKUs
+            </span>
+          </button>
         </div>
-      )}
 
-      <div className="space-y-10" style={{ opacity: isPending ? 0.55 : 1, transition: 'opacity 0.2s' }}>
-        <section
-          id="relatorios-vendas"
-          className="scroll-mt-24 rounded-2xl border overflow-hidden"
-          style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
-        >
-          <div
-            className="px-5 py-4 sm:px-6 border-b flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2"
-            style={{
-              borderColor: 'var(--ac-border)',
-              background: 'linear-gradient(135deg, color-mix(in srgb, #059669 12%, var(--ac-card)), var(--ac-card))',
-            }}
-          >
-            <div>
-              <h2 className="text-lg font-bold" style={{ color: 'var(--ac-text)' }}>
-                Desempenho de vendas
-              </h2>
-              <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-                Faturamento, ticket médio, pipeline e rankings no período.
-              </p>
-            </div>
+        {isPending && (
+          <div className="flex items-center gap-2 px-4 pb-2 text-sm" style={{ color: 'var(--ac-muted)' }}>
+            <span
+              className="inline-block w-4 h-4 border-2 rounded-full animate-spin"
+              style={{ borderColor: 'var(--ac-border)', borderTopColor: 'var(--ac-accent)' }}
+            />
+            Atualizando…
           </div>
-          <div className="p-4 sm:p-6" style={{ background: 'var(--ac-bg)' }}>
-            <VendasMetricsView data={vData} />
-          </div>
-        </section>
+        )}
 
-        <section
-          id="relatorios-estoque"
-          className="scroll-mt-24 rounded-2xl border overflow-hidden"
-          style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-card)' }}
+        <div
+          className="px-3 pb-4 sm:px-5 sm:pb-6 min-w-0"
+          style={{ opacity: isPending ? 0.55 : 1, transition: 'opacity 0.2s' }}
         >
-          <div
-            className="px-5 py-4 sm:px-6 border-b flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2"
-            style={{
-              borderColor: 'var(--ac-border)',
-              background: 'linear-gradient(135deg, color-mix(in srgb, #2563eb 12%, var(--ac-card)), var(--ac-card))',
-            }}
-          >
-            <div>
-              <h2 className="text-lg font-bold" style={{ color: 'var(--ac-text)' }}>
-                Saúde e movimentação de estoque
-              </h2>
-              <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-                Críticos, consumo (BOM), ordens de compra e atividade recente.
-              </p>
+          {painel === 'vendas' ? (
+            <div
+              role="tabpanel"
+              id="panel-relatorio-vendas"
+              aria-labelledby="tab-relatorio-vendas"
+              className="rounded-xl border min-w-0 overflow-hidden"
+              style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-bg)' }}
+            >
+              <div
+                className="px-4 py-3 border-b text-sm font-medium"
+                style={{ borderColor: 'var(--ac-border)', color: 'var(--ac-muted)' }}
+              >
+                Desempenho de vendas — abra cada seção para ver o detalhe.
+              </div>
+              <div className="p-3 sm:p-4 min-w-0">
+                <VendasMetricsView data={vData} />
+              </div>
             </div>
-          </div>
-          <div className="p-4 sm:p-6" style={{ background: 'var(--ac-bg)' }}>
-            <EstoqueMetricsView data={eData} />
-          </div>
-        </section>
+          ) : (
+            <div
+              role="tabpanel"
+              id="panel-relatorio-estoque"
+              aria-labelledby="tab-relatorio-estoque"
+              className="rounded-xl border min-w-0 overflow-hidden"
+              style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-bg)' }}
+            >
+              <div
+                className="px-4 py-3 border-b text-sm font-medium"
+                style={{ borderColor: 'var(--ac-border)', color: 'var(--ac-muted)' }}
+              >
+                Estoque e movimentação — alertas abrem automaticamente quando existirem.
+              </div>
+              <div className="p-3 sm:p-4 min-w-0">
+                <EstoqueMetricsView data={eData} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
