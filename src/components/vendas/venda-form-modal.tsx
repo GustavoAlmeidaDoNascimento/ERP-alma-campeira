@@ -39,6 +39,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [status, setStatus] = useState<StatusPedido>('em_espera')
   const [observacao, setObservacao] = useState('')
   const [frete, setFrete] = useState(0)
+  const [descontoTotalVal, setDescontoTotalVal] = useState(0)
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
@@ -71,6 +72,11 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setStatus(editando.status)
       setObservacao(editando.observacao ?? '')
       setFrete(editando.frete ?? 0)
+      {
+        const subLinhas = editando.itens?.reduce((s, i) => s + i.subtotal, 0) ?? 0
+        const base = subLinhas + (editando.frete ?? 0)
+        setDescontoTotalVal(Math.min(editando.desconto_total ?? 0, base))
+      }
       setItens(
         editando.itens && editando.itens.length > 0
           ? editando.itens.map((i) => ({
@@ -89,6 +95,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setStatus('em_espera')
       setObservacao('')
       setFrete(0)
+      setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
     }
   }, [open, editando])
@@ -101,7 +108,33 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
     [itens]
   )
 
-  const total = useMemo(() => subtotalItens + (frete || 0), [subtotalItens, frete])
+  const baseAntesDescontoTotal = useMemo(() => subtotalItens + (frete || 0), [subtotalItens, frete])
+
+  const descontoTotalAplicado = Math.min(descontoTotalVal, baseAntesDescontoTotal)
+  const pctDescontoTotal =
+    baseAntesDescontoTotal > 0 ? parseFloat(((descontoTotalAplicado / baseAntesDescontoTotal) * 100).toFixed(4)) : 0
+
+  useEffect(() => {
+    setDescontoTotalVal((v) => Math.min(v, baseAntesDescontoTotal))
+  }, [baseAntesDescontoTotal])
+
+  const total = useMemo(
+    () => Math.max(0, baseAntesDescontoTotal - descontoTotalAplicado),
+    [baseAntesDescontoTotal, descontoTotalAplicado]
+  )
+
+  function setDescontoTotalPorPct(pct: number) {
+    const p = Math.max(0, Math.min(100, pct))
+    const v =
+      baseAntesDescontoTotal > 0
+        ? Math.min(parseFloat(((baseAntesDescontoTotal * p) / 100).toFixed(2)), baseAntesDescontoTotal)
+        : 0
+    setDescontoTotalVal(v)
+  }
+
+  function setDescontoTotalPorValor(v: number) {
+    setDescontoTotalVal(Math.min(Math.max(0, v), baseAntesDescontoTotal))
+  }
 
   function addItem() {
     setItens((prev) => [...prev, { faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
@@ -182,6 +215,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         status,
         observacao,
         frete: frete || 0,
+        desconto_total: descontoTotalAplicado,
         itens: itensValidos.map((i) => ({
           faca_id: i.faca_id,
           quantidade: i.quantidade,
@@ -488,12 +522,73 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               </div>
             </div>
 
+            {/* Desconto sobre o total (% + R$) */}
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <label className="text-sm font-semibold uppercase tracking-wide shrink-0" style={{ color: 'var(--ac-muted)' }}>
+                Desconto no total
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    value={pctDescontoTotal === 0 ? '' : pctDescontoTotal}
+                    placeholder="0"
+                    onChange={(e) => setDescontoTotalPorPct(parseFloat(e.target.value) || 0)}
+                    disabled={baseAntesDescontoTotal <= 0}
+                    className="w-[4.5rem] px-2 py-1.5 rounded-lg text-sm outline-none text-right tabular-nums"
+                    style={
+                      descontoTotalAplicado > 0
+                        ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' }
+                        : inputStyle
+                    }
+                    onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+                    onBlur={(e) =>
+                      (e.currentTarget.style.borderColor = descontoTotalAplicado > 0 ? '#f59e0b' : 'var(--ac-border)')
+                    }
+                  />
+                  <span className="text-xs shrink-0" style={{ color: 'var(--ac-muted)' }}>%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs shrink-0" style={{ color: 'var(--ac-muted)' }}>R$</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={descontoTotalVal === 0 ? '' : descontoTotalVal}
+                    placeholder="0,00"
+                    onChange={(e) => setDescontoTotalPorValor(parseFloat(e.target.value) || 0)}
+                    disabled={baseAntesDescontoTotal <= 0}
+                    className="w-28 px-2 py-1.5 rounded-lg text-sm outline-none text-right tabular-nums"
+                    style={
+                      descontoTotalAplicado > 0
+                        ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' }
+                        : inputStyle
+                    }
+                    onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+                    onBlur={(e) =>
+                      (e.currentTarget.style.borderColor = descontoTotalAplicado > 0 ? '#f59e0b' : 'var(--ac-border)')
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Total geral */}
-            <div className="flex items-center justify-end gap-3">
-              <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</span>
-              <span className="text-xl font-bold" style={{ color: 'var(--ac-accent)' }}>
-                {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </span>
+            <div className="flex flex-col items-end gap-0.5">
+              {descontoTotalAplicado > 0 && (
+                <div className="text-xs tabular-nums line-through" style={{ color: 'var(--ac-muted)' }}>
+                  {baseAntesDescontoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-3">
+                <span className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</span>
+                <span className="text-xl font-bold" style={{ color: descontoTotalAplicado > 0 ? '#15803d' : 'var(--ac-accent)' }}>
+                  {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
             </div>
           </div>
         </div>

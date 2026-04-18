@@ -282,6 +282,8 @@ export type Pedido = {
   observacao: string | null
   valor_total: number | null
   frete: number
+  /** Desconto em R$ sobre (soma dos itens + frete). Opcional até migração antiga. */
+  desconto_total?: number
   entregue_at: string | null
   created_at: string
   cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null

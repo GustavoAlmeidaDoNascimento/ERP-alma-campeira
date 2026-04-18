@@ -79,6 +79,7 @@ export type VendaInput = {
   observacao: string
   status: StatusPedido
   frete: number
+  desconto_total: number
   itens: VendaItemInput[]
 }
 
@@ -134,7 +135,9 @@ export async function criarVenda(input: VendaInput) {
   const codigo = await gerarCodigoPedido()
   const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
   const frete = Math.max(0, input.frete || 0)
-  const valor_total = subtotalItens + frete
+  const bruto = subtotalItens + frete
+  const desconto_total = Math.min(Math.max(0, input.desconto_total || 0), bruto)
+  const valor_total = bruto - desconto_total
 
   // Se já entregue de início, inserimos como em_producao e executarEntregaPedido
   // vai finalizar com status=entregue e entregue_at.
@@ -150,6 +153,7 @@ export async function criarVenda(input: VendaInput) {
       observacao: input.observacao.trim() || null,
       status: statusInsert,
       frete,
+      desconto_total,
       valor_total,
     })
     .select('id')
@@ -246,7 +250,9 @@ export async function atualizarVenda(id: string, input: VendaInput) {
 
   const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
   const frete = Math.max(0, input.frete || 0)
-  const valor_total = subtotalItens + frete
+  const bruto = subtotalItens + frete
+  const desconto_total = Math.min(Math.max(0, input.desconto_total || 0), bruto)
+  const valor_total = bruto - desconto_total
 
   // Se o usuário quer marcar como entregue, o update inicial usa em_producao;
   // executarEntregaPedido fará o update final com status=entregue e entregue_at.
@@ -261,6 +267,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
       observacao: input.observacao.trim() || null,
       status: statusUpdate,
       frete,
+      desconto_total,
       valor_total,
     })
     .eq('id', id)

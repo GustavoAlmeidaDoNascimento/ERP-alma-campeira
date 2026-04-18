@@ -43,9 +43,12 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     }
   }
 
-  const subtotalItens = pedido.itens?.reduce((s, i) => s + i.subtotal, 0) ?? (pedido.valor_total ?? 0) - (pedido.frete ?? 0)
+  const subtotalItens = pedido.itens?.reduce((s, i) => s + i.subtotal, 0) ?? 0
   const frete = pedido.frete ?? 0
-  const total = subtotalItens + frete
+  const descontoTotal = pedido.desconto_total ?? 0
+  const total =
+    pedido.valor_total ??
+    Math.max(0, subtotalItens + frete - descontoTotal)
 
   return (
     <Modal
@@ -196,16 +199,28 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                 </tr>
               ))}
             </tbody>
-            {frete > 0 && (
+            {(frete > 0 || descontoTotal > 0) && (
               <tfoot>
-                <tr style={{ borderTop: '1px solid var(--ac-border)' }}>
-                  <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                    Frete
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
-                    {frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </td>
-                </tr>
+                {frete > 0 && (
+                  <tr style={{ borderTop: '1px solid var(--ac-border)' }}>
+                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                      Frete
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
+                      {frete.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                  </tr>
+                )}
+                {descontoTotal > 0 && (
+                  <tr style={{ borderTop: frete > 0 ? undefined : '1px solid var(--ac-border)' }}>
+                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                      Desconto no total
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: '#b45309' }}>
+                      −{descontoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                  </tr>
+                )}
               </tfoot>
             )}
           </table>
