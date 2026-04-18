@@ -389,7 +389,13 @@ function TabPane({
         />
       )
     case 'metricas-relatorios':
-      return <MetricasClient vendasData={data.vendas} estoqueData={data.estoque} />
+      return (
+        <MetricasClient
+          vendasData={data.vendas}
+          estoqueData={data.estoque}
+          atividadeData={data.atividade}
+        />
+      )
     default:
       return null
   }

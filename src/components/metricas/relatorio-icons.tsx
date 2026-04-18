@@ -123,6 +123,17 @@ export function IconRelatorioAbaEstoque({ className = 'size-5', ...p }: IconProp
   )
 }
 
+/** Aba atividade (histórico / log) */
+export function IconRelatorioAbaAtividade({ className = 'size-5', ...p }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden {...stroke} {...p}>
+      <path d="M12 3a9 9 0 1 0 9 9" />
+      <polyline points="21 3 21 9 15 9" />
+      <polyline points="12 7 12 12 15 14" />
+    </svg>
+  )
+}
+
 /** Aba visão geral (painel misto) */
 export function IconRelatorioAbaGeral({ className = 'size-5', ...p }: IconProps) {
   return (

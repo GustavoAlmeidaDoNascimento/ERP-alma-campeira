@@ -383,7 +383,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             <span>Faca</span>
             <span className="text-center">Qtd</span>
             <span className="text-right">Preço unit.</span>
-            <span className="text-center">Desconto</span>
+            <span className="text-center">Desconto unitário</span>
             <span className="text-right">Subtotal</span>
             <span></span>
           </div>

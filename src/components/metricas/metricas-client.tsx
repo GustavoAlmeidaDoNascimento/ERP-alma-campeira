@@ -10,16 +10,33 @@ import {
   type MetricasEstoqueData,
 } from '@/lib/actions/metricas'
 import { type DateRange } from '@/lib/metricas-periodos'
-import { IconRelatorioAbaEstoque, IconRelatorioAbaGeral, IconRelatorioAbaVendas } from './relatorio-icons'
+import {
+  IconRelatorioAbaAtividade,
+  IconRelatorioAbaEstoque,
+  IconRelatorioAbaGeral,
+  IconRelatorioAbaVendas,
+} from './relatorio-icons'
+import { AtividadeView } from '@/components/auditoria/atividade-view'
+import type { AuditLog } from '@/lib/actions/auditoria'
 
 export type MetricasClientProps = {
   vendasData: MetricasVendasData
   estoqueData: MetricasEstoqueData
+  atividadeData: {
+    logs: AuditLog[]
+    total: number
+    tabelas: string[]
+    usuarios: { id: string; nome: string }[]
+  }
 }
 
-type PainelId = 'geral' | 'vendas' | 'estoque'
+type PainelId = 'geral' | 'vendas' | 'estoque' | 'atividade'
 
-export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoqueInitial }: MetricasClientProps) {
+export function MetricasClient({
+  vendasData: vendasInitial,
+  estoqueData: estoqueInitial,
+  atividadeData,
+}: MetricasClientProps) {
   const initialRange: DateRange =
     vendasInitial.dateRange ??
     estoqueInitial.dateRange ??
@@ -288,6 +305,38 @@ export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoque
               </span>
             </span>
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={painel === 'atividade'}
+            id="tab-relatorio-atividade"
+            aria-controls="panel-relatorio-atividade"
+            onClick={() => setPainel('atividade')}
+            className="flex flex-1 min-w-[5.5rem] sm:flex-none sm:min-w-0 items-start gap-2.5 rounded-lg px-3 py-2.5 sm:px-4 text-left text-sm font-semibold transition-all"
+            style={{
+              color: painel === 'atividade' ? 'var(--ac-text)' : 'var(--ac-muted)',
+              background: painel === 'atividade' ? 'var(--ac-card)' : 'transparent',
+              boxShadow: painel === 'atividade' ? '0 1px 3px color-mix(in srgb, var(--ac-text) 12%, transparent)' : 'none',
+              border: painel === 'atividade' ? '1px solid var(--ac-border)' : '1px solid transparent',
+            }}
+          >
+            <span
+              className="flex size-8 shrink-0 items-center justify-center rounded-md mt-0.5"
+              style={{
+                color: painel === 'atividade' ? 'var(--ac-accent)' : 'var(--ac-muted)',
+                background: painel === 'atividade' ? 'color-mix(in srgb, var(--ac-accent) 10%, transparent)' : 'transparent',
+              }}
+              aria-hidden
+            >
+              <IconRelatorioAbaAtividade className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">Atividade</span>
+              <span className="block text-[11px] font-normal opacity-80 truncate" style={{ color: 'var(--ac-muted)' }}>
+                {atividadeData.total.toLocaleString('pt-BR')} registro{atividadeData.total === 1 ? '' : 's'}
+              </span>
+            </span>
+          </button>
         </div>
 
         {isPending && (
@@ -304,7 +353,30 @@ export function MetricasClient({ vendasData: vendasInitial, estoqueData: estoque
           className="px-3 pb-4 sm:px-5 sm:pb-6 min-w-0"
           style={{ opacity: isPending ? 0.55 : 1, transition: 'opacity 0.2s' }}
         >
-          {painel === 'geral' ? (
+          {painel === 'atividade' ? (
+            <div
+              role="tabpanel"
+              id="panel-relatorio-atividade"
+              aria-labelledby="tab-relatorio-atividade"
+              className="rounded-xl border min-w-0 overflow-hidden"
+              style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-bg)' }}
+            >
+              <div
+                className="px-4 py-3 border-b text-sm font-medium"
+                style={{ borderColor: 'var(--ac-border)', color: 'var(--ac-muted)' }}
+              >
+                Registro completo de atividades — clique em um item para ver os detalhes.
+              </div>
+              <div className="p-3 sm:p-4 min-w-0">
+                <AtividadeView
+                  logsIniciais={atividadeData.logs}
+                  totalInicial={atividadeData.total}
+                  tabelasDisponiveis={atividadeData.tabelas}
+                  usuariosDisponiveis={atividadeData.usuarios}
+                />
+              </div>
+            </div>
+          ) : painel === 'geral' ? (
             <div
               role="tabpanel"
               id="panel-relatorio-geral"

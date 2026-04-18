@@ -15,6 +15,7 @@ import { getCargos } from '@/lib/actions/cargos'
 import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
+import { getAuditLogs, getAuditLogTabelas, getAuditLogUsuarios, type AuditLog } from '@/lib/actions/auditoria'
 import { defaultDateRange } from '@/lib/metricas-periodos'
 import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
@@ -110,6 +111,12 @@ export type ErpTabData =
       kind: 'metricas-relatorios'
       vendas: MetricasVendasData
       estoque: MetricasEstoqueData
+      atividade: {
+        logs: AuditLog[]
+        total: number
+        tabelas: string[]
+        usuarios: { id: string; nome: string }[]
+      }
     }
 
 function assertAllowed(perm: Perm | undefined, label: string): void {
@@ -299,8 +306,24 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     const perm = perms.metricas as Perm
     assertAllowed(perm, 'metricas')
     const range = defaultDateRange()
-    const [vendas, estoque] = await Promise.all([getMetricasVendas(range), getMetricasEstoque(range)])
-    return { kind: 'metricas-relatorios', vendas, estoque }
+    const [vendas, estoque, auditoria, tabelas, usuarios] = await Promise.all([
+      getMetricasVendas(range),
+      getMetricasEstoque(range),
+      getAuditLogs({ limit: 100 }),
+      getAuditLogTabelas(),
+      getAuditLogUsuarios(),
+    ])
+    return {
+      kind: 'metricas-relatorios',
+      vendas,
+      estoque,
+      atividade: {
+        logs: auditoria.logs,
+        total: auditoria.total,
+        tabelas,
+        usuarios,
+      },
+    }
   }
 
   throw new Error(`Rota de aba não suportada: ${path}`)
