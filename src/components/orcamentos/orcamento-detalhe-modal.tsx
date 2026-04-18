@@ -453,7 +453,12 @@ export function OrcamentoDetalheModal({
                 <Button
                   variant="secondary"
                   onClick={() => setConfirmandoDelete(true)}
-                  style={{ color: '#dc2626', borderWidth: '1px', borderStyle: 'solid', borderColor: '#fecaca' }}
+                  style={{
+                    background: 'transparent',
+                    color: '#dc2626',
+                    border: '1px solid #fecaca',
+                    fontWeight: 500,
+                  }}
                 >
                   Excluir
                 </Button>
