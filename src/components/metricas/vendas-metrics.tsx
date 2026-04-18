@@ -5,6 +5,16 @@ import type { ReactNode } from 'react'
 import { KpiCard } from './kpi-card'
 import { BarHorizontal } from './bar-horizontal'
 import { CollapseSection } from './collapse-section'
+import {
+  IconRelatorioCalendario,
+  IconRelatorioClientes,
+  IconRelatorioClipboardUser,
+  IconRelatorioComissoes,
+  IconRelatorioPipeline,
+  IconRelatorioProdutos,
+  IconRelatorioRanking,
+  IconRelatorioSegmentos,
+} from './relatorio-icons'
 import { STATUS_PEDIDO } from '@/types'
 import type { MetricasVendasData, RelatorioVendedor } from '@/lib/actions/metricas'
 
@@ -318,6 +328,7 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
       <CollapseSection
         title="Pipeline de pedidos"
         description="Quantidade e valor por status no período."
+        icon={<IconRelatorioPipeline className="size-[18px]" />}
         badge={`${pipeline.length} status`}
       >
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -354,6 +365,7 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         <CollapseSection
           title="Vendas por período"
           description="Pedidos, itens e faturamento mês a mês."
+          icon={<IconRelatorioCalendario className="size-[18px]" />}
           badge={`${vendasPorMes.length} meses`}
         >
           <div className="overflow-x-auto">
@@ -405,6 +417,7 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         <CollapseSection
           title="Top clientes por faturamento"
           description="Participação no faturamento do período."
+          icon={<IconRelatorioClientes className="size-[18px]" />}
           badge={rankingClientes.length}
         >
           <div className="space-y-2">
@@ -448,6 +461,7 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         <CollapseSection
           title="Top produtos por faturamento"
           description="Facas mais vendidas em valor no período."
+          icon={<IconRelatorioProdutos className="size-[18px]" />}
           badge={rankingProdutos.length}
         >
           <div className="space-y-2">
@@ -485,7 +499,12 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
       )}
 
       {vendasPorTipo.length > 0 && (
-        <CollapseSection title="Vendas por tipo de cliente" description="Distribuição entre perfis de cliente." badge={vendasPorTipo.length}>
+        <CollapseSection
+          title="Vendas por tipo de cliente"
+          description="Distribuição entre perfis de cliente."
+          icon={<IconRelatorioSegmentos className="size-[18px]" />}
+          badge={vendasPorTipo.length}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {vendasPorTipo.map((v) => (
               <div key={v.tipo} className="rounded-lg border p-3 space-y-2" style={{ borderColor: 'var(--ac-border)' }}>
@@ -510,6 +529,7 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         <CollapseSection
           title="Relatório por vendedor"
           description="Abra cada vendedor para ver o detalhamento mensal."
+          icon={<IconRelatorioClipboardUser className="size-[18px]" />}
           badge={relatorioVendedores.length}
         >
           <div className="space-y-2">
@@ -521,7 +541,12 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
       )}
 
       {rankingVendedores.length > 0 && (
-        <CollapseSection title="Top vendedores por faturamento" description="Ranking rápido por valor vendido." badge={rankingVendedores.length}>
+        <CollapseSection
+          title="Top vendedores por faturamento"
+          description="Ranking rápido por valor vendido."
+          icon={<IconRelatorioRanking className="size-[18px]" />}
+          badge={rankingVendedores.length}
+        >
           <div className="space-y-2">
             {rankingVendedores.map((v, i) => (
               <div key={v.vendedorId ?? i} className="flex items-center gap-3">
@@ -557,6 +582,7 @@ export function VendasMetricsView({ data }: { data: MetricasVendasData }) {
         <CollapseSection
           title={`Comissões a pagar — taxa ${taxaComissao}%`}
           description="Totais e visão por mês e por vendedor."
+          icon={<IconRelatorioComissoes className="size-[18px]" />}
           badge={fmt(comissaoTotal)}
         >
           {comissoesNode}

@@ -4,6 +4,15 @@ import { useState } from 'react'
 import { KpiCard } from './kpi-card'
 import { BarHorizontal } from './bar-horizontal'
 import { CollapseSection } from './collapse-section'
+import {
+  IconRelatorioAlerta,
+  IconRelatorioBom,
+  IconRelatorioFaca,
+  IconRelatorioMateriaPrima,
+  IconRelatorioMovimento,
+  IconRelatorioOrdemCompra,
+  IconRelatorioUsuarios,
+} from './relatorio-icons'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { STATUS_OC } from '@/types'
 import type { MetricasEstoqueData, ConsumoBom, RankingUsuarioEstoque } from '@/lib/actions/metricas'
@@ -131,6 +140,7 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
         <CollapseSection
           title="Alertas de estoque"
           description="Itens em atenção ou zerados — priorize estes."
+          icon={<IconRelatorioAlerta className="size-[18px]" />}
           badge={alertas.length}
           defaultOpen
         >
@@ -159,7 +169,12 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
       )}
 
       {saudeFacas.length > 0 && (
-        <CollapseSection title="Saúde do estoque — facas" description="Cobertura, mínimos e status por SKU." badge={saudeFacas.length}>
+        <CollapseSection
+          title="Saúde do estoque — facas"
+          description="Cobertura, mínimos e status por SKU."
+          icon={<IconRelatorioFaca className="size-[18px]" />}
+          badge={saudeFacas.length}
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -209,7 +224,12 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
       )}
 
       {saudeMp.length > 0 && (
-        <CollapseSection title="Saúde do estoque — matérias-primas" description="MPs acompanhadas no período." badge={saudeMp.length}>
+        <CollapseSection
+          title="Saúde do estoque — matérias-primas"
+          description="MPs acompanhadas no período."
+          icon={<IconRelatorioMateriaPrima className="size-[18px]" />}
+          badge={saudeMp.length}
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -252,7 +272,12 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
       )}
 
       {movimentacoesRecentes.length > 0 && (
-        <CollapseSection title="Movimentações recentes" description="Últimas entradas e saídas registradas." badge={movimentacoesRecentes.length}>
+        <CollapseSection
+          title="Movimentações recentes"
+          description="Últimas entradas e saídas registradas."
+          icon={<IconRelatorioMovimento className="size-[18px]" />}
+          badge={movimentacoesRecentes.length}
+        >
           <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
             <table className="w-full text-sm">
               <thead>
@@ -299,7 +324,12 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
       )}
 
       {rankingUsuarios.length > 0 && (
-        <CollapseSection title="Movimentações por usuário" description="Volume de lançamentos no período." badge={rankingUsuarios.length}>
+        <CollapseSection
+          title="Movimentações por usuário"
+          description="Volume de lançamentos no período."
+          icon={<IconRelatorioUsuarios className="size-[18px]" />}
+          badge={rankingUsuarios.length}
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -341,6 +371,7 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
         <CollapseSection
           title="Consumo de insumos por faca (BOM)"
           description="Custo de materiais por modelo — cada faca expande a lista de MP."
+          icon={<IconRelatorioBom className="size-[18px]" />}
           badge={consumoBom.length}
         >
           <div className="space-y-2 max-h-[32rem] overflow-y-auto pr-1">
@@ -351,7 +382,12 @@ export function EstoqueMetricsView({ data }: { data: MetricasEstoqueData }) {
         </CollapseSection>
       )}
 
-      <CollapseSection title="Ordens de compra" description="Resumo por status no período." badge={`${resumoOC.length} status`}>
+      <CollapseSection
+        title="Ordens de compra"
+        description="Resumo por status no período."
+        icon={<IconRelatorioOrdemCompra className="size-[18px]" />}
+        badge={`${resumoOC.length} status`}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {resumoOC.map((oc) => {
             const st = STATUS_OC[oc.status]
