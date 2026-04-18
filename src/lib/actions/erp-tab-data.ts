@@ -16,7 +16,6 @@ import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
 import { defaultDateRange } from '@/lib/metricas-periodos'
-import { getConciliacao, type ResultadoConciliacao } from '@/lib/actions/conciliacao'
 import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
 
@@ -108,16 +107,9 @@ export type ErpTabData =
       permTaxasLucro: Perm
     }
   | {
-      kind: 'metricas-vendas'
-      data: MetricasVendasData
-    }
-  | {
-      kind: 'metricas-estoque'
-      data: MetricasEstoqueData
-    }
-  | {
-      kind: 'metricas-conciliacao'
-      data: ResultadoConciliacao
+      kind: 'metricas-relatorios'
+      vendas: MetricasVendasData
+      estoque: MetricasEstoqueData
     }
 
 function assertAllowed(perm: Perm | undefined, label: string): void {
@@ -295,28 +287,20 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     }
   }
 
-  if (path === '/metricas' || path === '/metricas/vendas') {
+  const metricasRelatoriosPaths = new Set([
+    '/metricas',
+    '/metricas/relatorios',
+    '/metricas/vendas',
+    '/metricas/estoque',
+    '/metricas/conciliacao',
+  ])
+  if (metricasRelatoriosPaths.has(path)) {
     const perms = await getPermissoesEfetivas()
     const perm = perms.metricas as Perm
     assertAllowed(perm, 'metricas')
-    const data = await getMetricasVendas(defaultDateRange())
-    return { kind: 'metricas-vendas', data }
-  }
-
-  if (path === '/metricas/estoque') {
-    const perms = await getPermissoesEfetivas()
-    const perm = perms.metricas as Perm
-    assertAllowed(perm, 'metricas')
-    const data = await getMetricasEstoque(defaultDateRange())
-    return { kind: 'metricas-estoque', data }
-  }
-
-  if (path === '/metricas/conciliacao') {
-    const perms = await getPermissoesEfetivas()
-    const perm = perms.metricas as Perm
-    assertAllowed(perm, 'metricas')
-    const data = await getConciliacao()
-    return { kind: 'metricas-conciliacao', data }
+    const range = defaultDateRange()
+    const [vendas, estoque] = await Promise.all([getMetricasVendas(range), getMetricasEstoque(range)])
+    return { kind: 'metricas-relatorios', vendas, estoque }
   }
 
   throw new Error(`Rota de aba não suportada: ${path}`)

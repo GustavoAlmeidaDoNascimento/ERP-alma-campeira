@@ -388,12 +388,8 @@ function TabPane({
           permTaxasLucro={data.permTaxasLucro}
         />
       )
-    case 'metricas-vendas':
-      return <MetricasClient initialTab="vendas" vendasData={data.data} />
-    case 'metricas-estoque':
-      return <MetricasClient initialTab="estoque" estoqueData={data.data} />
-    case 'metricas-conciliacao':
-      return <MetricasClient initialTab="conciliacao" conciliacaoData={data.data} />
+    case 'metricas-relatorios':
+      return <MetricasClient vendasData={data.vendas} estoqueData={data.estoque} />
     default:
       return null
   }

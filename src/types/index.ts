@@ -153,7 +153,7 @@ export type PedidoItemComPedido = PedidoItem & {
 // ============================================================
 export const MODULOS = [
   { key: 'dashboard',       label: 'Dashboard' },
-  { key: 'metricas',        label: 'Métricas' },
+  { key: 'metricas',        label: 'Relatórios' },
   { key: 'materias_primas', label: 'Matérias-Primas' },
   { key: 'movimentacoes_estoque', label: 'Movimentações de Estoque' },
   { key: 'fornecedores',    label: 'Fornecedores' },

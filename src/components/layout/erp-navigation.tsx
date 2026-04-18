@@ -97,28 +97,6 @@ const iconMetricas = (
   </svg>
 )
 
-const iconMetricasConciliacao = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-  </svg>
-)
-
-const iconMetricasVendas = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
-    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-    <polyline points="16 7 22 7 22 13" />
-  </svg>
-)
-
-const iconMetricasEstoque = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
-  </svg>
-)
-
 const iconConsumivel = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
     <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
@@ -129,11 +107,15 @@ const iconConsumivel = (
 
 export const sections: NavSection[] = [
   {
-    label: 'Métricas',
+    label: 'Relatórios',
     items: [
-      { href: '/metricas/vendas',       label: 'Vendas',       available: true, icon: iconMetricasVendas,       moduloKey: 'metricas' },
-      { href: '/metricas/estoque',      label: 'Estoque',      available: true, icon: iconMetricasEstoque,      moduloKey: 'metricas' },
-      { href: '/metricas/conciliacao',  label: 'Conciliação',  available: true, icon: iconMetricasConciliacao,  moduloKey: 'metricas' },
+      {
+        href: '/metricas/relatorios',
+        label: 'Relatórios',
+        available: true,
+        icon: iconMetricas,
+        moduloKey: 'metricas',
+      },
     ],
   },
   {
