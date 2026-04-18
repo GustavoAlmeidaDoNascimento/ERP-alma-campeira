@@ -9,6 +9,7 @@ import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prim
 import { getConsumiveis } from '@/lib/actions/consumiveis'
 import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getVendas } from '@/lib/actions/vendas'
+import { getOrcamentos } from '@/lib/actions/orcamentos'
 import { getClientes } from '@/lib/actions/clientes'
 import { getUsuarios, getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
@@ -18,7 +19,7 @@ import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type Me
 import { getAuditLogs, getAuditLogTabelas, getAuditLogUsuarios, type AuditLog } from '@/lib/actions/auditoria'
 import { defaultDateRange } from '@/lib/metricas-periodos'
 import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
-import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
+import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Orcamento, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -75,6 +76,15 @@ export type ErpTabData =
       facas: Faca[]
       usuarios: { id: string; nome: string }[]
       perm: Perm
+    }
+  | {
+      kind: 'orcamentos'
+      orcamentos: Orcamento[]
+      clientes: Cliente[]
+      facas: Faca[]
+      usuarios: { id: string; nome: string }[]
+      perm: Perm
+      permVendasCriar: boolean
     }
   | {
       kind: 'clientes'
@@ -231,6 +241,27 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     const perm = perms.vendas as Perm
     assertAllowed(perm, 'vendas')
     return { kind: 'vendas', pedidos, clientes, facas, usuarios, perm }
+  }
+
+  if (path === '/orcamentos') {
+    const [perms, orcamentos, clientes, facas, usuarios] = await Promise.all([
+      getPermissoesEfetivas(),
+      getOrcamentos(80),
+      getClientes(80),
+      getFacas(120),
+      getUsuariosPerfisList(),
+    ])
+    const perm = (perms as Record<string, Perm>).orcamentos
+    assertAllowed(perm, 'orcamentos')
+    return {
+      kind: 'orcamentos',
+      orcamentos,
+      clientes,
+      facas,
+      usuarios,
+      perm,
+      permVendasCriar: !!perms.vendas?.criar,
+    }
   }
 
   if (path === '/clientes') {

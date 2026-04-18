@@ -162,6 +162,7 @@ export const MODULOS = [
   { key: 'preco_venda',     label: 'Preço de Venda' },
   { key: 'estoque',         label: 'Estoque / Produção' },
   { key: 'vendas',          label: 'Vendas' },
+  { key: 'orcamentos',      label: 'Orçamentos' },
   { key: 'clientes',        label: 'Clientes' },
   { key: 'ordens_compra',   label: 'Ordens de Compra' },
   { key: 'usuarios',        label: 'Usuários' },
@@ -289,6 +290,41 @@ export type Pedido = {
   cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null
   vendedor?: { id: string; nome: string } | null
   itens?: PedidoItem[]
+}
+
+// ============================================================
+// Orçamentos (não impactam estoque, fila de reposição ou métricas
+// de vendas; podem ser convertidos em Pedido a qualquer momento)
+// ============================================================
+export type OrcamentoItem = {
+  id: string
+  orcamento_id: string
+  faca_id: string
+  quantidade: number
+  preco_unitario: number
+  subtotal: number
+  faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda' | 'foto_url'>
+}
+
+export type Orcamento = {
+  id: string
+  codigo: string
+  cliente_id: string | null
+  vendedor_id: string | null
+  data_orcamento: string
+  observacao: string | null
+  frete: number
+  desconto_total: number
+  valor_total: number | null
+  /** ID do pedido criado quando o orçamento foi convertido em venda. */
+  convertido_pedido_id: string | null
+  convertido_at: string | null
+  created_at: string
+  cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null
+  vendedor?: { id: string; nome: string } | null
+  itens?: OrcamentoItem[]
+  /** Resumo do pedido criado quando o orçamento foi convertido (apenas em queries de detalhe). */
+  pedido_convertido?: Pick<Pedido, 'id' | 'codigo' | 'status' | 'data_pedido'> | null
 }
 
 export const CATEGORIAS_FACA = [
