@@ -74,17 +74,18 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   const [dataInicio, setDataInicio] = useState(() => dataInicioParam ?? '')
   const [dataFim, setDataFim] = useState(() => dataFimParam ?? '')
   type OrdemColuna = 'cliente' | 'vendedor' | 'data' | 'status' | 'frete' | 'total'
-  const [ordemColuna, setOrdemColuna] = useState<OrdemColuna | null>(null)
-  const [ordemDir, setOrdemDir] = useState<'asc' | 'desc'>('asc')
+  /** Um único estado evita aninhar setters (no Strict Mode o updater duplicado anulava o toggle asc/desc). */
+  const [ordenacao, setOrdenacao] = useState<{ coluna: OrdemColuna | null; dir: 'asc' | 'desc' }>({
+    coluna: null,
+    dir: 'asc',
+  })
 
   function toggleOrdem(coluna: OrdemColuna) {
-    setOrdemColuna((prev) => {
-      if (prev === coluna) {
-        setOrdemDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-        return coluna
+    setOrdenacao((prev) => {
+      if (prev.coluna === coluna) {
+        return { coluna, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
       }
-      setOrdemDir('asc')
-      return coluna
+      return { coluna, dir: 'asc' }
     })
   }
 
@@ -179,8 +180,9 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   }, [pedidos, filtroStatus, filtroVendedor, filtroCliente, valorMin, valorMax, dataInicio, dataFim])
 
   const ordenados = useMemo(() => {
+    const ordemColuna = ordenacao.coluna
     if (!ordemColuna) return filtrados
-    const dir = ordemDir === 'asc' ? 1 : -1
+    const dir = ordenacao.dir === 'asc' ? 1 : -1
     return [...filtrados].sort((a, b) => {
       switch (ordemColuna) {
         case 'cliente': {
@@ -205,7 +207,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
           return 0
       }
     })
-  }, [filtrados, ordemColuna, ordemDir])
+  }, [filtrados, ordenacao])
 
   function abrirNovo() { setEditando(null); setFormAberto(true) }
   function abrirEditar(p: Pedido) { setEditando(p); setFormAberto(true) }
@@ -399,12 +401,12 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                   <th key={col}
                     onClick={() => toggleOrdem(col)}
                     className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                    style={{ color: ordemColuna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                    style={{ color: ordenacao.coluna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
                   >
                     <span className="inline-flex items-center gap-1">
                       {col === 'cliente' ? 'Cliente' : col === 'vendedor' ? 'Vendedor' : col === 'data' ? 'Data' : 'Status'}
-                      <span style={{ opacity: ordemColuna === col ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordemColuna === col ? (ordemDir === 'asc' ? '▲' : '▼') : '▲'}
+                      <span style={{ opacity: ordenacao.coluna === col ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordenacao.coluna === col ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
                       </span>
                     </span>
                   </th>
@@ -413,12 +415,12 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                   <th key={col}
                     onClick={() => toggleOrdem(col)}
                     className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                    style={{ color: ordemColuna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                    style={{ color: ordenacao.coluna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
                   >
                     <span className="inline-flex items-center justify-end gap-1">
                       {col === 'frete' ? 'Frete' : 'Total'}
-                      <span style={{ opacity: ordemColuna === col ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordemColuna === col ? (ordemDir === 'asc' ? '▲' : '▼') : '▲'}
+                      <span style={{ opacity: ordenacao.coluna === col ? 1 : 0.3, fontSize: '10px' }}>
+                        {ordenacao.coluna === col ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
                       </span>
                     </span>
                   </th>
