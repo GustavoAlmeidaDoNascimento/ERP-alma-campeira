@@ -10,18 +10,6 @@ export type FacaCatalogoItem = {
   preco_venda: number
 }
 
-const logoMask: CSSProperties = {
-  backgroundColor: '#EAB308',
-  maskImage: 'url(/images/logo.png)',
-  maskSize: 'contain',
-  maskRepeat: 'no-repeat',
-  maskPosition: 'center',
-  WebkitMaskImage: 'url(/images/logo.png)',
-  WebkitMaskSize: 'contain',
-  WebkitMaskRepeat: 'no-repeat',
-  WebkitMaskPosition: 'center',
-}
-
 function formatPreco(preco: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -287,17 +275,10 @@ export function CatalogoClient({ facas }: Props) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                        background: '#ffffff',
+                      background: '#f9fafb',
                     }}
                   >
-                    <div
-                      aria-hidden
-                      style={{
-                        ...logoMask,
-                        width: 'min(42%, 140px)',
-                        height: 'min(42%, 140px)',
-                      }}
-                    />
+                    <KnifeIcon />
                   </div>
                 )}
               </div>

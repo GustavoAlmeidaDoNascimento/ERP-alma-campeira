@@ -1,12 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Metadata } from 'next'
-import type { CSSProperties } from 'react'
 import { CatalogoClient, type FacaCatalogoItem } from './catalogo-client'
 
 export const metadata: Metadata = {
-  title: 'Catálogo de Facas — Alma Campeira',
-  description:
-    'Conheça nossa linha de facas artesanais, forjadas com tradição e qualidade em cada lâmina.',
+  title: 'Catálogo de Facas',
+  description: 'Catálogo de facas artesanais.',
 }
 
 async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
@@ -20,18 +18,6 @@ async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
   } catch {
     return []
   }
-}
-
-const logoMask: CSSProperties = {
-  backgroundColor: '#EAB308',
-  maskImage: 'url(/images/logo.png)',
-  maskSize: 'contain',
-  maskRepeat: 'no-repeat',
-  maskPosition: 'center',
-  WebkitMaskImage: 'url(/images/logo.png)',
-  WebkitMaskSize: 'contain',
-  WebkitMaskRepeat: 'no-repeat',
-  WebkitMaskPosition: 'center',
 }
 
 export default async function CatalogoPage() {
@@ -130,66 +116,15 @@ export default async function CatalogoPage() {
 
       <div style={{ minHeight: '100vh', background: '#ffffff', color: '#111827' }}>
 
-        <header style={{
-          position: 'sticky', top: 0, zIndex: 50,
-          background: 'rgba(255,255,255,0.92)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid #e5e7eb',
-          padding: '8px 16px',
-        }}>
-          <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ ...logoMask, width: 36, height: 36, flexShrink: 0 }} aria-hidden />
-            <div>
-              <p style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2, color: '#111827' }}>
-                Alma Campeira
-              </p>
-              <p style={{ fontSize: 11, color: '#6b7280', letterSpacing: '0.05em' }}>
-                CUTELARIA ARTESANAL
-              </p>
-            </div>
-          </div>
-        </header>
-
-        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '0 12px 0', textAlign: 'center' }}>
-          <h1 style={{ margin: 0, lineHeight: 0 }}>
-            <img
-              src="/images/letreiro.png"
-              alt="Alma Campeira Cutelaria"
-              width={340}
-              height={155}
-              decoding="async"
-              fetchPriority="high"
-              style={{
-                width: 'min(260px, 72vw)',
-                height: 'auto',
-                objectFit: 'contain',
-                display: 'block',
-                margin: '0 auto -4px',
-              }}
-            />
+        <section style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 20px 16px', textAlign: 'center' }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+            Catálogo de Facas
           </h1>
         </section>
 
         <main style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px 60px' }}>
           <CatalogoClient facas={facas} />
         </main>
-
-        <footer style={{
-          borderTop: '1px solid #e5e7eb',
-          padding: '32px 20px',
-          textAlign: 'center',
-          background: '#fafafa',
-        }}>
-          <div style={{ ...logoMask, width: 32, height: 32, margin: '0 auto 12px' }} aria-hidden />
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Alma Campeira</p>
-          <p style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-            Cutelaria Artesanal — Tradição e qualidade em cada lâmina
-          </p>
-          <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 16 }}>
-            © {new Date().getFullYear()} Alma Campeira. Todos os direitos reservados.
-          </p>
-        </footer>
 
       </div>
     </>

@@ -6,10 +6,18 @@ import { formatarDocumento } from '@/lib/br/documento'
 
 const FACA_THUMB_PX = 96
 
+// Paleta (amarelo do sistema — --ac-accent #EAB308 / dark #ca8a04)
+const COR_BRAND: [number, number, number]   = [202, 138, 4]   // amarelo escuro Alma Campeira
+const COR_ACCENT: [number, number, number]  = [234, 179, 8]   // amarelo vivo (barra superior)
+const COR_TEXTO: [number, number, number]   = [28, 28, 28]
+const COR_MUTED: [number, number, number]   = [110, 110, 110]
+const COR_BORDA: [number, number, number]   = [229, 231, 235]
+const COR_CARD:  [number, number, number]   = [254, 252, 232] // creme suave (yellow-50)
+const COR_DESC:  [number, number, number]   = [176, 64, 32]   // vermelho/laranja para desconto
+const COR_OK:    [number, number, number]   = [34, 120, 72]
+
 type ImagemFaca = { dataUrl: string; mime: 'PNG' | 'JPEG' } | null
 
-/** Carrega uma URL como dataURL, redimensionando para `size` × `size` (cover).
- *  Retorna null se falhar (sem foto, CORS, etc.) — o PDF segue sem a imagem. */
 async function carregarFotoComoDataUrl(url: string | null | undefined, size: number): Promise<ImagemFaca> {
   if (!url) return null
   try {
@@ -29,7 +37,6 @@ async function carregarFotoComoDataUrl(url: string | null | undefined, size: num
           const ctx = canvas.getContext('2d')
           if (!ctx) return resolve(null)
 
-          // Cover: recorta o maior eixo para caber em size × size
           const ratio = Math.max(size / img.width, size / img.height)
           const w = img.width * ratio
           const h = img.height * ratio
@@ -52,99 +59,172 @@ async function carregarFotoComoDataUrl(url: string | null | undefined, size: num
   }
 }
 
-function brl(v: number) {
+type LogoImagem = { dataUrl: string; width: number; height: number } | null
+
+async function carregarLogoLetreiro(): Promise<LogoImagem> {
+  try {
+    const resp = await fetch('/images/letreiro.png')
+    if (!resp.ok) return null
+    const blob = await resp.blob()
+    return await new Promise<LogoImagem>((resolve) => {
+      const fr = new FileReader()
+      fr.onload = () => {
+        const img = new Image()
+        img.onload = () => {
+          resolve({ dataUrl: fr.result as string, width: img.width, height: img.height })
+        }
+        img.onerror = () => resolve(null)
+        img.src = fr.result as string
+      }
+      fr.onerror = () => resolve(null)
+      fr.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+function brl(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function dataLocal(iso: string) {
+function dataLocal(iso: string): string {
   return new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR')
 }
 
 /**
- * Gera um PDF do orçamento com cabeçalho, dados do cliente, tabela de itens
- * com fotos das facas, totais e abre o "Salvar como" do navegador.
- *
- * O PDF é gerado client-side, então qualquer informação aqui já está visível
- * no navegador do usuário.
+ * Gera PDF do orçamento com layout limpo, cabeçalho com marca, bloco do
+ * cliente em card, tabela com fotos e descontos por item + bloco de totais.
  */
 export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageWidth  = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 40
 
-  // ── Cabeçalho ──────────────────────────────────────────────────────────
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.setTextColor(20, 20, 20)
-  doc.text('ALMA CAMPEIRA', margin, 60)
+  // ── CABEÇALHO ─────────────────────────────────────────────────────────
+  // Barra superior fina com a cor da marca
+  doc.setFillColor(...COR_ACCENT)
+  doc.rect(0, 0, pageWidth, 6, 'F')
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.setTextColor(100)
-  doc.text('Orçamento', margin, 76)
+  const logo = await carregarLogoLetreiro()
+  if (logo) {
+    const logoH = 110
+    const logoW = (logo.width / logo.height) * logoH
+    doc.addImage(logo.dataUrl, 'PNG', margin - 6, 16, logoW, logoH)
+  } else {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(22)
+    doc.setTextColor(...COR_BRAND)
+    doc.text('ALMA CAMPEIRA', margin, 58)
 
-  // Bloco direito: código + data
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(20)
-  doc.text(`Código: ${orcamento.codigo}`, pageWidth - margin, 60, { align: 'right' })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.setTextColor(80)
-  doc.text(`Data: ${dataLocal(orcamento.data_orcamento)}`, pageWidth - margin, 76, { align: 'right' })
-  if (orcamento.vendedor?.nome) {
-    doc.text(`Vendedor: ${orcamento.vendedor.nome}`, pageWidth - margin, 90, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...COR_MUTED)
+    doc.text('Cutelaria artesanal', margin, 72)
   }
 
-  // Linha divisória
-  doc.setDrawColor(220)
-  doc.setLineWidth(0.6)
-  doc.line(margin, 100, pageWidth - margin, 100)
+  // Bloco direito: código / data / vendedor
+  const boxW = 190
+  const boxX = pageWidth - margin - boxW
+  const boxY = 40
+  const boxH = 58
+  doc.setFillColor(...COR_CARD)
+  doc.roundedRect(boxX, boxY, boxW, boxH, 4, 4, 'F')
 
-  // ── Dados do cliente ───────────────────────────────────────────────────
-  let yCliente = 122
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(60)
-  doc.text('CLIENTE', margin, yCliente)
-  yCliente += 14
+  doc.setFontSize(8)
+  doc.setTextColor(...COR_MUTED)
+  doc.text('ORÇAMENTO', boxX + 12, boxY + 16)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...COR_TEXTO)
+  doc.text(orcamento.codigo, boxX + 12, boxY + 32)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(11)
-  doc.setTextColor(20)
-  if (orcamento.cliente) {
-    doc.text(orcamento.cliente.nome, margin, yCliente)
-    yCliente += 13
+  doc.setFontSize(9)
+  doc.setTextColor(...COR_MUTED)
+  doc.text(`Data: ${dataLocal(orcamento.data_orcamento)}`, boxX + 12, boxY + 45)
+  if (orcamento.vendedor?.nome) {
+    doc.text(`Vendedor: ${orcamento.vendedor.nome}`, boxX + 12, boxY + 55)
+  }
 
-    doc.setFontSize(9)
-    doc.setTextColor(90)
+  // ── CLIENTE ───────────────────────────────────────────────────────────
+  const clienteY = 140
+  const clienteH = 54
+
+  doc.setFillColor(...COR_CARD)
+  doc.roundedRect(margin, clienteY, pageWidth - margin * 2, clienteH, 4, 4, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...COR_MUTED)
+  doc.text('CLIENTE', margin + 12, clienteY + 16)
+
+  if (orcamento.cliente) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(...COR_TEXTO)
+    doc.text(orcamento.cliente.nome, margin + 12, clienteY + 32)
+
     const detalhes: string[] = []
     if (orcamento.cliente.tipo) detalhes.push(orcamento.cliente.tipo)
     if (orcamento.cliente.documento) {
       detalhes.push(
         formatarDocumento(
           orcamento.cliente.tipo_documento === 'cpf' ? 'cpf' : 'cnpj',
-          orcamento.cliente.documento
-        )
+          orcamento.cliente.documento,
+        ),
       )
     }
     if (orcamento.cliente.cidade && orcamento.cliente.estado) {
       detalhes.push(`${orcamento.cliente.cidade}/${orcamento.cliente.estado}`)
     }
     if (detalhes.length > 0) {
-      doc.text(detalhes.join(' · '), margin, yCliente)
-      yCliente += 12
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(...COR_MUTED)
+      doc.text(detalhes.join('  .  '), margin + 12, clienteY + 46)
     }
   } else {
-    doc.setTextColor(150)
-    doc.text('Sem cliente associado', margin, yCliente)
-    yCliente += 12
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(11)
+    doc.setTextColor(...COR_MUTED)
+    doc.text('Sem cliente associado', margin + 12, clienteY + 34)
   }
 
-  // ── Itens (carregar fotos em paralelo antes da tabela) ─────────────────
+  // ── ITENS ─────────────────────────────────────────────────────────────
   const itens = orcamento.itens ?? []
 
+  // Calcula descontos por item (preço tabela vs. líquido)
+  type Linha = {
+    qtd: number
+    precoTabela: number   // faca.preco_venda (ou preco_unitario se não tiver)
+    precoLiquido: number  // item.preco_unitario (valor já com desconto aplicado)
+    descontoUnit: number  // tabela - líquido (por unidade)
+    descontoTotal: number // descontoUnit × qtd
+    subtotal: number      // item.subtotal
+  }
+
+  const linhas: Linha[] = itens.map((item) => {
+    const tabela = Number(item.faca?.preco_venda ?? item.preco_unitario) || 0
+    const liquido = Number(item.preco_unitario) || 0
+    const descUnit = Math.max(0, Math.round((tabela - liquido) * 100) / 100)
+    const qtd = Number(item.quantidade) || 0
+    return {
+      qtd,
+      precoTabela: tabela,
+      precoLiquido: liquido,
+      descontoUnit: descUnit,
+      descontoTotal: Math.round(descUnit * qtd * 100) / 100,
+      subtotal: Number(item.subtotal) || 0,
+    }
+  })
+
+  const temDescontoItem = linhas.some((l) => l.descontoUnit > 0.005)
+
+  // Carrega fotos em paralelo
   const fotos = await Promise.all(
     itens.map(async (item) => {
       const url = getOptimizedSupabaseImageUrl(item.faca?.foto_url ?? null, {
@@ -155,48 +235,72 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
         fallbackUrl: '',
       })
       return carregarFotoComoDataUrl(url || null, FACA_THUMB_PX)
-    })
+    }),
   )
 
-  // Coluna "Foto" fica em branco no body — desenhamos a imagem em `didDrawCell`
-  // (que conhece a posição final da célula). `fotos[idx]` é capturado pelo closure.
-  const linhasTabela: string[][] = itens.map((item) => [
-    '',
-    `${item.faca?.codigo ?? ''}\n${item.faca?.nome ?? '—'}`,
-    String(item.quantidade),
-    brl(item.preco_unitario),
-    brl(item.subtotal),
-  ])
+  // Linhas da tabela — colunas condicionais para o caso de ter desconto por item
+  const body: (string | number)[][] = itens.map((item, idx) => {
+    const l = linhas[idx]
+    const faca = `${item.faca?.codigo ?? ''}\n${item.faca?.nome ?? '-'}`
+    if (temDescontoItem) {
+      return [
+        '',
+        faca,
+        l.qtd,
+        brl(l.precoTabela),
+        l.descontoUnit > 0.005 ? `- ${brl(l.descontoUnit)}` : '-',
+        brl(l.subtotal),
+      ]
+    }
+    return ['', faca, l.qtd, brl(l.precoLiquido), brl(l.subtotal)]
+  })
 
-  const startY = Math.max(yCliente + 10, 170)
+  const head = temDescontoItem
+    ? [['Foto', 'Faca', 'Qtd', 'Preço unit.', 'Desconto', 'Subtotal']]
+    : [['Foto', 'Faca', 'Qtd', 'Preço unit.', 'Subtotal']]
+
+  const startY = 212
 
   autoTable(doc, {
     startY,
-    head: [['Foto', 'Faca', 'Qtd', 'Preço unit.', 'Subtotal']],
-    body: linhasTabela,
+    head,
+    body,
     theme: 'grid',
     styles: {
       fontSize: 9,
       cellPadding: 6,
       valign: 'middle',
-      lineColor: [220, 220, 220],
-      textColor: [40, 40, 40],
+      lineColor: COR_BORDA,
+      lineWidth: 0.4,
+      textColor: COR_TEXTO,
     },
     headStyles: {
-      fillColor: [245, 245, 245],
-      textColor: [60, 60, 60],
+      fillColor: COR_BRAND,
+      textColor: [255, 255, 255],
       fontStyle: 'bold',
       halign: 'left',
+      fontSize: 9,
     },
-    columnStyles: {
-      0: { cellWidth: 56, halign: 'center' },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 40, halign: 'center' },
-      3: { cellWidth: 80, halign: 'right' },
-      4: { cellWidth: 80, halign: 'right' },
+    alternateRowStyles: {
+      fillColor: [252, 251, 249],
     },
+    columnStyles: temDescontoItem
+      ? {
+          0: { cellWidth: 54, halign: 'center' },
+          1: { cellWidth: 'auto' },
+          2: { cellWidth: 32, halign: 'center' },
+          3: { cellWidth: 70, halign: 'right' },
+          4: { cellWidth: 70, halign: 'right', textColor: COR_DESC },
+          5: { cellWidth: 72, halign: 'right', fontStyle: 'bold' },
+        }
+      : {
+          0: { cellWidth: 54, halign: 'center' },
+          1: { cellWidth: 'auto' },
+          2: { cellWidth: 40, halign: 'center' },
+          3: { cellWidth: 80, halign: 'right' },
+          4: { cellWidth: 80, halign: 'right', fontStyle: 'bold' },
+        },
     didParseCell: (data) => {
-      // Esvazia o texto da célula da imagem — render visual é feito em didDrawCell.
       if (data.column.index === 0 && data.section === 'body') {
         data.cell.text = []
       }
@@ -205,84 +309,123 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
       if (data.column.index !== 0 || data.section !== 'body') return
       const foto = fotos[data.row.index]
       if (!foto) {
-        // Placeholder: caixa cinza
-        doc.setFillColor(245, 245, 245)
-        doc.rect(data.cell.x + 6, data.cell.y + 6, data.cell.width - 12, data.cell.height - 12, 'F')
+        doc.setFillColor(240, 238, 234)
+        doc.roundedRect(
+          data.cell.x + 5,
+          data.cell.y + 5,
+          data.cell.width - 10,
+          data.cell.height - 10,
+          2,
+          2,
+          'F',
+        )
         return
       }
-      const size = Math.min(data.cell.width - 12, data.cell.height - 12)
+      const size = Math.min(data.cell.width - 10, data.cell.height - 10)
       const x = data.cell.x + (data.cell.width - size) / 2
       const y = data.cell.y + (data.cell.height - size) / 2
       doc.addImage(foto.dataUrl, foto.mime, x, y, size, size)
     },
-    // Garante altura mínima de linha para a foto caber confortavelmente.
-    bodyStyles: { minCellHeight: 56 },
+    bodyStyles: { minCellHeight: 54 },
+    margin: { left: margin, right: margin },
   })
 
-  // ── Totais ─────────────────────────────────────────────────────────────
-  // jspdf-autotable expõe `lastAutoTable.finalY` em runtime; tipo não está
-  // declarado, então fazemos cast pontual.
+  // ── TOTAIS ────────────────────────────────────────────────────────────
   const lastY =
     (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? startY
-  let yTot = lastY + 18
 
-  const subtotal = itens.reduce((s, i) => s + i.subtotal, 0)
-  const frete = orcamento.frete ?? 0
-  const desconto = orcamento.desconto_total ?? 0
-  const total = orcamento.valor_total ?? Math.max(0, subtotal + frete - desconto)
+  const subtotalItens = linhas.reduce((s, l) => s + l.subtotal, 0)
+  const descontoItens = linhas.reduce((s, l) => s + l.descontoTotal, 0)
+  const frete = Number(orcamento.frete ?? 0) || 0
+  const descontoTotal = Number(orcamento.desconto_total ?? 0) || 0
+  const total =
+    orcamento.valor_total != null
+      ? Number(orcamento.valor_total)
+      : Math.max(0, subtotalItens + frete - descontoTotal)
 
-  const labelX = pageWidth - margin - 140
-  const valueX = pageWidth - margin
+  // Card de totais (direita)
+  const totaisW = 230
+  const totaisX = pageWidth - margin - totaisW
+  const totaisY = lastY + 16
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(80)
+  // calcula altura dinâmica
+  const rows: Array<{ label: string; value: string; cor: [number, number, number]; bold?: boolean }> = []
+  if (descontoItens > 0.005) {
+    const bruto = subtotalItens + descontoItens
+    rows.push({ label: 'Subtotal (tabela)', value: brl(bruto), cor: COR_MUTED })
+    rows.push({ label: 'Descontos por item', value: `- ${brl(descontoItens)}`, cor: COR_DESC })
+  }
+  rows.push({ label: 'Subtotal itens', value: brl(subtotalItens), cor: COR_TEXTO })
+  if (frete > 0) rows.push({ label: 'Frete', value: brl(frete), cor: COR_TEXTO })
+  if (descontoTotal > 0) rows.push({ label: 'Desconto extra', value: `- ${brl(descontoTotal)}`, cor: COR_DESC })
 
-  function linha(label: string, value: string, bold = false, color: [number, number, number] = [40, 40, 40]) {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setTextColor(...color)
-    doc.text(label, labelX, yTot)
-    doc.text(value, valueX, yTot, { align: 'right' })
-    yTot += bold ? 18 : 14
+  const lineH = 15
+  const totaisH = 18 + rows.length * lineH + 30
+
+  doc.setFillColor(...COR_CARD)
+  doc.roundedRect(totaisX, totaisY, totaisW, totaisH, 4, 4, 'F')
+
+  let yRow = totaisY + 20
+  for (const r of rows) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.5)
+    doc.setTextColor(...r.cor)
+    doc.text(r.label, totaisX + 14, yRow)
+    doc.setFont('helvetica', r.bold ? 'bold' : 'normal')
+    doc.text(r.value, totaisX + totaisW - 14, yRow, { align: 'right' })
+    yRow += lineH
   }
 
-  linha('Subtotal itens', brl(subtotal))
-  if (frete > 0) linha('Frete', brl(frete))
-  if (desconto > 0) linha('Desconto', `− ${brl(desconto)}`, false, [180, 90, 0])
+  // Divisória antes do total
+  doc.setDrawColor(...COR_BORDA)
+  doc.setLineWidth(0.6)
+  doc.line(totaisX + 14, yRow - 5, totaisX + totaisW - 14, yRow - 5)
 
-  // Linha separadora antes do total
-  doc.setDrawColor(200)
-  doc.line(labelX, yTot - 6, valueX, yTot - 6)
+  // TOTAL (destaque)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...COR_MUTED)
+  doc.text('TOTAL', totaisX + 14, yRow + 14)
+  doc.setFontSize(15)
+  doc.setTextColor(...COR_OK)
+  doc.text(brl(total), totaisX + totaisW - 14, yRow + 14, { align: 'right' })
 
-  doc.setFontSize(13)
-  linha('TOTAL', brl(total), true, [20, 20, 20])
-
-  // ── Observações ────────────────────────────────────────────────────────
+  // ── OBSERVAÇÕES ───────────────────────────────────────────────────────
   if (orcamento.observacao) {
-    yTot += 10
+    const obsY = lastY + 16
+    const obsW = totaisX - margin - 14
+    const obsH = totaisH
+
+    doc.setFillColor(...COR_CARD)
+    doc.roundedRect(margin, obsY, obsW, obsH, 4, 4, 'F')
+
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.setTextColor(60)
-    doc.text('OBSERVAÇÕES', margin, yTot)
-    yTot += 14
+    doc.setFontSize(8)
+    doc.setTextColor(...COR_MUTED)
+    doc.text('OBSERVAÇÕES', margin + 12, obsY + 18)
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
-    doc.setTextColor(60)
-    const linhas = doc.splitTextToSize(orcamento.observacao, pageWidth - margin * 2)
-    doc.text(linhas, margin, yTot)
+    doc.setTextColor(...COR_TEXTO)
+    const linhasObs = doc.splitTextToSize(orcamento.observacao, obsW - 24)
+    doc.text(linhasObs, margin + 12, obsY + 34)
   }
 
-  // ── Rodapé ─────────────────────────────────────────────────────────────
-  const rodapeY = doc.internal.pageSize.getHeight() - 24
+  // ── RODAPÉ ────────────────────────────────────────────────────────────
+  const rodapeY = pageHeight - 28
+  doc.setDrawColor(...COR_BORDA)
+  doc.setLineWidth(0.4)
+  doc.line(margin, rodapeY - 10, pageWidth - margin, rodapeY - 10)
+
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  doc.setTextColor(150)
+  doc.setTextColor(...COR_MUTED)
   doc.text(
-    `Orçamento ${orcamento.codigo} · gerado em ${new Date().toLocaleString('pt-BR')}`,
-    pageWidth / 2,
+    `Orçamento ${orcamento.codigo}  .  gerado em ${new Date().toLocaleString('pt-BR')}`,
+    margin,
     rodapeY,
-    { align: 'center' }
   )
+  doc.text('Alma Campeira — cutelaria artesanal', pageWidth - margin, rodapeY, { align: 'right' })
 
   doc.save(`orcamento-${orcamento.codigo}.pdf`)
 }

@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/modal'
 import { FacaModal } from './faca-modal'
 import { deletarFaca, type DeletarFacaModo } from '@/lib/actions/facas'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
-import { statusEstoqueFaca } from '@/types'
+import { statusEstoqueFaca, type StatusEstoque } from '@/types'
 import type { Faca, CategoriaFacaDB, MateriaPrima } from '@/types'
 import { lucroUnitarioFaca } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
@@ -15,6 +15,18 @@ import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
+
+const STATUS_ESTOQUE_ORDEM: Record<StatusEstoque, number> = { critico: 0, atencao: 1, ok: 2 }
+
+type OrdemColunaFacas =
+  | 'codigo'
+  | 'nome'
+  | 'categoria'
+  | 'preco_custo'
+  | 'preco_venda'
+  | 'lucro'
+  | 'estoque'
+  | 'status'
 
 type Props = {
   facas: Faca[]
@@ -45,6 +57,19 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
   const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>('')
   const [busca, setBusca] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [ordenacao, setOrdenacao] = useState<{ coluna: OrdemColunaFacas | null; dir: 'asc' | 'desc' }>({
+    coluna: null,
+    dir: 'asc',
+  })
+
+  function toggleOrdem(coluna: OrdemColunaFacas) {
+    setOrdenacao((prev) => {
+      if (prev.coluna === coluna) {
+        return { coluna, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      }
+      return { coluna, dir: 'asc' }
+    })
+  }
 
   const filtradas = useMemo(() => {
     return facas.filter((f) => {
@@ -55,6 +80,42 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
       return matchBusca && matchCategoria
     })
   }, [facas, busca, filtroCategoria])
+
+  const ordenadas = useMemo(() => {
+    const col = ordenacao.coluna
+    if (!col) return filtradas
+    const dir = ordenacao.dir === 'asc' ? 1 : -1
+    return [...filtradas].sort((a, b) => {
+      switch (col) {
+        case 'codigo':
+          return a.codigo.localeCompare(b.codigo, 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
+        case 'nome':
+          return a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }) * dir
+        case 'categoria':
+          return a.categoria.localeCompare(b.categoria, 'pt-BR', { sensitivity: 'base' }) * dir
+        case 'preco_custo':
+          return ((a.preco_custo ?? 0) - (b.preco_custo ?? 0)) * dir
+        case 'preco_venda':
+          return (a.preco_venda - b.preco_venda) * dir
+        case 'lucro':
+          return (lucroUnitarioFaca(a, taxasLucro) - lucroUnitarioFaca(b, taxasLucro)) * dir
+        case 'estoque': {
+          const diff = a.estoque_atual - b.estoque_atual
+          if (diff !== 0) return diff * dir
+          return a.codigo.localeCompare(b.codigo, 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
+        }
+        case 'status': {
+          const sa = STATUS_ESTOQUE_ORDEM[statusEstoqueFaca(a)]
+          const sb = STATUS_ESTOQUE_ORDEM[statusEstoqueFaca(b)]
+          const diff = sa - sb
+          if (diff !== 0) return diff * dir
+          return a.codigo.localeCompare(b.codigo, 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
+        }
+        default:
+          return 0
+      }
+    })
+  }, [filtradas, ordenacao, taxasLucro])
 
   const categoriasDisponiveis = useMemo(() => [...new Set(facas.map((f) => f.categoria))].sort(), [facas])
 
