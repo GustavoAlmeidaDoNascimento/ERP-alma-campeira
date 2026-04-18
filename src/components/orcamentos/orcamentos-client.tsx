@@ -426,9 +426,18 @@ export function OrcamentosClient({
               {ordenados.map((o, i) => {
                 const convertido = !!o.convertido_pedido_id
                 const podeEditar = !convertido && perm.editar
+                const carregando = loadingDetalheId === o.id
                 return (
                   <tr key={o.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
+                    onClick={() => abrirDetalhe(o)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirDetalhe(o) } }}
+                    style={{
+                      borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined,
+                      background: 'var(--ac-card)',
+                      cursor: carregando ? 'wait' : 'pointer',
+                    }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
@@ -478,26 +487,15 @@ export function OrcamentosClient({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => abrirDetalhe(o)} className="p-1.5 rounded-lg transition-colors"
-                          disabled={loadingDetalheId === o.id}
-                          style={{ color: 'var(--ac-muted)' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ac-border)'; e.currentTarget.style.color = 'var(--ac-text)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
-                          title="Ver orçamento">
-                          {loadingDetalheId === o.id ? (
-                            <svg viewBox="0 0 24 24" className="size-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2}>
-                              <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
-                            </svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-4">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                          )}
-                        </button>
-
+                        {carregando && (
+                          <svg viewBox="0 0 24 24" className="size-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} style={{ color: 'var(--ac-muted)' }} aria-label="Carregando">
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                          </svg>
+                        )}
                         {podeEditar && (
-                          <button onClick={() => abrirEditar(o)} className="p-1.5 rounded-lg transition-colors"
+                          <button
+                            onClick={(e) => { e.stopPropagation(); abrirEditar(o) }}
+                            className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ac-border)'; e.currentTarget.style.color = 'var(--ac-text)' }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
