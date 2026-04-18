@@ -13,7 +13,6 @@ import { type DateRange } from '@/lib/metricas-periodos'
 import {
   IconRelatorioAbaAtividade,
   IconRelatorioAbaEstoque,
-  IconRelatorioAbaGeral,
   IconRelatorioAbaVendas,
 } from './relatorio-icons'
 import { AtividadeView } from '@/components/auditoria/atividade-view'
@@ -30,7 +29,7 @@ export type MetricasClientProps = {
   }
 }
 
-type PainelId = 'geral' | 'vendas' | 'estoque' | 'atividade'
+type PainelId = 'vendas' | 'estoque' | 'atividade'
 
 export function MetricasClient({
   vendasData: vendasInitial,
@@ -88,7 +87,7 @@ export function MetricasClient({
           Visão comercial e de estoque
         </h1>
         <p className="text-sm leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
-          Escolha entre visão geral, vendas ou estoque. Só um painel é exibido por vez; em vendas e estoque, os detalhes ficam em blocos expansíveis.
+          Escolha entre vendas, estoque ou atividade do sistema. Só um painel é exibido por vez; em vendas e estoque, os detalhes ficam em blocos expansíveis.
         </p>
       </header>
 
@@ -209,38 +208,6 @@ export function MetricasClient({
         aria-label="Tipo de relatório"
       >
         <div className="flex flex-wrap p-1 gap-1 sm:inline-flex sm:flex-row w-full sm:w-auto rounded-xl m-2" style={{ background: 'var(--ac-bg)' }}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={painel === 'geral'}
-            id="tab-relatorio-geral"
-            aria-controls="panel-relatorio-geral"
-            onClick={() => setPainel('geral')}
-            className="flex flex-1 min-w-[5.5rem] sm:flex-none sm:min-w-0 items-start gap-2.5 rounded-lg px-3 py-2.5 sm:px-4 text-left text-sm font-semibold transition-all"
-            style={{
-              color: painel === 'geral' ? 'var(--ac-text)' : 'var(--ac-muted)',
-              background: painel === 'geral' ? 'var(--ac-card)' : 'transparent',
-              boxShadow: painel === 'geral' ? '0 1px 3px color-mix(in srgb, var(--ac-text) 12%, transparent)' : 'none',
-              border: painel === 'geral' ? '1px solid var(--ac-border)' : '1px solid transparent',
-            }}
-          >
-            <span
-              className="flex size-8 shrink-0 items-center justify-center rounded-md mt-0.5"
-              style={{
-                color: painel === 'geral' ? 'var(--ac-accent)' : 'var(--ac-muted)',
-                background: painel === 'geral' ? 'color-mix(in srgb, var(--ac-accent) 10%, transparent)' : 'transparent',
-              }}
-              aria-hidden
-            >
-              <IconRelatorioAbaGeral className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate">Geral</span>
-              <span className="block text-[11px] font-normal opacity-80 truncate" style={{ color: 'var(--ac-muted)' }}>
-                {kpiV.totalPedidos} ped. · {criticosE} crít.
-              </span>
-            </span>
-          </button>
           <button
             type="button"
             role="tab"
@@ -374,40 +341,6 @@ export function MetricasClient({
                   tabelasDisponiveis={atividadeData.tabelas}
                   usuariosDisponiveis={atividadeData.usuarios}
                 />
-              </div>
-            </div>
-          ) : painel === 'geral' ? (
-            <div
-              role="tabpanel"
-              id="panel-relatorio-geral"
-              aria-labelledby="tab-relatorio-geral"
-              className="rounded-xl border min-w-0 overflow-hidden"
-              style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-bg)' }}
-            >
-              <div
-                className="px-4 py-3 border-b text-sm font-medium"
-                style={{ borderColor: 'var(--ac-border)', color: 'var(--ac-muted)' }}
-              >
-                Visão geral do período — conteúdo em definição.
-              </div>
-              <div className="p-6 sm:p-8 min-w-0 text-center space-y-3">
-                <div
-                  className="mx-auto flex size-12 items-center justify-center rounded-xl"
-                  style={{
-                    color: 'var(--ac-accent)',
-                    background: 'color-mix(in srgb, var(--ac-accent) 12%, var(--ac-card))',
-                    border: '1px solid color-mix(in srgb, var(--ac-accent) 25%, var(--ac-border))',
-                  }}
-                >
-                  <IconRelatorioAbaGeral className="size-6" />
-                </div>
-                <p className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-                  Painel &quot;Geral&quot;
-                </p>
-                <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: 'var(--ac-muted)' }}>
-                  Este espaço está reservado para o resumo que você quiser (indicadores cruzados, links rápidos, etc.).
-                  Diga o que deve aparecer aqui que a gente implementa.
-                </p>
               </div>
             </div>
           ) : painel === 'vendas' ? (

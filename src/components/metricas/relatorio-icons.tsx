@@ -134,18 +134,6 @@ export function IconRelatorioAbaAtividade({ className = 'size-5', ...p }: IconPr
   )
 }
 
-/** Aba visão geral (painel misto) */
-export function IconRelatorioAbaGeral({ className = 'size-5', ...p }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden {...stroke} {...p}>
-      <rect x="3" y="3" width="7" height="9" rx="1" />
-      <rect x="14" y="3" width="7" height="5" rx="1" />
-      <rect x="14" y="10" width="7" height="11" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-    </svg>
-  )
-}
-
 /** Alertas */
 export function IconRelatorioAlerta({ className = 'size-5', ...p }: IconProps) {
   return (
