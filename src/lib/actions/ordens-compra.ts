@@ -1,99 +1,239 @@
 'use server'
 
 import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser } from '@/lib/auth'
 import {
-  executarGerarTodasOCsDesdeFilaAutomatico,
   gerarCodigoOC,
-  gerarOCDesdeFilaSupabase,
+  gerarOCsDeFilaItens,
 } from '@/lib/ordens-compra/gerar-oc-fila'
-import type { OrdemCompra, FilaFornecedor } from '@/types'
+import type { OrdemCompra, FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem } from '@/types'
 
 // ─── Fila de Reposição ────────────────────────────────────────────────────────
 
-async function carregarFilaReposicao(supabase: Awaited<ReturnType<typeof createClient>>): Promise<FilaFornecedor[]> {
-  const { data, error } = await supabase
-    .from('fila_reposicao')
-    .select(`
-      materia_prima_id,
-      fornecedor_id,
-      quantidade_pendente,
-      mp:materias_primas(id, codigo, nome, preco_custo),
-      fornecedor:fornecedores(id, nome)
-    `)
-
-  if (error) throw new Error(error.message)
-
-  const mapa = new Map<string, FilaFornecedor>()
-  for (const row of data ?? []) {
-    const mp = (Array.isArray(row.mp) ? row.mp[0] : row.mp) as {
-      id: string; codigo: string; nome: string; preco_custo: number
-    } | null
-    const forn = (Array.isArray(row.fornecedor) ? row.fornecedor[0] : row.fornecedor) as {
-      id: string; nome: string
-    } | null
-    if (!mp) continue
-    const chave = row.fornecedor_id ?? '__sem_fornecedor__'
-    if (!mapa.has(chave)) {
-      mapa.set(chave, {
-        fornecedor_id: row.fornecedor_id,
-        fornecedor_nome: forn?.nome ?? 'Sem fornecedor',
-        itens: [],
-      })
-    }
-    const grupo = mapa.get(chave)!
-    const existente = grupo.itens.find((i) => i.materia_prima_id === row.materia_prima_id)
-    if (existente) {
-      existente.quantidade_total += Number(row.quantidade_pendente)
-    } else {
-      grupo.itens.push({
-        materia_prima_id: row.materia_prima_id,
-        mp_codigo: mp.codigo,
-        mp_nome: mp.nome,
-        mp_preco_custo: Number(mp.preco_custo),
-        quantidade_total: Number(row.quantidade_pendente),
-      })
-    }
-  }
-
-  return Array.from(mapa.values()).sort((a, b) => a.fornecedor_nome.localeCompare(b.fornecedor_nome))
-}
-
-const getFilaReposicaoCached = unstable_cache(
-  async (): Promise<FilaFornecedor[]> => {
-    const supabase = await createClient()
-    return carregarFilaReposicao(supabase)
-  },
-  ['ordens-compra-fila'],
-  { revalidate: 30, tags: ['ordens-compra-fila'] }
-)
-
-export async function getFilaReposicao(): Promise<FilaFornecedor[]> {
+export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
   await assertPermissao('ordens_compra', 'ver')
   return withSupabaseCookieContext(async () => {
-    // Não chamar backfill aqui: quando a fila fica vazia após gerar OC, o backfill
-    // re-inseria todas as MPs de pedidos "entregue" e a fila voltaria a aparecer.
-    return getFilaReposicaoCached()
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+      .from('fila_reposicao')
+      .select(`
+        id,
+        pedido_id,
+        status,
+        created_at,
+        pedido:pedidos(
+          id,
+          codigo,
+          cliente:clientes(id, nome)
+        ),
+        itens:fila_reposicao_itens(id)
+      `)
+      .in('status', ['pendente'])
+      .order('created_at', { ascending: false })
+
+    if (error) throw new Error(error.message)
+
+    return (data ?? []).map((row) => {
+      const pedido = (Array.isArray(row.pedido) ? row.pedido[0] : row.pedido) as {
+        id: string; codigo: string
+        cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
+      } | null
+      const cliente = pedido?.cliente
+        ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
+        : null
+
+      return {
+        id: row.id,
+        pedido_id: row.pedido_id,
+        pedido_codigo: pedido?.codigo ?? '—',
+        cliente_nome: cliente?.nome ?? '—',
+        status: row.status as FilaReposicao['status'],
+        created_at: row.created_at ?? '',
+        itens_count: Array.isArray(row.itens) ? row.itens.length : 0,
+      }
+    })
   })
 }
 
-// ─── Gerar OC ─────────────────────────────────────────────────────────────────
+export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaReposicaoDetalhe> {
+  await assertPermissao('ordens_compra', 'ver')
+  return withSupabaseCookieContext(async () => {
+    const supabase = await createClient()
 
-export async function gerarOC(
-  fornecedor_id: string | null,
-  adicionaisPorMateriaPrima: Record<string, number> = {},
-): Promise<string> {
+    // Busca o registro da fila com o pedido
+    const { data: filaRow, error: filaErr } = await supabase
+      .from('fila_reposicao')
+      .select(`
+        id,
+        pedido_id,
+        status,
+        created_at,
+        pedido:pedidos(
+          id,
+          codigo,
+          cliente:clientes(id, nome)
+        )
+      `)
+      .eq('id', fila_id)
+      .single()
+
+    if (filaErr || !filaRow) throw new Error(filaErr?.message ?? 'Fila não encontrada.')
+
+    // Busca os itens com dados completos da MP e fornecedor
+    const { data: itensRows, error: itensErr } = await supabase
+      .from('fila_reposicao_itens')
+      .select(`
+        id,
+        fila_id,
+        materia_prima_id,
+        quantidade_sugerida,
+        quantidade_adicional,
+        selecionado,
+        mp:materias_primas(
+          id, codigo, nome, preco_custo, estoque_atual, estoque_minimo,
+          fornecedor_id,
+          fornecedor:fornecedores(id, nome)
+        )
+      `)
+      .eq('fila_id', fila_id)
+
+    if (itensErr) throw new Error(itensErr.message)
+
+    // Para cada MP, busca as facas que a utilizam
+    const mpIds = (itensRows ?? []).map((i) => i.materia_prima_id)
+    const { data: facasMpRows, error: facasMpErr } = await supabase
+      .from('faca_materias_primas')
+      .select(`
+        materia_prima_id,
+        quantidade,
+        faca:facas(id, nome, estoque_atual, estoque_minimo)
+      `)
+      .in('materia_prima_id', mpIds)
+
+    if (facasMpErr) throw new Error(facasMpErr.message)
+
+    // Agrupa facas por MP
+    const facasPorMp = new Map<string, FilaReposicaoItem['facas_relacionadas']>()
+    for (const row of facasMpRows ?? []) {
+      const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as {
+        id: string; nome: string; estoque_atual: number; estoque_minimo: number
+      } | null
+      if (!faca) continue
+      const list = facasPorMp.get(row.materia_prima_id) ?? []
+      list.push({
+        faca_id: faca.id,
+        faca_nome: faca.nome,
+        estoque_atual: Number(faca.estoque_atual ?? 0),
+        estoque_minimo: Number(faca.estoque_minimo ?? 0),
+        quantidade_bom: Number(row.quantidade),
+      })
+      facasPorMp.set(row.materia_prima_id, list)
+    }
+
+    // Monta a resposta
+    const pedido = (Array.isArray(filaRow.pedido) ? filaRow.pedido[0] : filaRow.pedido) as {
+      id: string; codigo: string
+      cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
+    } | null
+    const cliente = pedido?.cliente
+      ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
+      : null
+
+    const fila: FilaReposicao = {
+      id: filaRow.id,
+      pedido_id: filaRow.pedido_id,
+      pedido_codigo: pedido?.codigo ?? '—',
+      cliente_nome: cliente?.nome ?? '—',
+      status: filaRow.status as FilaReposicao['status'],
+      created_at: filaRow.created_at ?? '',
+      itens_count: (itensRows ?? []).length,
+    }
+
+    const itens: FilaReposicaoItem[] = (itensRows ?? []).map((row) => {
+      const mp = (Array.isArray(row.mp) ? row.mp[0] : row.mp) as {
+        id: string; codigo: string; nome: string; preco_custo: number
+        estoque_atual: number; estoque_minimo: number; fornecedor_id: string | null
+        fornecedor: { id: string; nome: string } | { id: string; nome: string }[] | null
+      } | null
+
+      const fornecedor = mp?.fornecedor
+        ? (Array.isArray(mp.fornecedor) ? mp.fornecedor[0] : mp.fornecedor)
+        : null
+
+      return {
+        id: row.id,
+        fila_id: row.fila_id,
+        materia_prima_id: row.materia_prima_id,
+        mp_nome: mp?.nome ?? '—',
+        mp_codigo: mp?.codigo ?? '—',
+        mp_preco_custo: Number(mp?.preco_custo ?? 0),
+        fornecedor_id: mp?.fornecedor_id ?? null,
+        fornecedor_nome: fornecedor?.nome ?? null,
+        estoque_atual: Number(mp?.estoque_atual ?? 0),
+        estoque_minimo: Number(mp?.estoque_minimo ?? 0),
+        quantidade_sugerida: Number(row.quantidade_sugerida),
+        quantidade_adicional: Number(row.quantidade_adicional),
+        selecionado: row.selecionado,
+        facas_relacionadas: facasPorMp.get(row.materia_prima_id) ?? [],
+      }
+    })
+
+    return { fila, itens }
+  })
+}
+
+export async function atualizarItemFila(
+  item_id: string,
+  patch: { selecionado?: boolean; quantidade_adicional?: number },
+) {
+  await assertPermissao('ordens_compra', 'editar')
+  const supabase = await createClient()
+
+  const update: Record<string, unknown> = {}
+  if (patch.selecionado !== undefined) update.selecionado = patch.selecionado
+  if (patch.quantidade_adicional !== undefined) {
+    if (!Number.isFinite(patch.quantidade_adicional) || patch.quantidade_adicional < 0) {
+      throw new Error('Quantidade adicional inválida.')
+    }
+    update.quantidade_adicional = patch.quantidade_adicional
+  }
+
+  const { error } = await supabase
+    .from('fila_reposicao_itens')
+    .update(update)
+    .eq('id', item_id)
+
+  if (error) throw new Error(error.message)
+  revalidateTag('ordens-compra-fila', 'max')
+}
+
+export async function gerarOCsDaFila(fila_id: string): Promise<string[]> {
   await assertPermissao('ordens_compra', 'criar')
   const supabase = await createClient()
-  return gerarOCDesdeFilaSupabase(supabase, fornecedor_id, adicionaisPorMateriaPrima)
+  const codigos = await gerarOCsDeFilaItens(supabase, fila_id)
+  revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-historico', 'max')
+  revalidateTag('ordens-compra-fila', 'max')
+  return codigos
 }
 
-export async function gerarTodasOCs(): Promise<number> {
-  await assertPermissao('ordens_compra', 'criar')
-  return executarGerarTodasOCsDesdeFilaAutomatico({ continuarEmErro: false })
+export async function dispensarFila(fila_id: string): Promise<void> {
+  await assertPermissao('ordens_compra', 'editar')
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('fila_reposicao')
+    .update({ status: 'dispensada', updated_at: new Date().toISOString() })
+    .eq('id', fila_id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/ordens-compra')
+  revalidateTag('ordens-compra-fila', 'max')
 }
+
+// ─── OC Manual ────────────────────────────────────────────────────────────────
 
 export type CriarOcItemManual = {
   materia_prima_id: string
@@ -103,7 +243,7 @@ export type CriarOcItemManual = {
 }
 
 /**
- * Cria uma OC manualmente (sem passar pela fila de reposição): fornecedor, itens e observação.
+ * Cria uma OC manualmente (sem passar pela fila de reposição).
  */
 export async function criarOrdemCompraManual(input: {
   fornecedor_id: string | null
@@ -157,11 +297,7 @@ export async function criarOrdemCompraManual(input: {
 
   const itensInsert = Array.from(agregado.entries()).map(([materia_prima_id, { quantidade, subtotal }]) => {
     const preco_unitario = quantidade > 0 ? subtotal / quantidade : 0
-    return {
-      materia_prima_id,
-      quantidade,
-      preco_unitario,
-    }
+    return { materia_prima_id, quantidade, preco_unitario }
   })
 
   const codigo = await gerarCodigoOC(supabase)
@@ -339,7 +475,6 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
   const supabase = await createClient()
 
   if (status === 'recebida') {
-    // Buscar itens da OC
     const { data: itens, error: itensErr } = await supabase
       .from('ordem_compra_itens')
       .select('materia_prima_id, quantidade')
@@ -349,7 +484,6 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
 
     const user = await getAuthenticatedUser()
 
-    // Incrementar estoque e registrar movimentação
     for (const item of itens ?? []) {
       const { data: mp } = await supabase
         .from('materias_primas')

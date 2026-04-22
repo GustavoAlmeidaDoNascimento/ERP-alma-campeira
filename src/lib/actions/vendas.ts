@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
-import { executarGerarTodasOCsDesdeFilaAutomatico } from '@/lib/ordens-compra/gerar-oc-fila'
+import { analisarReposicaoParaPedido } from '@/lib/ordens-compra/analisar-reposicao'
 import type { Pedido, StatusPedido } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 
@@ -369,29 +369,11 @@ async function executarEntregaPedido(
     if (estoqueErr) throw new Error(`Erro ao atualizar estoque de ${faca.nome}: ${estoqueErr.message}`)
   }
 
-  const { data: boms } = await supabase
-    .from('faca_materias_primas')
-    .select('faca_id, materia_prima_id, quantidade, mp:materias_primas(id, fornecedor_id)')
-    .in('faca_id', facaIds)
-
-  for (const item of itens) {
-    const facaBom = (boms ?? []).filter((b) => b.faca_id === item.faca_id)
-    for (const bom of facaBom) {
-      const mp = (Array.isArray(bom.mp) ? bom.mp[0] : bom.mp) as { id: string; fornecedor_id: string | null }
-      const { error: filaErr } = await supabase.from('fila_reposicao').insert({
-        materia_prima_id: bom.materia_prima_id,
-        fornecedor_id: mp.fornecedor_id,
-        quantidade_pendente: bom.quantidade * item.quantidade,
-        pedido_id: id,
-      })
-      if (filaErr) throw new Error(filaErr.message)
-    }
-  }
-
   try {
-    await executarGerarTodasOCsDesdeFilaAutomatico()
-  } catch {
-    // Fila já foi preenchida; OC pode ser gerada manualmente.
+    const resultado = await analisarReposicaoParaPedido(supabase, id)
+    console.log(`[fila_reposicao] pedido=${id} criouFila=${resultado.criouFila} itens=${resultado.quantidadeItens}`)
+  } catch (e) {
+    console.error(`[fila_reposicao] Erro ao analisar reposição para pedido ${id}:`, e)
   }
 }
 

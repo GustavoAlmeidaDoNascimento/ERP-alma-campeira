@@ -16,6 +16,8 @@ type Props = {
   clientes: Cliente[]
   facas: Faca[]
   usuarios: { id: string; nome: string }[]
+  /** Pré-seleciona o vendedor em novo orçamento quando o usuário logado está na lista. */
+  usuarioLogadoId: string | null
   /** Chamado após salvar, com o ID do orçamento (útil pra abrir detalhe direto). */
   onSaved?: (orcamentoId: string) => void
 }
@@ -74,7 +76,7 @@ function itemFormDesdePersistido(i: OrcamentoItem, facas: Faca[]): ItemForm {
   }
 }
 
-export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, usuarios, onSaved }: Props) {
+export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, usuarios, usuarioLogadoId, onSaved }: Props) {
   const [clienteId, setClienteId] = useState('')
   const [vendedorId, setVendedorId] = useState('')
   const [dataOrcamento, setDataOrcamento] = useState(today())
@@ -124,14 +126,16 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
       )
     } else {
       setClienteId('')
-      setVendedorId('')
+      setVendedorId(
+        usuarioLogadoId && usuarios.some((u) => u.id === usuarioLogadoId) ? usuarioLogadoId : ''
+      )
       setDataOrcamento(today())
       setObservacao('')
       setFrete(0)
       setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
     }
-  }, [open, editando, facas])
+  }, [open, editando, facas, usuarioLogadoId, usuarios])
 
   const subtotalItens = useMemo(
     () =>

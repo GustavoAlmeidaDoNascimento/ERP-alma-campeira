@@ -17,6 +17,8 @@ type Props = {
   clientes: Cliente[]
   facas: Faca[]
   usuarios: { id: string; nome: string }[]
+  /** Pré-seleciona o vendedor em nova venda quando o usuário logado está na lista. */
+  usuarioLogadoId: string | null
   onSaved?: () => void
 }
 
@@ -32,7 +34,7 @@ function today() {
   return new Date().toISOString().split('T')[0]
 }
 
-export function VendaFormModal({ open, onClose, editando, clientes, facas, usuarios, onSaved }: Props) {
+export function VendaFormModal({ open, onClose, editando, clientes, facas, usuarios, usuarioLogadoId, onSaved }: Props) {
   const [clienteId, setClienteId] = useState('')
   const [vendedorId, setVendedorId] = useState('')
   const [dataPedido, setDataPedido] = useState(today())
@@ -90,7 +92,9 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       )
     } else {
       setClienteId('')
-      setVendedorId('')
+      setVendedorId(
+        usuarioLogadoId && usuarios.some((u) => u.id === usuarioLogadoId) ? usuarioLogadoId : ''
+      )
       setDataPedido(today())
       setStatus('em_espera')
       setObservacao('')
@@ -98,7 +102,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
     }
-  }, [open, editando])
+  }, [open, editando, usuarioLogadoId, usuarios])
 
   const subtotalItens = useMemo(
     () => itens.reduce((s, i) => {

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getPermissoesEfetivas } from '@/lib/auth'
-import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
+import { getFilaReposicaoList, getOrdensCompra } from '@/lib/actions/ordens-compra'
 import { OcClient } from '@/components/ordens-compra/oc-client'
 import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
 
@@ -21,7 +21,7 @@ export default async function OrdensCompraPage() {
 async function OrdensCompraPageData() {
   const perms = await getPermissoesEfetivas()
   if (!perms.ordens_compra.ver) redirect('/')
-  const [fila, ordens] = await Promise.all([getFilaReposicao(), getOrdensCompra()])
+  const [fila, ordens] = await Promise.all([getFilaReposicaoList(), getOrdensCompra()])
 
   return (
     <div data-nav-content-ready="Ordens de Compra">

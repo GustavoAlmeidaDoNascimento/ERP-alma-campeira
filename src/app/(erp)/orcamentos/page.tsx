@@ -4,7 +4,7 @@ import { getOrcamentos } from '@/lib/actions/orcamentos'
 import { getClientes } from '@/lib/actions/clientes'
 import { getFacas } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
-import { getPermissoesEfetivas } from '@/lib/auth'
+import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { OrcamentosClient } from '@/components/orcamentos/orcamentos-client'
 import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
 
@@ -26,11 +26,12 @@ async function OrcamentosPageData() {
   const permOrc = (perms as Record<string, { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }>).orcamentos
   if (!permOrc?.ver) redirect('/')
 
-  const [orcamentos, clientes, facas, usuarios] = await Promise.all([
+  const [orcamentos, clientes, facas, usuarios, authUser] = await Promise.all([
     getOrcamentos(80),
     getClientes(80),
     getFacas(120),
     getUsuariosPerfisList(),
+    getAuthenticatedUser(),
   ])
 
   return (
@@ -42,6 +43,7 @@ async function OrcamentosPageData() {
         usuarios={usuarios}
         perm={permOrc}
         permVendasCriar={!!perms.vendas?.criar}
+        usuarioLogadoId={authUser?.id ?? null}
       />
     </div>
   )

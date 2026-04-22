@@ -6,9 +6,8 @@ import { Modal } from '@/components/ui/modal'
 import { Select } from '@/components/ui/select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import {
-  getFilaReposicao,
+  getFilaReposicaoList,
   getOrdensCompra,
-  gerarOC,
   criarOrdemCompraManual,
   atualizarUnidadesAdicionaisItem,
   criarItemOrdemCompra,
@@ -18,15 +17,16 @@ import {
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
-import type { FilaFornecedor, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
+import type { FilaReposicao, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { FilaReposicaoDetalheModal } from '@/components/ordens-compra/fila-reposicao-detalhe'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 type Props = {
-  fila: FilaFornecedor[]
+  fila: FilaReposicao[]
   ordens: OrdemCompra[]
   perm: Perm
 }
@@ -156,10 +156,28 @@ function exportarPDF(oc: OrdemCompra) {
   win.document.close()
 }
 
-// ─── Badge de Status ─────────────────────────────────────────────────────────
+// ─── Badge de Status OC ──────────────────────────────────────────────────────
 
 function BadgeStatus({ status }: { status: StatusOC }) {
   const cfg = STATUS_OC[status]
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+    >
+      {cfg.label}
+    </span>
+  )
+}
+
+// ─── Badge Status Fila ────────────────────────────────────────────────────────
+
+function BadgeStatusFila({ status }: { status: FilaReposicao['status'] }) {
+  const cfg = {
+    pendente: { label: 'Pendente', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+    convertida: { label: 'Convertida', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
+    dispensada: { label: 'Dispensada', color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db' },
+  }[status]
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
@@ -183,7 +201,6 @@ function OcDetalheModal({
   perm: Perm
   onClose: () => void
   onRefresh: () => void
-  /** Abre o modal de confirmação de exclusão (OC pendente + permissão). */
   onRequestExcluir?: () => void
 }) {
   const [editandoAdicional, setEditandoAdicional] = useState<Record<string, string>>({})
@@ -509,7 +526,6 @@ function OcDetalheModal({
                 Adicionar
               </Button>
             </div>
-
           </div>
         )}
 
@@ -675,7 +691,6 @@ function OcCriarModal({
     async function load() {
       setCarregando(true)
       try {
-        // Limite alto para não ocultar fornecedores recentes em bases maiores.
         const [f, m] = await Promise.all([getFornecedoresSemCache(1000), getMatériasPrimas(300)])
         if (!cancelled) {
           setFornecedores(f)
@@ -940,12 +955,11 @@ function OcCriarModal({
 export function OcClient({ fila, ordens, perm }: Props) {
   const { refreshActiveTab } = useErpTabs()
   const [aba, setAba] = useState<'fila' | 'historico'>('fila')
-  const [filaState, setFilaState] = useState<FilaFornecedor[]>(fila)
+  const [filaState, setFilaState] = useState<FilaReposicao[]>(fila)
   const [ordensState, setOrdensState] = useState<OrdemCompra[]>(ordens)
   const [loadingHistorico, setLoadingHistorico] = useState(false)
-  const [gerandoFornecedor, setGerandoFornecedor] = useState<string | null>(null)
-  const [gerandoTodas, setGerandoTodas] = useState(false)
   const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null)
+  const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null)
   const [deletando, setDeletando] = useState<OrdemCompra | null>(null)
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [erroDelete, setErroDelete] = useState('')
@@ -953,9 +967,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [ocCriarOpen, setOcCriarOpen] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
-  const gerarOcInFlightRef = useRef<Record<string, boolean>>({})
   const gerarTodasInFlightRef = useRef(false)
-  const [adicionaisFila, setAdicionaisFila] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (aba !== 'historico' || ordensState.length > 0 || loadingHistorico) return
@@ -984,13 +996,13 @@ export function OcClient({ fila, ordens, perm }: Props) {
     setLoadingHistorico(true)
     try {
       const [filaAtualizada, ordensAtualizadas] = await Promise.all([
-        getFilaReposicao(),
+        getFilaReposicaoList(),
         getOrdensCompra(),
       ])
       setFilaState(filaAtualizada)
       setOrdensState(ordensAtualizadas)
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao atualizar histórico.')
+      setErro(e instanceof Error ? e.message : 'Erro ao atualizar.')
     } finally {
       setLoadingHistorico(false)
     }
@@ -999,65 +1011,6 @@ export function OcClient({ fila, ordens, perm }: Props) {
   function flash(msg: string) {
     setSucesso(msg)
     setTimeout(() => setSucesso(''), 3500)
-  }
-
-  function parseNumero(raw: string): number {
-    const v = raw.trim().replace(',', '.')
-    const n = Number(v)
-    return Number.isFinite(n) ? n : NaN
-  }
-
-  async function handleGerarOC(
-    fornecedor_id: string | null,
-    adicionaisPorMateriaPrima: Record<string, number> = {},
-  ) {
-    const chave = fornecedor_id ?? '__sem_fornecedor__'
-    if (gerarOcInFlightRef.current[chave]) return
-    gerarOcInFlightRef.current[chave] = true
-    setGerandoFornecedor(chave); setErro('')
-    try {
-      const codigo = await gerarOC(fornecedor_id, adicionaisPorMateriaPrima)
-      flash(`OC ${codigo} gerada com sucesso.`)
-      setFilaState((prev) => prev.filter((grupo) => (grupo.fornecedor_id ?? '__sem_fornecedor__') !== chave))
-      setAdicionaisFila({})
-      await refresh()
-      setAba('historico')
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao gerar OC.')
-    } finally {
-      setGerandoFornecedor(null)
-      gerarOcInFlightRef.current[chave] = false
-    }
-  }
-
-  async function handleGerarTodas() {
-    if (gerarTodasInFlightRef.current) return
-    gerarTodasInFlightRef.current = true
-    setGerandoTodas(true); setErro('')
-    try {
-      let criadas = 0
-      for (const grupo of filaState) {
-        const adicionaisPorMateriaPrima: Record<string, number> = {}
-        for (const it of grupo.itens) {
-          adicionaisPorMateriaPrima[it.materia_prima_id] = parseNumero(
-            adicionaisFila[it.materia_prima_id] ?? '0',
-          )
-        }
-        await gerarOC(grupo.fornecedor_id, adicionaisPorMateriaPrima)
-        criadas++
-      }
-
-      flash(`${criadas} ${criadas === 1 ? 'OC gerada' : 'OCs geradas'} com sucesso.`)
-      setFilaState([])
-      setAdicionaisFila({})
-      await refresh()
-      setAba('historico')
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao gerar OCs.')
-    } finally {
-      setGerandoTodas(false)
-      gerarTodasInFlightRef.current = false
-    }
   }
 
   async function handleDeleteOC() {
@@ -1086,6 +1039,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
     { value: 'recebida', label: 'Recebidas' },
   ]
 
+  void gerarTodasInFlightRef
+
   return (
     <>
       {/* Header */}
@@ -1097,34 +1052,18 @@ export function OcClient({ fila, ordens, perm }: Props) {
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Ordens de Compra</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
             {filaState.length > 0
-              ? `${filaState.length} ${filaState.length === 1 ? 'fornecedor' : 'fornecedores'} com itens pendentes`
+              ? `${filaState.length} ${filaState.length === 1 ? 'pedido' : 'pedidos'} aguardando reposição`
               : 'Fila de reposição vazia'}
           </p>
         </div>
         {perm.criar && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" onClick={() => setOcCriarOpen(true)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Nova ordem de compra
-            </Button>
-            {filaState.length > 0 && (
-              <Button
-                variant="secondary"
-                loading={gerandoTodas}
-                onClick={handleGerarTodas}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-                  <polyline points="16 16 12 12 8 16" />
-                  <line x1="12" y1="12" x2="12" y2="21" />
-                  <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-                </svg>
-                Gerar Todas as OCs
-              </Button>
-            )}
-          </div>
+          <Button variant="primary" onClick={() => setOcCriarOpen(true)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nova ordem de compra
+          </Button>
         )}
       </div>
 
@@ -1174,7 +1113,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
         </div>
       </div>
 
-      {/* ── Aba: Fila ── */}
+      {/* ── Aba: Fila de Reposição ── */}
       {aba === 'fila' && (
         <div className="px-4 sm:px-8 py-6">
           {filaState.length === 0 ? (
@@ -1188,126 +1127,64 @@ export function OcClient({ fila, ordens, perm }: Props) {
               </svg>
               <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Fila vazia</p>
               <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                Quando vendas forem marcadas como entregues, as matérias-primas aparecerão aqui.
+                Quando vendas forem entregues e houver estoques abaixo do mínimo, os pedidos aparecerão aqui.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4" style={{ maxWidth: 880 }}>
-              {filaState.map((grupo) => {
-                const chave = grupo.fornecedor_id ?? '__sem_fornecedor__'
-                const isGerando = gerandoFornecedor === chave
-                const totalValor = grupo.itens.reduce((s, i) => {
-                  const adicional = parseNumero(adicionaisFila[i.materia_prima_id] ?? '0')
-                  const adicionalSafe = Number.isFinite(adicional) ? adicional : 0
-                  return s + i.mp_preco_custo * (i.quantidade_total + adicionalSafe)
-                }, 0)
-                return (
-                  <div
-                    key={chave}
-                    className="rounded-xl p-5"
-                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)' }}
-                  >
-                    {/* Header do card */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-semibold text-base" style={{ color: 'var(--ac-text)' }}>
-                          {grupo.fornecedor_nome}
-                        </h3>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-                          {grupo.itens.length} {grupo.itens.length === 1 ? 'item' : 'itens'} · Estimativa {fmt(totalValor)}
-                        </p>
-                      </div>
-                      {perm.criar && (
-                        <Button
-                          variant="primary"
-                          loading={isGerando}
-                          onClick={() => {
-                            const adicionaisPorMateriaPrima: Record<string, number> = {}
-                            for (const it of grupo.itens) {
-                              adicionaisPorMateriaPrima[it.materia_prima_id] = parseNumero(
-                                adicionaisFila[it.materia_prima_id] ?? '0',
-                              )
-                            }
-                            handleGerarOC(grupo.fornecedor_id, adicionaisPorMateriaPrima)
-                          }}
+            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)' }}>
+                    {['Pedido', 'Cliente', 'Detectado em', 'MPs para repor', 'Status', ''].map((h) => (
+                      <th key={h} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left" style={{ color: 'var(--ac-muted)' }}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filaState.map((item, idx) => (
+                    <tr
+                      key={item.id}
+                      className="cursor-pointer transition-colors"
+                      style={{ borderTop: idx > 0 ? '1px solid var(--ac-border)' : undefined }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-border) 20%, transparent)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      onClick={() => setFilaAberta(item)}
+                    >
+                      <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
+                        {item.pedido_codigo}
+                      </td>
+                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
+                        {item.cliente_nome}
+                      </td>
+                      <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
+                        {fmtData(item.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                          style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
                         >
-                          Gerar OC
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Itens */}
-                    <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
-                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Matéria-Prima</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendido</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Unidades adicionais</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd Total</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Unit.</th>
-                            <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estimativa</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {grupo.itens.map((item, idx) => (
-                            <tr
-                              key={item.materia_prima_id}
-                              style={{ borderTop: idx > 0 ? '1px solid var(--ac-border)' : undefined }}
-                            >
-                              <td className="px-3 py-2.5 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{item.mp_codigo}</td>
-                              <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>{item.mp_nome}</td>
-                              <td className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--ac-accent)' }}>
-                                {fmtQtd(item.quantidade_total)}
-                              </td>
-                              <td className="px-3 py-2.5 text-right">
-                                {perm.criar ? (
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="any"
-                                    disabled={isGerando}
-                                    value={adicionaisFila[item.materia_prima_id] ?? ''}
-                                    onChange={(e) =>
-                                      setAdicionaisFila((prev) => ({ ...prev, [item.materia_prima_id]: e.target.value }))
-                                    }
-                                    className="w-24 px-2 py-1 rounded text-sm text-right"
-                                    style={{
-                                      border: '1px solid var(--ac-border)',
-                                      background: 'var(--ac-bg)',
-                                      color: 'var(--ac-text)',
-                                    }}
-                                  />
-                                ) : (
-                                  <span style={{ color: 'var(--ac-text)' }}>—</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
-                                {(() => {
-                                  const adicional = parseNumero(adicionaisFila[item.materia_prima_id] ?? '0')
-                                  const adicionalSafe = Number.isFinite(adicional) ? adicional : 0
-                                  return fmtQtd(item.quantidade_total + adicionalSafe)
-                                })()}
-                              </td>
-                              <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
-                                {fmt(item.mp_preco_custo)}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
-                                {(() => {
-                                  const adicional = parseNumero(adicionaisFila[item.materia_prima_id] ?? '0')
-                                  const adicionalSafe = Number.isFinite(adicional) ? adicional : 0
-                                  return fmt(item.mp_preco_custo * (item.quantidade_total + adicionalSafe))
-                                })()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )
-              })}
+                          {item.itens_count} {item.itens_count === 1 ? 'item' : 'itens'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <BadgeStatusFila status={item.status} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                          style={{ background: 'var(--ac-accent)', color: '#111827' }}
+                          onClick={(e) => { e.stopPropagation(); setFilaAberta(item) }}
+                        >
+                          Revisar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -1446,6 +1323,21 @@ export function OcClient({ fila, ordens, perm }: Props) {
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal detalhe Fila de Reposição */}
+      {filaAberta && (
+        <FilaReposicaoDetalheModal
+          fila={filaAberta}
+          perm={perm}
+          onClose={() => setFilaAberta(null)}
+          onRefresh={() => {
+            setFilaAberta(null)
+            flash('Operação realizada com sucesso.')
+            refresh()
+            setAba('historico')
+          }}
+        />
       )}
 
       {/* Modal detalhe OC */}

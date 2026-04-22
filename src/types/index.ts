@@ -373,18 +373,44 @@ export type OrdemCompra = {
   itens?: OrdemCompraItem[]
 }
 
-export type FilaItemAgrupado = {
-  materia_prima_id: string
-  mp_codigo: string
-  mp_nome: string
-  mp_preco_custo: number
-  quantidade_total: number
+export type FilaReposicao = {
+  id: string
+  pedido_id: string
+  pedido_codigo: string
+  cliente_nome: string
+  status: 'pendente' | 'convertida' | 'dispensada'
+  created_at: string
+  itens_count: number
 }
 
-export type FilaFornecedor = {
+export type FilaReposicaoItemFacaRelacionada = {
+  faca_id: string
+  faca_nome: string
+  estoque_atual: number
+  estoque_minimo: number
+  quantidade_bom: number
+}
+
+export type FilaReposicaoItem = {
+  id: string
+  fila_id: string
+  materia_prima_id: string
+  mp_nome: string
+  mp_codigo: string
+  mp_preco_custo: number
   fornecedor_id: string | null
-  fornecedor_nome: string
-  itens: FilaItemAgrupado[]
+  fornecedor_nome: string | null
+  estoque_atual: number
+  estoque_minimo: number
+  quantidade_sugerida: number
+  quantidade_adicional: number
+  selecionado: boolean
+  facas_relacionadas: FilaReposicaoItemFacaRelacionada[]
+}
+
+export type FilaReposicaoDetalhe = {
+  fila: FilaReposicao
+  itens: FilaReposicaoItem[]
 }
 
 export type CategoriaFacaDB = {

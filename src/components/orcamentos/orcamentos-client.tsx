@@ -20,6 +20,7 @@ type Props = {
   perm: Perm
   /** Permissão de criar venda — necessária para "Transformar em venda". */
   permVendasCriar: boolean
+  usuarioLogadoId: string | null
 }
 
 const STATUS_TABS: { value: 'todos' | 'pendentes' | 'convertidos'; label: string }[] = [
@@ -50,6 +51,7 @@ export function OrcamentosClient({
   usuarios,
   perm,
   permVendasCriar,
+  usuarioLogadoId,
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -527,6 +529,7 @@ export function OrcamentosClient({
         clientes={clientes}
         facas={facas}
         usuarios={usuarios}
+        usuarioLogadoId={usuarioLogadoId}
         onSaved={handleSaved}
       />
 

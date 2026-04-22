@@ -4,7 +4,7 @@ import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
 import { getFacas } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
-import { getPermissoesEfetivas } from '@/lib/auth'
+import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { VendasClient } from '@/components/vendas/vendas-client'
 import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
 
@@ -24,11 +24,12 @@ export default async function VendasPage() {
 async function VendasPageData() {
   const perms = await getPermissoesEfetivas()
   if (!perms.vendas.ver) redirect('/')
-  const [pedidos, clientes, facas, usuarios] = await Promise.all([
+  const [pedidos, clientes, facas, usuarios, authUser] = await Promise.all([
     getVendas(80),
     getClientes(80),
     getFacas(120),
     getUsuariosPerfisList(),
+    getAuthenticatedUser(),
   ])
 
   return (
@@ -39,6 +40,7 @@ async function VendasPageData() {
         facas={facas}
         usuarios={usuarios}
         perm={perms.vendas}
+        usuarioLogadoId={authUser?.id ?? null}
       />
     </div>
   )

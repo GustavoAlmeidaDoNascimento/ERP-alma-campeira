@@ -1,6 +1,6 @@
 'use server'
 
-import { getPermissoesEfetivas } from '@/lib/auth'
+import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { getMatériasPrimas, getMPDetalhe, type MPDetalheData } from '@/lib/actions/materias-primas'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
@@ -13,7 +13,7 @@ import { getOrcamentos } from '@/lib/actions/orcamentos'
 import { getClientes } from '@/lib/actions/clientes'
 import { getUsuarios, getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
-import { getFilaReposicao, getOrdensCompra } from '@/lib/actions/ordens-compra'
+import { getFilaReposicaoList, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
 import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
 import { getAuditLogs, getAuditLogTabelas, getAuditLogUsuarios, type AuditLog } from '@/lib/actions/auditoria'
@@ -65,7 +65,7 @@ export type ErpTabData =
     }
   | {
       kind: 'ordens-compra'
-      fila: Awaited<ReturnType<typeof getFilaReposicao>>
+      fila: Awaited<ReturnType<typeof getFilaReposicaoList>>
       ordens: Awaited<ReturnType<typeof getOrdensCompra>>
       perm: Perm
     }
@@ -76,6 +76,7 @@ export type ErpTabData =
       facas: Faca[]
       usuarios: { id: string; nome: string }[]
       perm: Perm
+      usuarioLogadoId: string | null
     }
   | {
       kind: 'orcamentos'
@@ -85,6 +86,7 @@ export type ErpTabData =
       usuarios: { id: string; nome: string }[]
       perm: Perm
       permVendasCriar: boolean
+      usuarioLogadoId: string | null
     }
   | {
       kind: 'clientes'
@@ -222,7 +224,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   if (path === '/ordens-compra') {
     const [perms, fila, ordens] = await Promise.all([
       getPermissoesEfetivas(),
-      getFilaReposicao(),
+      getFilaReposicaoList(),
       getOrdensCompra(),
     ])
     const perm = perms.ordens_compra as Perm
@@ -231,25 +233,35 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/vendas') {
-    const [perms, pedidos, clientes, facas, usuarios] = await Promise.all([
+    const [perms, pedidos, clientes, facas, usuarios, authUser] = await Promise.all([
       getPermissoesEfetivas(),
       getVendas(80),
       getClientes(80),
       getFacas(120),
       getUsuariosPerfisList(),
+      getAuthenticatedUser(),
     ])
     const perm = perms.vendas as Perm
     assertAllowed(perm, 'vendas')
-    return { kind: 'vendas', pedidos, clientes, facas, usuarios, perm }
+    return {
+      kind: 'vendas',
+      pedidos,
+      clientes,
+      facas,
+      usuarios,
+      perm,
+      usuarioLogadoId: authUser?.id ?? null,
+    }
   }
 
   if (path === '/orcamentos') {
-    const [perms, orcamentos, clientes, facas, usuarios] = await Promise.all([
+    const [perms, orcamentos, clientes, facas, usuarios, authUser] = await Promise.all([
       getPermissoesEfetivas(),
       getOrcamentos(80),
       getClientes(80),
       getFacas(120),
       getUsuariosPerfisList(),
+      getAuthenticatedUser(),
     ])
     const perm = (perms as Record<string, Perm>).orcamentos
     assertAllowed(perm, 'orcamentos')
@@ -261,6 +273,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
       usuarios,
       perm,
       permVendasCriar: !!perms.vendas?.criar,
+      usuarioLogadoId: authUser?.id ?? null,
     }
   }
 

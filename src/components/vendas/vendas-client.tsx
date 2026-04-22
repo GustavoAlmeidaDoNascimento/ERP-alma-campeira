@@ -20,6 +20,7 @@ type Props = {
   facas: Faca[]
   usuarios: { id: string; nome: string }[]
   perm: Perm
+  usuarioLogadoId: string | null
 }
 
 const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
@@ -44,7 +45,7 @@ function isFullDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuarios, perm }: Props) {
+export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuarios, perm, usuarioLogadoId }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -545,6 +546,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
         clientes={clientes}
         facas={facas}
         usuarios={usuarios}
+        usuarioLogadoId={usuarioLogadoId}
         onSaved={handleVendaSaved}
       />
 
