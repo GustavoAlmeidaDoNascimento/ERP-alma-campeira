@@ -1,8 +1,22 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { BadgeEstoque } from '@/components/ui/badge-estoque'
-import { statusEstoqueFaca } from '@/types'
+import { statusEstoqueFaca, type StatusEstoque } from '@/types'
+
+/** Apenas amarelo e vermelho; "ok" não exibe tag (público). */
+const CATALOGO_ESTOQUETag: Record<
+  Exclude<StatusEstoque, 'ok'>,
+  { label: string; style: CSSProperties }
+> = {
+  atencao: {
+    label: 'Últimas unidades',
+    style: { color: '#b45309', background: '#fef9c3', border: '1px solid #fde047' },
+  },
+  critico: {
+    label: 'Sem estoque',
+    style: { color: '#dc2626', background: '#fee2e2', border: '1px solid #fca5a5' },
+  },
+}
 
 export type FacaCatalogoItem = {
   id: string
@@ -13,6 +27,20 @@ export type FacaCatalogoItem = {
   estoque_minimo: number
   /** Só preenchido quando a página é carregada com preços visíveis. */
   preco_venda?: number
+}
+
+function tagEstoquePublico(faca: FacaCatalogoItem) {
+  const s = statusEstoqueFaca(faca)
+  if (s === 'ok') return null
+  const cfg = CATALOGO_ESTOQUETag[s]
+  return (
+    <span
+      className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold"
+      style={cfg.style}
+    >
+      {cfg.label}
+    </span>
+  )
 }
 
 function formatPreco(preco: number) {
@@ -355,7 +383,7 @@ export function CatalogoClient({ facas, mostrarPrecos = true }: Props) {
                       {faca.estoque_atual}
                     </span>
                   </span>
-                  <BadgeEstoque status={statusEstoqueFaca(faca)} />
+                  {tagEstoquePublico(faca)}
                 </div>
               </div>
             </div>
