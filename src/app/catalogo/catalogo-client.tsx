@@ -72,9 +72,10 @@ const inputStyle: CSSProperties = {
 
 type Props = {
   facas: FacaCatalogoItem[]
+  mostrarPrecos?: boolean
 }
 
-export function CatalogoClient({ facas }: Props) {
+export function CatalogoClient({ facas, mostrarPrecos = true }: Props) {
   const [buscaNome, setBuscaNome] = useState('')
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('')
   const [precoMinStr, setPrecoMinStr] = useState('')
@@ -103,11 +104,13 @@ export function CatalogoClient({ facas }: Props) {
     return facas.filter((f) => {
       if (qNome && !norm(f.nome).includes(qNome)) return false
       if (categoriaSelecionada && f.categoria !== categoriaSelecionada) return false
-      if (minP !== null && f.preco_venda < minP) return false
-      if (maxP !== null && f.preco_venda > maxP) return false
+      if (mostrarPrecos) {
+        if (minP !== null && f.preco_venda < minP) return false
+        if (maxP !== null && f.preco_venda > maxP) return false
+      }
       return true
     })
-  }, [facas, buscaNome, categoriaSelecionada, precoMinStr, precoMaxStr])
+  }, [facas, buscaNome, categoriaSelecionada, precoMinStr, precoMaxStr, mostrarPrecos])
 
   const total = facas.length
   const n = filtradas.length
@@ -193,43 +196,47 @@ export function CatalogoClient({ facas }: Props) {
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label htmlFor="catalogo-preco-min" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Preço mín.
-              </label>
-              <input
-                id="catalogo-preco-min"
-                type="text"
-                inputMode="decimal"
-                placeholder="0,00"
-                value={precoMinStr}
-                onChange={(e) => setPrecoMinStr(e.target.value)}
-                style={{ ...inputStyle, boxSizing: 'border-box' }}
-              />
+          {mostrarPrecos && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label htmlFor="catalogo-preco-min" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Preço mín.
+                </label>
+                <input
+                  id="catalogo-preco-min"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={precoMinStr}
+                  onChange={(e) => setPrecoMinStr(e.target.value)}
+                  style={{ ...inputStyle, boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label htmlFor="catalogo-preco-max" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Preço máx.
+                </label>
+                <input
+                  id="catalogo-preco-max"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={precoMaxStr}
+                  onChange={(e) => setPrecoMaxStr(e.target.value)}
+                  style={{ ...inputStyle, boxSizing: 'border-box' }}
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="catalogo-preco-max" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Preço máx.
-              </label>
-              <input
-                id="catalogo-preco-max"
-                type="text"
-                inputMode="decimal"
-                placeholder="0,00"
-                value={precoMaxStr}
-                onChange={(e) => setPrecoMaxStr(e.target.value)}
-                style={{ ...inputStyle, boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
       {n === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>Nenhuma faca com esses filtros</p>
-          <p style={{ marginTop: 8, fontSize: 13 }}>Ajuste a busca ou o intervalo de preço.</p>
+          <p style={{ marginTop: 8, fontSize: 13 }}>
+            {mostrarPrecos ? 'Ajuste a busca ou o intervalo de preço.' : 'Ajuste a busca ou a categoria.'}
+          </p>
         </div>
       ) : (
         <div className="catalog-grid">
@@ -304,23 +311,25 @@ export function CatalogoClient({ facas }: Props) {
                   style={{
                     fontSize: 12,
                     color: '#6b7280',
-                    marginBottom: 8,
+                    marginBottom: mostrarPrecos ? 8 : 0,
                     lineHeight: 1.35,
                   }}
                 >
                   {faca.categoria}
                 </p>
 
-                <p
-                  style={{
-                    fontSize: 17,
-                    fontWeight: 800,
-                    color: '#15803d',
-                    letterSpacing: '-0.01em',
-                  }}
-                >
-                  {formatPreco(faca.preco_venda)}
-                </p>
+                {mostrarPrecos && (
+                  <p
+                    style={{
+                      fontSize: 17,
+                      fontWeight: 800,
+                      color: '#15803d',
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    {formatPreco(faca.preco_venda)}
+                  </p>
+                )}
               </div>
             </div>
             )
