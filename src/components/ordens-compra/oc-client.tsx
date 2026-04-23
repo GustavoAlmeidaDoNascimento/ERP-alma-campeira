@@ -958,6 +958,12 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [filaState, setFilaState] = useState<FilaReposicao[]>(fila)
   const [ordensState, setOrdensState] = useState<OrdemCompra[]>(ordens)
   const [loadingHistorico, setLoadingHistorico] = useState(false)
+
+  // Sincroniza com props quando a aba é recarregada por refreshTab('/ordens-compra')
+  // (ex.: ao entregar uma venda em /vendas). Sem isso, o useState acima só
+  // pega o valor inicial e a fila nova nunca aparece sem F5.
+  useEffect(() => { setFilaState(fila) }, [fila])
+  useEffect(() => { setOrdensState(ordens) }, [ordens])
   const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null)
   const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null)
   const [deletando, setDeletando] = useState<OrdemCompra | null>(null)
