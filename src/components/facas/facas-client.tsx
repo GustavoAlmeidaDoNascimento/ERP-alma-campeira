@@ -54,6 +54,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
   const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>('')
+  const [modalCatalogoAberto, setModalCatalogoAberto] = useState(false)
   const [busca, setBusca] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [ordenacao, setOrdenacao] = useState<{ coluna: OrdemColunaFacas | null; dir: 'asc' | 'desc' }>({
@@ -182,8 +183,9 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/catalogo"
+          <button
+            type="button"
+            onClick={() => setModalCatalogoAberto(true)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-all hover:brightness-95"
             style={{
               background: 'transparent',
@@ -193,7 +195,7 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
             }}
           >
             Ver catálogo público
-          </Link>
+          </button>
           {perm.criar && (
             <Button onClick={abrirNovo}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4">
@@ -503,6 +505,39 @@ export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoV
         taxasLucro={taxasLucro}
         onSaved={refreshActiveTab}
       />
+
+      <Modal
+        open={modalCatalogoAberto}
+        onClose={() => setModalCatalogoAberto(false)}
+        title="Abrir catálogo público"
+        width="420px"
+      >
+        <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
+          Escolha se deseja exibir preços (como fica hoje) ou somente modelos, ideal para compartilhar.
+        </p>
+        <div className="mt-5 flex flex-col gap-3">
+          <Link
+            href="/catalogo"
+            onClick={() => setModalCatalogoAberto(false)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-all hover:brightness-95"
+            style={{ background: 'var(--ac-accent)', color: '#0c0a09' }}
+          >
+            Com preços
+          </Link>
+          <Link
+            href="/catalogo?sem_precos=1"
+            onClick={() => setModalCatalogoAberto(false)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all hover:brightness-95"
+            style={{
+              background: 'transparent',
+              color: 'var(--ac-text)',
+              border: '1px solid var(--ac-border)',
+            }}
+          >
+            Sem preços
+          </Link>
+        </div>
+      </Modal>
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir faca">
         <div className="flex flex-col gap-4">
