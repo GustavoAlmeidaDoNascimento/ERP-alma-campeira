@@ -78,6 +78,7 @@ export async function gerarOCsDeFilaItens(
       .insert({
         codigo,
         fornecedor_id: grupo.fornecedor_id ?? null,
+        fila_reposicao_id: fila_id,
         status: 'pendente',
         data_geracao: new Date().toISOString().split('T')[0],
       })

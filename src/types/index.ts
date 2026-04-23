@@ -365,11 +365,17 @@ export type OrdemCompra = {
   id: string
   codigo: string
   fornecedor_id: string | null
+  fila_reposicao_id: string | null
   status: StatusOC
   data_geracao: string
   observacao: string | null
   created_at: string
   fornecedor?: Pick<Fornecedor, 'id' | 'nome'> | null
+  // Derivados do join fila_reposicao → pedidos → clientes. Null para OCs
+  // manuais (criadas via "Nova ordem de compra") que não têm pedido de origem.
+  pedido_id?: string | null
+  pedido_codigo?: string | null
+  cliente_nome?: string | null
   itens?: OrdemCompraItem[]
 }
 

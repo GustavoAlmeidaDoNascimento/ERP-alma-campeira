@@ -121,6 +121,15 @@ function exportarPDF(oc: OrdemCompra) {
       <strong>Status</strong>
       <span>${STATUS_OC[oc.status].label}</span>
     </div>
+    ${oc.pedido_codigo ? `
+    <div>
+      <strong>Pedido de Origem</strong>
+      <span>${oc.pedido_codigo}</span>
+    </div>
+    <div>
+      <strong>Cliente</strong>
+      <span>${oc.cliente_nome ?? '—'}</span>
+    </div>` : ''}
   </div>
 
   <table>
@@ -331,11 +340,25 @@ function OcDetalheModal({
     <Modal open onClose={onClose} title={`${oc.codigo} — ${oc.fornecedor?.nome ?? 'Sem fornecedor'}`} width="760px">
       <div className="space-y-5">
         {/* Resumo */}
-        <div className="flex items-center gap-6 text-sm" style={{ color: 'var(--ac-muted)' }}>
+        <div className="flex items-center gap-6 text-sm flex-wrap" style={{ color: 'var(--ac-muted)' }}>
           <span>Data: <strong style={{ color: 'var(--ac-text)' }}>{fmtData(oc.data_geracao)}</strong></span>
           <span>Status: <BadgeStatus status={oc.status} /></span>
           <span className="ml-auto font-semibold text-base" style={{ color: 'var(--ac-text)' }}>{fmt(total)}</span>
         </div>
+
+        {/* Pedido de origem */}
+        {oc.pedido_codigo && (
+          <div
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm flex-wrap"
+            style={{ background: 'color-mix(in srgb, var(--ac-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--ac-accent) 30%, transparent)' }}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+              Pedido de origem
+            </span>
+            <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{oc.pedido_codigo}</span>
+            <span style={{ color: 'var(--ac-text)' }}>· {oc.cliente_nome ?? '—'}</span>
+          </div>
+        )}
 
         {/* Tabela de itens */}
         <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
@@ -1033,10 +1056,44 @@ export function OcClient({ fila, ordens, perm }: Props) {
     }
   }
 
+  const [agruparPorPedido, setAgruparPorPedido] = useState(true)
+
   const ordensFiltradas = useMemo(() => {
     if (filtroStatus === 'todas') return ordensState
     return ordensState.filter((o) => o.status === filtroStatus)
   }, [ordensState, filtroStatus])
+
+  // Agrupa OCs pelo pedido de origem. OCs manuais (sem pedido_id) ficam num
+  // grupo "Sem pedido (manuais)". Mantém a ordem decrescente de created_at ao
+  // posicionar cada grupo pelo created_at mais recente entre seus filhos.
+  const gruposPorPedido = useMemo(() => {
+    if (!agruparPorPedido) return null
+    type Grupo = {
+      key: string
+      pedido_codigo: string | null
+      cliente_nome: string | null
+      ocs: OrdemCompra[]
+      maisRecente: string
+    }
+    const map = new Map<string, Grupo>()
+    for (const oc of ordensFiltradas) {
+      const key = oc.pedido_id ?? '__manuais__'
+      const existente = map.get(key)
+      if (existente) {
+        existente.ocs.push(oc)
+        if (oc.created_at > existente.maisRecente) existente.maisRecente = oc.created_at
+      } else {
+        map.set(key, {
+          key,
+          pedido_codigo: oc.pedido_codigo ?? null,
+          cliente_nome: oc.cliente_nome ?? null,
+          ocs: [oc],
+          maisRecente: oc.created_at,
+        })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.maisRecente.localeCompare(a.maisRecente))
+  }, [ordensFiltradas, agruparPorPedido])
 
   const statusTabs: { value: StatusOC | 'todas'; label: string }[] = [
     { value: 'todas', label: 'Todas' },
@@ -1199,8 +1256,9 @@ export function OcClient({ fila, ordens, perm }: Props) {
       {/* ── Aba: Histórico ── */}
       {aba === 'historico' && (
         <div className="px-4 sm:px-8 py-6">
-          {/* Filtro de status */}
-          <div className="flex gap-2 mb-5">
+          {/* Filtro de status + agrupamento */}
+          <div className="flex gap-2 mb-5 flex-wrap items-center">
+            <div className="flex gap-2 flex-wrap">
             {statusTabs.map((tab) => {
               const count = tab.value === 'todas'
                 ? ordensState.length
@@ -1221,6 +1279,17 @@ export function OcClient({ fila, ordens, perm }: Props) {
                 </button>
               )
             })}
+            </div>
+            <label className="ml-auto flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--ac-muted)' }}>
+              <input
+                type="checkbox"
+                checked={agruparPorPedido}
+                onChange={(e) => setAgruparPorPedido(e.target.checked)}
+                className="w-4 h-4 cursor-pointer rounded"
+                style={{ accentColor: 'var(--ac-accent)' }}
+              />
+              Agrupar por pedido
+            </label>
           </div>
 
           {loadingHistorico && (
@@ -1248,7 +1317,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)' }}>
-                    {['Código', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
+                    {['Código', 'Pedido', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
                       <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left ${h === '' ? 'w-20' : ''}`} style={{ color: 'var(--ac-muted)' }}>
                         {h}
                       </th>
@@ -1256,7 +1325,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {ordensFiltradas.map((oc, idx) => {
+                  {(() => {
+                    const renderRow = (oc: OrdemCompra, idx: number) => {
                     const itens = oc.itens ?? []
                     const quantidadeFinal = itens.reduce((acc, item) => acc + Number(item.quantidade ?? 0), 0)
                     const total = totalOC(itens)
@@ -1271,6 +1341,16 @@ export function OcClient({ fila, ordens, perm }: Props) {
                       >
                         <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
                           {oc.codigo}
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                          {oc.pedido_codigo ? (
+                            <div>
+                              <div className="font-mono font-semibold" style={{ color: 'var(--ac-text)' }}>{oc.pedido_codigo}</div>
+                              <div style={{ color: 'var(--ac-muted)' }}>{oc.cliente_nome ?? '—'}</div>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--ac-muted)' }}>Manual</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
                           {oc.fornecedor?.nome ?? '—'}
@@ -1323,7 +1403,47 @@ export function OcClient({ fila, ordens, perm }: Props) {
                         </td>
                       </tr>
                     )
-                  })}
+                    }
+
+                    if (gruposPorPedido) {
+                      let globalIdx = 0
+                      return gruposPorPedido.flatMap((grupo, grupoIdx) => {
+                        const totalGrupo = grupo.ocs.reduce((s, oc) => s + totalOC(oc.itens ?? []), 0)
+                        const header = (
+                          <tr
+                            key={`header-${grupo.key}`}
+                            style={{
+                              background: 'color-mix(in srgb, var(--ac-accent) 8%, transparent)',
+                              borderTop: grupoIdx > 0 ? '2px solid var(--ac-border)' : undefined,
+                            }}
+                          >
+                            <td colSpan={8} className="px-4 py-2">
+                              <div className="flex items-center gap-2 flex-wrap text-sm">
+                                {grupo.pedido_codigo ? (
+                                  <>
+                                    <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{grupo.pedido_codigo}</span>
+                                    <span style={{ color: 'var(--ac-text)' }}>· {grupo.cliente_nome ?? '—'}</span>
+                                  </>
+                                ) : (
+                                  <span className="font-semibold" style={{ color: 'var(--ac-muted)' }}>Ordens manuais (sem pedido)</span>
+                                )}
+                                <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                                  · {grupo.ocs.length} {grupo.ocs.length === 1 ? 'OC' : 'OCs'}
+                                </span>
+                                <span className="ml-auto text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
+                                  Total: <span style={{ color: 'var(--ac-text)' }}>{fmt(totalGrupo)}</span>
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                        const linhas = grupo.ocs.map((oc) => renderRow(oc, globalIdx++))
+                        return [header, ...linhas]
+                      })
+                    }
+
+                    return ordensFiltradas.map((oc, idx) => renderRow(oc, idx))
+                  })()}
                 </tbody>
               </table>
             </div>

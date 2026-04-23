@@ -345,6 +345,14 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     .select(`
       *,
       fornecedor:fornecedores(id, nome),
+      fila:fila_reposicao(
+        id,
+        pedido:pedidos(
+          id,
+          codigo,
+          cliente:clientes(id, nome)
+        )
+      ),
       itens:ordem_compra_itens(
         id, ordem_compra_id, materia_prima_id,
         quantidade, quantidade_vendida, quantidade_adicional,
@@ -355,7 +363,25 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
-  return data as OrdemCompra[]
+
+  return (data ?? []).map((row) => {
+    const fila = (Array.isArray(row.fila) ? row.fila[0] : row.fila) as {
+      id: string
+      pedido: { id: string; codigo: string; cliente: { nome: string } | { nome: string }[] | null } | { id: string; codigo: string; cliente: { nome: string } | { nome: string }[] | null }[] | null
+    } | null
+    const pedido = fila?.pedido
+      ? (Array.isArray(fila.pedido) ? fila.pedido[0] : fila.pedido)
+      : null
+    const cliente = pedido?.cliente
+      ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
+      : null
+    return {
+      ...row,
+      pedido_id: pedido?.id ?? null,
+      pedido_codigo: pedido?.codigo ?? null,
+      cliente_nome: cliente?.nome ?? null,
+    }
+  }) as OrdemCompra[]
 }
 
 export async function getOrdensCompra(): Promise<OrdemCompra[]> {
