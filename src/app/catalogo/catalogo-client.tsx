@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { BadgeEstoque } from '@/components/ui/badge-estoque'
+import { statusEstoqueFaca } from '@/types'
 
 export type FacaCatalogoItem = {
   id: string
   nome: string
   categoria: string
   foto_url: string | null
+  estoque_atual: number
+  estoque_minimo: number
   /** Só preenchido quando a página é carregada com preços visíveis. */
   preco_venda?: number
 }
@@ -314,7 +318,7 @@ export function CatalogoClient({ facas, mostrarPrecos = true }: Props) {
                   style={{
                     fontSize: 12,
                     color: '#6b7280',
-                    marginBottom: mostrarPrecos ? 8 : 0,
+                    marginBottom: 8,
                     lineHeight: 1.35,
                   }}
                 >
@@ -328,11 +332,31 @@ export function CatalogoClient({ facas, mostrarPrecos = true }: Props) {
                       fontWeight: 800,
                       color: '#15803d',
                       letterSpacing: '-0.01em',
+                      marginBottom: 8,
                     }}
                   >
                     {formatPreco(faca.preco_venda)}
                   </p>
                 )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: '8px 10px',
+                    fontSize: 12,
+                    color: '#4b5563',
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: '#374151' }}>
+                    Estoque:{' '}
+                    <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {faca.estoque_atual}
+                    </span>
+                  </span>
+                  <BadgeEstoque status={statusEstoqueFaca(faca)} />
+                </div>
               </div>
             </div>
             )

@@ -56,7 +56,9 @@ export type Faca = {
   created_at: string
 }
 
-export function statusEstoqueFaca(faca: Faca): StatusEstoque {
+export function statusEstoqueFaca(
+  faca: Pick<Faca, 'estoque_atual' | 'estoque_minimo'>
+): StatusEstoque {
   if (faca.estoque_atual === 0) return 'critico'
   if (faca.estoque_atual <= faca.estoque_minimo) return 'atencao'
   return 'ok'

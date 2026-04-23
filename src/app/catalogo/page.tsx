@@ -23,11 +23,14 @@ async function getFacasCatalogo(mostrarPrecos: boolean): Promise<FacaCatalogoIte
     if (mostrarPrecos) {
       const { data } = await supabase
         .from('facas')
-        .select('id, nome, categoria, foto_url, preco_venda')
+        .select('id, nome, categoria, foto_url, preco_venda, estoque_atual, estoque_minimo')
         .order('nome')
       return (data ?? []) as FacaCatalogoItem[]
     }
-    const { data } = await supabase.from('facas').select('id, nome, categoria, foto_url').order('nome')
+    const { data } = await supabase
+      .from('facas')
+      .select('id, nome, categoria, foto_url, estoque_atual, estoque_minimo')
+      .order('nome')
     return (data ?? []) as FacaCatalogoItem[]
   } catch {
     return []
