@@ -2,9 +2,19 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { Metadata } from 'next'
 import { CatalogoClient, type FacaCatalogoItem } from './catalogo-client'
 
-export const metadata: Metadata = {
-  title: 'Catálogo de Facas',
-  description: 'Catálogo de facas artesanais.',
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ sem_precos?: string }>
+}): Promise<Metadata> {
+  const { sem_precos: semPrecos } = await searchParams
+  const sem = semPrecos === '1'
+  return {
+    title: sem ? 'Catálogo (sem preços) — Facas' : 'Catálogo de Facas',
+    description: sem
+      ? 'Visualização pública do catálogo, sem exibir valores.'
+      : 'Catálogo de facas artesanais.',
+  }
 }
 
 async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
@@ -20,7 +30,13 @@ async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
   }
 }
 
-export default async function CatalogoPage() {
+export default async function CatalogoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sem_precos?: string }>
+}) {
+  const { sem_precos: semPrecos } = await searchParams
+  const mostrarPrecos = semPrecos !== '1'
   const facas = await getFacasCatalogo()
 
   return (
@@ -120,10 +136,15 @@ export default async function CatalogoPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
             Catálogo de Facas
           </h1>
+          {!mostrarPrecos && (
+            <p style={{ marginTop: 10, fontSize: 14, fontWeight: 500, color: '#6b7280' }}>
+              Visualização pública sem preços
+            </p>
+          )}
         </section>
 
         <main style={{ maxWidth: 1280, margin: '0 auto', padding: '0 20px 60px' }}>
-          <CatalogoClient facas={facas} />
+          <CatalogoClient facas={facas} mostrarPrecos={mostrarPrecos} />
         </main>
 
       </div>
