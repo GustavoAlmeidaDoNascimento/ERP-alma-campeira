@@ -20,10 +20,14 @@ export async function generateMetadata({
 async function getFacasCatalogo(mostrarPrecos: boolean): Promise<FacaCatalogoItem[]> {
   try {
     const supabase = createAdminClient()
-    const cols = mostrarPrecos
-      ? 'id, nome, categoria, foto_url, preco_venda'
-      : 'id, nome, categoria, foto_url'
-    const { data } = await supabase.from('facas').select(cols).order('nome')
+    if (mostrarPrecos) {
+      const { data } = await supabase
+        .from('facas')
+        .select('id, nome, categoria, foto_url, preco_venda')
+        .order('nome')
+      return (data ?? []) as FacaCatalogoItem[]
+    }
+    const { data } = await supabase.from('facas').select('id, nome, categoria, foto_url').order('nome')
     return (data ?? []) as FacaCatalogoItem[]
   } catch {
     return []
