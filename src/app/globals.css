@@ -33,6 +33,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Campos numéricos sem setas (spinners); continua type="number" para validação e teclado numérico */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* Scrollbar discreta */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
