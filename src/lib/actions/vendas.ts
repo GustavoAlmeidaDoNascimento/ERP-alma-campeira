@@ -369,12 +369,10 @@ async function executarEntregaPedido(
     if (estoqueErr) throw new Error(`Erro ao atualizar estoque de ${faca.nome}: ${estoqueErr.message}`)
   }
 
-  try {
-    const resultado = await analisarReposicaoParaPedido(supabase, id)
-    console.log(`[fila_reposicao] pedido=${id} criouFila=${resultado.criouFila} itens=${resultado.quantidadeItens}`)
-  } catch (e) {
-    console.error(`[fila_reposicao] Erro ao analisar reposição para pedido ${id}:`, e)
-  }
+  // Não engolir o erro: falhas na análise de reposição estavam silenciando
+  // problemas reais de RLS/schema e a fila simplesmente nunca aparecia.
+  const resultado = await analisarReposicaoParaPedido(supabase, id)
+  console.log(`[fila_reposicao] pedido=${id} criouFila=${resultado.criouFila} itens=${resultado.quantidadeItens}`)
 }
 
 export async function marcarEntregue(id: string) {

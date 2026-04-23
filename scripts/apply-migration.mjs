@@ -50,6 +50,26 @@ do $$ begin
       for all to authenticated using (true) with check (true);
   end if;
 end $$;
+
+-- Fix: fila_reposicao / fila_reposicao_itens tinham RLS ligada (default do
+-- Supabase ao criar tabela) mas nenhuma policy, então toda inserção de
+-- autenticado caía em 42501 e era engolida pelo try/catch na entrega do pedido.
+alter table fila_reposicao enable row level security;
+alter table fila_reposicao_itens enable row level security;
+do $$ begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'fila_reposicao' and policyname = 'auth fila_reposicao'
+  ) then
+    create policy "auth fila_reposicao" on fila_reposicao
+      for all to authenticated using (true) with check (true);
+  end if;
+  if not exists (
+    select 1 from pg_policies where tablename = 'fila_reposicao_itens' and policyname = 'auth fila_reposicao_itens'
+  ) then
+    create policy "auth fila_reposicao_itens" on fila_reposicao_itens
+      for all to authenticated using (true) with check (true);
+  end if;
+end $$;
 `
 
 const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {

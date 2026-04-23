@@ -31,3 +31,24 @@ CREATE TABLE fila_reposicao_itens (
 
 CREATE INDEX idx_fila_reposicao_itens_fila ON fila_reposicao_itens(fila_id);
 CREATE INDEX idx_fila_reposicao_itens_mp ON fila_reposicao_itens(materia_prima_id);
+
+-- 4. RLS: habilita e libera para autenticados (sem policies, o Supabase bloqueia
+-- todas as operações, fazendo os inserts falharem silenciosamente dentro do
+-- try/catch de executarEntregaPedido — era esse o bug reportado).
+ALTER TABLE fila_reposicao ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fila_reposicao_itens ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'fila_reposicao' AND policyname = 'auth fila_reposicao'
+  ) THEN
+    CREATE POLICY "auth fila_reposicao" ON fila_reposicao
+      FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'fila_reposicao_itens' AND policyname = 'auth fila_reposicao_itens'
+  ) THEN
+    CREATE POLICY "auth fila_reposicao_itens" ON fila_reposicao_itens
+      FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
