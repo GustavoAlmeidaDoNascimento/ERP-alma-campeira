@@ -7,7 +7,8 @@ export type FacaCatalogoItem = {
   nome: string
   categoria: string
   foto_url: string | null
-  preco_venda: number
+  /** Só preenchido quando a página é carregada com preços visíveis. */
+  preco_venda?: number
 }
 
 function formatPreco(preco: number) {
@@ -105,8 +106,10 @@ export function CatalogoClient({ facas, mostrarPrecos = true }: Props) {
       if (qNome && !norm(f.nome).includes(qNome)) return false
       if (categoriaSelecionada && f.categoria !== categoriaSelecionada) return false
       if (mostrarPrecos) {
-        if (minP !== null && f.preco_venda < minP) return false
-        if (maxP !== null && f.preco_venda > maxP) return false
+        const pv = f.preco_venda
+        if (pv === undefined) return false
+        if (minP !== null && pv < minP) return false
+        if (maxP !== null && pv > maxP) return false
       }
       return true
     })
@@ -318,7 +321,7 @@ export function CatalogoClient({ facas, mostrarPrecos = true }: Props) {
                   {faca.categoria}
                 </p>
 
-                {mostrarPrecos && (
+                {mostrarPrecos && faca.preco_venda != null && (
                   <p
                     style={{
                       fontSize: 17,

@@ -17,13 +17,13 @@ export async function generateMetadata({
   }
 }
 
-async function getFacasCatalogo(): Promise<FacaCatalogoItem[]> {
+async function getFacasCatalogo(mostrarPrecos: boolean): Promise<FacaCatalogoItem[]> {
   try {
     const supabase = createAdminClient()
-    const { data } = await supabase
-      .from('facas')
-      .select('id, nome, categoria, foto_url, preco_venda')
-      .order('nome')
+    const cols = mostrarPrecos
+      ? 'id, nome, categoria, foto_url, preco_venda'
+      : 'id, nome, categoria, foto_url'
+    const { data } = await supabase.from('facas').select(cols).order('nome')
     return (data ?? []) as FacaCatalogoItem[]
   } catch {
     return []
@@ -37,7 +37,7 @@ export default async function CatalogoPage({
 }) {
   const { sem_precos: semPrecos } = await searchParams
   const mostrarPrecos = semPrecos !== '1'
-  const facas = await getFacasCatalogo()
+  const facas = await getFacasCatalogo(mostrarPrecos)
 
   return (
     <>
