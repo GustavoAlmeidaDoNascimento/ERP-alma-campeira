@@ -415,7 +415,7 @@ export async function deletarVenda(id: string) {
     .single()
 
   if (!pedido || normalizeStatusPedido(String(pedido.status)) !== 'em_espera') {
-    throw new Error('Apenas vendas em espera podem ser excluídas.')
+    throw new Error('Apenas vendas aguardando pagamento podem ser excluídas.')
   }
 
   const { error } = await supabase.from('pedidos').delete().eq('id', id)

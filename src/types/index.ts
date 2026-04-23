@@ -260,7 +260,7 @@ export type Cliente = {
 export type StatusPedido = 'em_espera' | 'em_producao' | 'entregue'
 
 export const STATUS_PEDIDO: Record<StatusPedido, { label: string; color: string; bg: string; border: string }> = {
-  em_espera:   { label: 'Em espera',   color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+  em_espera:   { label: 'Aguardando pagamento', color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
   em_producao: { label: 'Em Produção', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
   entregue:    { label: 'Entregue',    color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
 }

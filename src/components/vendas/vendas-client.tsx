@@ -25,7 +25,7 @@ type Props = {
 
 const STATUS_TABS: { value: StatusPedido | 'todos'; label: string }[] = [
   { value: 'todos', label: 'Todos' },
-  { value: 'em_espera', label: 'Em espera' },
+  { value: 'em_espera', label: 'Aguardando pagamento' },
   { value: 'em_producao', label: 'Em Produção' },
   { value: 'entregue', label: 'Entregue' },
 ]
@@ -514,7 +514,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                           </button>
                         )}
 
-                        {/* Excluir (somente em espera) */}
+                        {/* Excluir (somente aguardando pagamento) */}
                         {podeDeletar && (
                           <button onClick={() => { setDeletando(p); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
                             style={{ color: 'var(--ac-muted)' }}
