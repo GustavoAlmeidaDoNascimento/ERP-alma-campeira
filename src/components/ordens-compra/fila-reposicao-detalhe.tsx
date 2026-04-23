@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import {
@@ -158,6 +158,23 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
     return s + i.mp_preco_custo * (i.quantidade_sugerida + adicionalSafe)
   }, 0)
 
+  // Agrupa por fornecedor na mesma ordem do backend (gerarOCsDaFila cria uma OC
+  // por fornecedor distinto, incluindo "Sem fornecedor"). Assim o modal espelha
+  // exatamente quantas OCs sairão e como ficarão divididas.
+  const grupos = useMemo(() => {
+    const map = new Map<string, { key: string; fornecedorNome: string; itens: FilaReposicaoItem[] }>()
+    for (const item of itens) {
+      const key = item.fornecedor_id ?? '__sem_fornecedor__'
+      const nome = item.fornecedor_nome ?? 'Sem fornecedor'
+      const grupo = map.get(key)
+      if (grupo) grupo.itens.push(item)
+      else map.set(key, { key, fornecedorNome: nome, itens: [item] })
+    }
+    return Array.from(map.values())
+  }, [itens])
+
+  const ocsQueSerãoGeradas = grupos.filter((g) => g.itens.some((i) => i.selecionado)).length
+
   return (
     <Modal
       open
@@ -211,7 +228,49 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                 </tr>
               </thead>
               <tbody>
-                {itens.map((item, idx) => {
+                {grupos.flatMap((grupo, grupoIdx) => {
+                  const itensSelGrupo = grupo.itens.filter((i) => i.selecionado)
+                  const subtotalGrupo = itensSelGrupo.reduce((s, i) => {
+                    const adicional = parseNumero(adicionaisLocais[i.id] ?? String(i.quantidade_adicional))
+                    const adicionalSafe = Number.isFinite(adicional) ? adicional : i.quantidade_adicional
+                    return s + i.mp_preco_custo * (i.quantidade_sugerida + adicionalSafe)
+                  }, 0)
+                  const geraOC = itensSelGrupo.length > 0
+
+                  const header = (
+                    <tr
+                      key={`header-${grupo.key}`}
+                      style={{
+                        background: 'color-mix(in srgb, var(--ac-accent) 8%, transparent)',
+                        borderTop: grupoIdx > 0 ? '2px solid var(--ac-border)' : undefined,
+                      }}
+                    >
+                      <td colSpan={7} className="px-3 py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
+                            style={{
+                              background: geraOC ? 'var(--ac-accent)' : 'var(--ac-border)',
+                              color: geraOC ? '#111827' : 'var(--ac-muted)',
+                            }}
+                          >
+                            {geraOC ? `OC ${grupoIdx + 1}` : 'Sem OC'}
+                          </span>
+                          <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                            {grupo.fornecedorNome}
+                          </span>
+                          <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                            · {itensSelGrupo.length}/{grupo.itens.length} {grupo.itens.length === 1 ? 'item' : 'itens'}
+                          </span>
+                          <span className="ml-auto text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
+                            {geraOC ? `Subtotal: ${fmt(subtotalGrupo)}` : 'nenhum item selecionado'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+
+                  const linhas = grupo.itens.map((item, idx) => {
                   const adicionalRaw = adicionaisLocais[item.id] ?? String(item.quantidade_adicional)
                   const adicionalValor = parseNumero(adicionalRaw)
                   const adicionalSafe = Number.isFinite(adicionalValor) ? adicionalValor : item.quantidade_adicional
@@ -326,6 +385,8 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                       </td>
                     </tr>
                   )
+                  })
+                  return [header, ...linhas]
                 })}
               </tbody>
             </table>
@@ -388,7 +449,7 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                 disabled={itensSelecionados.length === 0 || dispensando || carregando}
                 onClick={handleGerarOC}
               >
-                Gerar {itensSelecionados.length === 1 ? 'OC' : 'OCs'} ({itensSelecionados.length} {itensSelecionados.length === 1 ? 'item' : 'itens'})
+                Gerar {ocsQueSerãoGeradas === 1 ? 'OC' : 'OCs'} ({ocsQueSerãoGeradas} {ocsQueSerãoGeradas === 1 ? 'OC' : 'OCs'} · {itensSelecionados.length} {itensSelecionados.length === 1 ? 'item' : 'itens'})
               </Button>
             )}
           </div>
