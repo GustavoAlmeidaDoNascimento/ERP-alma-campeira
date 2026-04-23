@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,24 @@ function today() {
 
 function moeda2(n: number) {
   return Math.round(n * 100) / 100
+}
+
+/** Setas ↑/↓: passo inteiro (1); step=0.01 no HTML continua válido para digitação decimal. */
+function applyArrowStep(
+  e: KeyboardEvent<HTMLInputElement>,
+  current: number,
+  set: (n: number) => void,
+  opts: { min?: number; max?: number; step?: number }
+) {
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+  e.preventDefault()
+  const base = Number.isFinite(current) ? current : 0
+  const inc = opts.step ?? 1
+  const delta = e.key === 'ArrowUp' ? inc : -inc
+  let next = moeda2(base + delta)
+  if (opts.min !== undefined) next = Math.max(opts.min, next)
+  if (opts.max !== undefined) next = Math.min(opts.max, next)
+  set(moeda2(next))
 }
 
 /**
@@ -454,6 +472,12 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
                         value={item.desconto_pct === 0 ? '' : item.desconto_pct}
                         placeholder="0"
                         onChange={(e) => updateItem(idx, 'desconto_pct', parseFloat(e.target.value) || 0)}
+                        onKeyDown={(e) =>
+                          applyArrowStep(e, item.desconto_pct, (n) => updateItem(idx, 'desconto_pct', n), {
+                            min: 0,
+                            max: 100,
+                          })
+                        }
                         className="w-full px-2 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
                         style={temDesconto ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' } : inputStyle}
                         onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
@@ -470,6 +494,12 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
                         value={item.desconto_val === 0 ? '' : item.desconto_val}
                         placeholder="0,00"
                         onChange={(e) => updateItem(idx, 'desconto_val', parseFloat(e.target.value) || 0)}
+                        onKeyDown={(e) =>
+                          applyArrowStep(e, item.desconto_val, (n) => updateItem(idx, 'desconto_val', n), {
+                            min: 0,
+                            max: item.preco_unitario || 0,
+                          })
+                        }
                         className="w-full px-2 py-2 rounded-lg text-sm outline-none text-right tabular-nums"
                         style={temDesconto ? { ...inputStyle, borderColor: '#f59e0b', color: '#b45309' } : inputStyle}
                         onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
@@ -544,6 +574,9 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
                     value={pctDescontoTotal === 0 ? '' : pctDescontoTotal}
                     placeholder="0"
                     onChange={(e) => setDescontoTotalPorPct(parseFloat(e.target.value) || 0)}
+                    onKeyDown={(e) =>
+                      applyArrowStep(e, pctDescontoTotal, setDescontoTotalPorPct, { min: 0, max: 100 })
+                    }
                     disabled={baseAntesDescontoTotal <= 0}
                     className="w-[4.5rem] px-2 py-1.5 rounded-lg text-sm outline-none text-right tabular-nums"
                     style={
@@ -567,6 +600,12 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
                     value={descontoTotalVal === 0 ? '' : descontoTotalVal}
                     placeholder="0,00"
                     onChange={(e) => setDescontoTotalPorValor(parseFloat(e.target.value) || 0)}
+                    onKeyDown={(e) =>
+                      applyArrowStep(e, descontoTotalVal, setDescontoTotalPorValor, {
+                        min: 0,
+                        max: baseAntesDescontoTotal,
+                      })
+                    }
                     disabled={baseAntesDescontoTotal <= 0}
                     className="w-28 px-2 py-1.5 rounded-lg text-sm outline-none text-right tabular-nums"
                     style={
