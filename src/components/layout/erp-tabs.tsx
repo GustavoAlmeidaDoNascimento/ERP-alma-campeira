@@ -56,7 +56,7 @@ const ERP_TAB_FETCH_TIMEOUT_MS = 120_000
  * Evita abrir 10+ abas e disparar o mesmo número de server actions/HTTP em paralelo
  * (Next/Supabase filas ou pool — algumas requisições nunca concluíam a tempo).
  */
-const MAX_CONCURRENT_ERP_TAB_FETCHES = 4
+const MAX_CONCURRENT_ERP_TAB_FETCHES = 6
 let erpTabFetchSlotCount = 0
 const erpTabFetchWaitQueue: Array<() => void> = []
 
@@ -319,15 +319,12 @@ function TabPane({
   const [data, setData] = useState<ErpTabData | null>(cachedData ?? null)
   const [errMsg, setErrMsg] = useState<string>('')
 
-  // Track whether we've completed at least one successful load and which refreshSeq was last fetched.
-  // This prevents re-fetching just because the user switched back to this tab.
-  const loadedRef = useRef(!!cachedData)
+  // Último refreshSeq atendido. Evite "loadedRef": ref podia ficar true com fetch cancelado + data null.
   const lastFetchedSeqRef = useRef(cachedData ? 0 : -1)
   // Refreshes no final do async: `data` no closure do catch pode estar desatualizado vs cache no pai.
   const latestRenderableRef = useRef<ErpTabData | null>(null)
 
   const contentData = data ?? cachedData ?? null
-  if (contentData) loadedRef.current = true
   latestRenderableRef.current = contentData
 
   useEffect(() => {
@@ -341,10 +338,16 @@ function TabPane({
   useEffect(() => {
     if (!active) return
 
-    // Skip fetch if already loaded and refreshSeq hasn't changed.
-    // This means switching back to a visited tab never triggers a re-fetch.
-    // Only an explicit refresh (F5 resets the component; refreshTab increments refreshSeq) will fetch again.
-    if (loadedRef.current && lastFetchedSeqRef.current === refreshSeq) return
+    const pay = data ?? cachedData
+    // Só pula o fetch se já temos o que exibir (estado ou prop) e o seq ainda bate.
+    // Se pay é null, mesmo com seq "igual" (ex.: fetch cancelado, data zerado) precisamos buscar de novo.
+    if (lastFetchedSeqRef.current === refreshSeq && pay) {
+      if (data == null && cachedData) {
+        setData(cachedData)
+        setStatus('ready')
+      }
+      return
+    }
 
     lastFetchedSeqRef.current = refreshSeq
 
@@ -364,7 +367,6 @@ function TabPane({
 
         const d = await getErpTabDataDeduplicated(href, refreshSeq)
         if (cancelled) return
-        loadedRef.current = true
         setData(d)
         setStatus('ready')
         onData?.(href, d)
@@ -386,7 +388,8 @@ function TabPane({
     return () => {
       cancelled = true
     }
-    // cachedData: quando o preloader preenche o ref no pai, precisamos reavaliar (antes o efeito não rodava e o skeleton podia travar)
+    // Não incluir `data` nas deps: setData(null) no início do fetch re-dispararia o efeito e rodaria run() de novo.
+    // cachedData: preloader preenche o ref no pai.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [href, active, refreshSeq, cachedData])
 
