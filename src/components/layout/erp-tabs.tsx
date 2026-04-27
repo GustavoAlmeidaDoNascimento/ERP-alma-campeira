@@ -42,6 +42,47 @@ function normalizeHref(href: string) {
   return normalizePath(pathOnly || '/')
 }
 
+/**
+ * Uma mesma aba + refreshSeq = uma Promise compartilhada.
+ * Evita: (1) React Strict Mode mount→unmount→remount disparando 2 fetches, onde o 1.º
+ * vê `cancelled` e o 2.º pode nunca "ganhar" a resposta; (2) preloader + TabPane em paralelismo duplicado.
+ * `refreshSeq` entra na chave para `refreshTab` não reutilizar pedido antigo.
+ */
+const erpTabDataInflight = new Map<string, Promise<ErpTabData>>()
+const ERP_TAB_FETCH_TIMEOUT_MS = 90_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      reject(new Error(`Carregamento excedeu ${Math.round(ms / 1000)}s. Atualize a página ou tente de novo.`))
+    }, ms)
+    promise.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      }
+    )
+  })
+}
+
+function getErpTabDataDeduplicated(href: string, refreshSeq: number): Promise<ErpTabData> {
+  const key = `${normalizeHref(href)}#${refreshSeq}`
+  const existing = erpTabDataInflight.get(key)
+  if (existing) {
+    if (LOG) console.log('[TABS] reusing in-flight getErpTabData', { key })
+    return existing
+  }
+  const p = withTimeout(getErpTabData(href), ERP_TAB_FETCH_TIMEOUT_MS).finally(() => {
+    erpTabDataInflight.delete(key)
+  })
+  erpTabDataInflight.set(key, p)
+  return p
+}
+
 function parseStoredTabs(value: string | null): OpenTab[] {
   if (!value) return []
   try {
@@ -248,6 +289,12 @@ function TabPane({
   // This prevents re-fetching just because the user switched back to this tab.
   const loadedRef = useRef(!!cachedData)
   const lastFetchedSeqRef = useRef(cachedData ? 0 : -1)
+  // Refreshes no final do async: `data` no closure do catch pode estar desatualizado vs cache no pai.
+  const latestRenderableRef = useRef<ErpTabData | null>(null)
+
+  const contentData = data ?? cachedData ?? null
+  if (contentData) loadedRef.current = true
+  latestRenderableRef.current = contentData
 
   useEffect(() => {
     if (LOG) console.log('[TABS] TabPane mounted', { href, hasCachedData: !!cachedData })
@@ -281,7 +328,7 @@ function TabPane({
           setErrMsg('')
         }
 
-        const d = await getErpTabData(href)
+        const d = await getErpTabDataDeduplicated(href, refreshSeq)
         if (cancelled) return
         loadedRef.current = true
         setData(d)
@@ -291,8 +338,8 @@ function TabPane({
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Erro ao carregar.'
         if (cancelled) return
-        // Only show error if we have no cached data to display
-        if (!data) {
+        // Só exibe tela de erro se não houver dado (estado ou cache do preloader) para mostrar
+        if (!latestRenderableRef.current) {
           setErrMsg(msg)
           setStatus('error')
         }
@@ -305,10 +352,11 @@ function TabPane({
     return () => {
       cancelled = true
     }
+    // cachedData: quando o preloader preenche o ref no pai, precisamos reavaliar (antes o efeito não rodava e o skeleton podia travar)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [href, active, refreshSeq])
+  }, [href, active, refreshSeq, cachedData])
 
-  if (status === 'loading') return <TabSkeleton href={href} />
+  if (status === 'loading' && !contentData) return <TabSkeleton href={href} />
   if (status === 'error') {
     const isAcessoNegado = errMsg.toLowerCase().includes('acesso negado')
     return (
@@ -343,79 +391,79 @@ function TabPane({
     )
   }
 
-  if (!data) return null
+  if (!contentData) return null
 
   // Permite renderizar componente e manter state interno enquanto a aba estiver aberta.
-  switch (data.kind) {
+  switch (contentData.kind) {
     case 'mp-detalhe':
-      return <MPDetalheClient detalhe={data.detalhe} perm={data.perm} permEditarMov={data.permEditarMov} permVerMov={data.permVerMov} />
+      return <MPDetalheClient detalhe={contentData.detalhe} perm={contentData.perm} permEditarMov={contentData.permEditarMov} permVerMov={contentData.permVerMov} />
     case 'materias-primas':
-      return <MPClient materiasPrimas={data.materiasPrimas} fornecedores={data.fornecedores} categoriasMateriaPrima={data.categoriasMateriaPrima} perm={data.perm} />
+      return <MPClient materiasPrimas={contentData.materiasPrimas} fornecedores={contentData.fornecedores} categoriasMateriaPrima={contentData.categoriasMateriaPrima} perm={contentData.perm} />
     case 'facas':
       return (
         <FacasClient
-          facas={data.facas}
-          categorias={data.categorias}
-          materiasPrimas={data.materiasPrimas}
-          perm={data.perm}
-          verPrecoVenda={data.verPrecoVenda}
-          verLucro={data.verLucro}
-          taxasLucro={data.taxasLucro}
+          facas={contentData.facas}
+          categorias={contentData.categorias}
+          materiasPrimas={contentData.materiasPrimas}
+          perm={contentData.perm}
+          verPrecoVenda={contentData.verPrecoVenda}
+          verLucro={contentData.verLucro}
+          taxasLucro={contentData.taxasLucro}
         />
       )
     case 'faca-detalhe':
-      return <FacaDetalheClient detalhe={data.detalhe} materiasPrimas={data.materiasPrimas} categorias={data.categorias} perm={data.perm} verPrecoVenda={data.verPrecoVenda} usuarios={data.usuarios} permEditarMovAdmin={data.permEditarMovAdmin} />
+      return <FacaDetalheClient detalhe={contentData.detalhe} materiasPrimas={contentData.materiasPrimas} categorias={contentData.categorias} perm={contentData.perm} verPrecoVenda={contentData.verPrecoVenda} usuarios={contentData.usuarios} permEditarMovAdmin={contentData.permEditarMovAdmin} />
     case 'fornecedores':
-      return <FornecedoresClient fornecedores={data.fornecedores} perm={data.perm} />
+      return <FornecedoresClient fornecedores={contentData.fornecedores} perm={contentData.perm} />
     case 'ordens-compra':
-      return <OcClient fila={data.fila} ordens={data.ordens} perm={data.perm} />
+      return <OcClient fila={contentData.fila} ordens={contentData.ordens} perm={contentData.perm} />
     case 'vendas':
       return (
         <VendasClient
-          pedidos={data.pedidos}
-          clientes={data.clientes}
-          facas={data.facas}
-          usuarios={data.usuarios}
-          perm={data.perm}
-          usuarioLogadoId={data.usuarioLogadoId}
+          pedidos={contentData.pedidos}
+          clientes={contentData.clientes}
+          facas={contentData.facas}
+          usuarios={contentData.usuarios}
+          perm={contentData.perm}
+          usuarioLogadoId={contentData.usuarioLogadoId}
         />
       )
     case 'orcamentos':
       return (
         <OrcamentosClient
-          orcamentos={data.orcamentos}
-          clientes={data.clientes}
-          facas={data.facas}
-          usuarios={data.usuarios}
-          perm={data.perm}
-          permVendasCriar={data.permVendasCriar}
-          usuarioLogadoId={data.usuarioLogadoId}
+          orcamentos={contentData.orcamentos}
+          clientes={contentData.clientes}
+          facas={contentData.facas}
+          usuarios={contentData.usuarios}
+          perm={contentData.perm}
+          permVendasCriar={contentData.permVendasCriar}
+          usuarioLogadoId={contentData.usuarioLogadoId}
         />
       )
     case 'clientes':
-      return <ClientesClient clientes={data.clientes} perm={data.perm} />
+      return <ClientesClient clientes={contentData.clientes} perm={contentData.perm} />
     case 'usuarios':
-      return <UsuariosClient usuarios={data.usuarios} cargos={data.cargos} perm={data.perm} />
+      return <UsuariosClient usuarios={contentData.usuarios} cargos={contentData.cargos} perm={contentData.perm} />
     case 'cargos':
-      return <CargosClient cargos={data.cargos} perm={data.perm} />
+      return <CargosClient cargos={contentData.cargos} perm={contentData.perm} />
     case 'consumiveis':
-      return <ConsumivelClient consumiveis={data.consumiveis} fornecedores={data.fornecedores} categoriasConsumivel={data.categoriasConsumivel} perm={data.perm} />
+      return <ConsumivelClient consumiveis={contentData.consumiveis} fornecedores={contentData.fornecedores} categoriasConsumivel={contentData.categoriasConsumivel} perm={contentData.perm} />
     case 'configuracoes':
       return (
         <ConfiguracoesClient
-          categorias={data.categorias}
-          categoriasMateriaPrima={data.categoriasMateriaPrima}
-          categoriasConsumivel={data.categoriasConsumivel}
-          taxasLucro={data.taxasLucro}
-          permTaxasLucro={data.permTaxasLucro}
+          categorias={contentData.categorias}
+          categoriasMateriaPrima={contentData.categoriasMateriaPrima}
+          categoriasConsumivel={contentData.categoriasConsumivel}
+          taxasLucro={contentData.taxasLucro}
+          permTaxasLucro={contentData.permTaxasLucro}
         />
       )
     case 'metricas-relatorios':
       return (
         <MetricasClient
-          vendasData={data.vendas}
-          estoqueData={data.estoque}
-          atividadeData={data.atividade}
+          vendasData={contentData.vendas}
+          estoqueData={contentData.estoque}
+          atividadeData={contentData.atividade}
         />
       )
     default:
@@ -587,7 +635,7 @@ function ErpTabsContent() {
 
         try {
           if (LOG) console.log('[TABS] preload start', { href: tab.href })
-          const d = await getErpTabData(tab.href)
+          const d = await getErpTabDataDeduplicated(tab.href, tabRefreshSeq[tab.href] ?? 0)
           if (signal.aborted) return
 
           dataCacheRef.current.set(tab.href, d)
@@ -616,7 +664,7 @@ function ErpTabsContent() {
         if (signal.aborted) return
         if (dataCacheRef.current.has(tab.href)) continue
         try {
-          const d = await getErpTabData(tab.href)
+          const d = await getErpTabDataDeduplicated(tab.href, tabRefreshSeq[tab.href] ?? 0)
           if (signal.aborted) return
           dataCacheRef.current.set(tab.href, d)
           if (d.kind === 'faca-detalhe') {
@@ -638,7 +686,7 @@ function ErpTabsContent() {
     return () => controller.abort()
     // Re-run whenever activeHref changes (cancels in-flight preload and restarts spiral)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeHref, openTabs, updateTabLabel])
+  }, [activeHref, openTabs, updateTabLabel, tabRefreshSeq])
 
   // Clean up visited set and data cache when tabs are closed
   useEffect(() => {
