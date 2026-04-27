@@ -49,7 +49,34 @@ function normalizeHref(href: string) {
  * `refreshSeq` entra na chave para `refreshTab` não reutilizar pedido antigo.
  */
 const erpTabDataInflight = new Map<string, Promise<ErpTabData>>()
-const ERP_TAB_FETCH_TIMEOUT_MS = 90_000
+/** Timeout vale só enquanto o fetch real está em execução, não a espera na fila abaixo. */
+const ERP_TAB_FETCH_TIMEOUT_MS = 120_000
+
+/**
+ * Evita abrir 10+ abas e disparar o mesmo número de server actions/HTTP em paralelo
+ * (Next/Supabase filas ou pool — algumas requisições nunca concluíam a tempo).
+ */
+const MAX_CONCURRENT_ERP_TAB_FETCHES = 4
+let erpTabFetchSlotCount = 0
+const erpTabFetchWaitQueue: Array<() => void> = []
+
+function takeErpTabFetchSlot(): Promise<() => void> {
+  return new Promise((resolve) => {
+    const tryEnter = () => {
+      if (erpTabFetchSlotCount < MAX_CONCURRENT_ERP_TAB_FETCHES) {
+        erpTabFetchSlotCount += 1
+        resolve(() => {
+          erpTabFetchSlotCount -= 1
+          const runNext = erpTabFetchWaitQueue.shift()
+          if (runNext) runNext()
+        })
+      } else {
+        erpTabFetchWaitQueue.push(tryEnter)
+      }
+    }
+    tryEnter()
+  })
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -76,7 +103,14 @@ function getErpTabDataDeduplicated(href: string, refreshSeq: number): Promise<Er
     if (LOG) console.log('[TABS] reusing in-flight getErpTabData', { key })
     return existing
   }
-  const p = withTimeout(getErpTabData(href), ERP_TAB_FETCH_TIMEOUT_MS).finally(() => {
+  const p = (async () => {
+    const release = await takeErpTabFetchSlot()
+    try {
+      return await withTimeout(getErpTabData(href), ERP_TAB_FETCH_TIMEOUT_MS)
+    } finally {
+      release()
+    }
+  })().finally(() => {
     erpTabDataInflight.delete(key)
   })
   erpTabDataInflight.set(key, p)
