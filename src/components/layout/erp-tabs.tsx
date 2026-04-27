@@ -1130,21 +1130,28 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
       const pathAtClose = normalizeHref(pathname)
       setOpenTabs((prev) => {
         const remaining = prev.filter((t) => t.href !== normalizedHref)
-        const closingActive = pathAtClose === normalizedHref
+        // pathname pode atrasar o click; activeHref costuma bater com a aba "em uso"
+        const closingCurrentView =
+          pathAtClose === normalizedHref || activeHref === normalizedHref
         const nextActive = remaining[remaining.length - 1]?.href ?? ''
         const dest = nextActive || ERP_FALLBACK_HREF
         if (LOG) console.log('[TABS] closeTab', { href: normalizedHref, remaining: remaining.length })
-        if (closingActive) {
+        // Sem abas: sempre sincronizar URL (antes só se "closingActive", e podia cair no else e não dar router)
+        const mustSyncUrl = closingCurrentView || remaining.length === 0
+        if (mustSyncUrl) {
           setActiveHref(dest)
           persist(remaining, dest)
-          queueMicrotask(() => router.push(dest))
+          queueMicrotask(() => {
+            // replace: substitui a rota "fantasma" (sem aba) e não acumula entrada extra no histórico
+            router.replace(dest)
+          })
         } else {
           persist(remaining, pathAtClose)
         }
         return remaining
       })
     },
-    [persist, pathname, router]
+    [activeHref, persist, pathname, router]
   )
 
   const reorderTabs = useCallback(
