@@ -36,6 +36,12 @@ const LOG = process.env.NODE_ENV === 'development'
 
 /** Rota padrão após login — alinhado a `src/app/page.tsx` */
 const ERP_FALLBACK_HREF = '/materias-primas'
+/**
+ * Quando o usuário fecha todas as abas, não podemos deixar a URL no mesmo path de um item do
+ * menu (ex. /materias-primas) senão a sidebar fica "como se" o módulo estivesse ativo.
+ * Esta rota existe só na URL; o conteúdo continua sendo o wallpaper do ErpTabs.
+ */
+const ERP_WALLPAPER_HREF = '/inicio'
 
 function normalizeHref(href: string) {
   const [pathOnly] = href.split('?')
@@ -620,9 +626,12 @@ function ErpTabsContent() {
   )
 
   // Track which tabs have been visited at least once — only those get mounted.
-  const [visited, setVisited] = useState<Set<string>>(() => new Set([activeHref]))
+  const [visited, setVisited] = useState<Set<string>>(
+    () => new Set(activeHref ? [activeHref] : []),
+  )
 
   useEffect(() => {
+    if (!activeHref) return
     setVisited((prev) => {
       if (prev.has(activeHref)) return prev
       const next = new Set(prev)
@@ -646,6 +655,8 @@ function ErpTabsContent() {
     const signal = controller.signal
 
     async function preload() {
+      if (openTabs.length === 0 || !activeHref) return
+
       // 1. Wait for the active tab to finish loading into cache
       while (!dataCacheRef.current.has(activeHref) && !signal.aborted) {
         await new Promise((r) => setTimeout(r, 100))
@@ -1019,8 +1030,12 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
 
   // Estado inicial precisa ser idêntico no servidor e no primeiro paint do cliente (sem localStorage),
   // senão a hidratação quebra. Abas persistidas são aplicadas em useEffect após montar.
-  const [openTabs, setOpenTabs] = useState<OpenTab[]>(() => [{ href: initialHref, label: initialLabel }])
-  const [activeHref, setActiveHref] = useState<string>(() => initialHref)
+  const [openTabs, setOpenTabs] = useState<OpenTab[]>(() =>
+    initialHref === ERP_WALLPAPER_HREF ? [] : [{ href: initialHref, label: initialLabel }],
+  )
+  const [activeHref, setActiveHref] = useState<string>(() =>
+    initialHref === ERP_WALLPAPER_HREF ? '' : initialHref,
+  )
 
   const primeiraRotaRef = useRef<{ href: string; label: string } | null>(null)
   if (primeiraRotaRef.current === null) {
@@ -1055,6 +1070,12 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     const defaultTab: OpenTab = { href: ih, label: il }
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw === null) {
+      if (ih === ERP_WALLPAPER_HREF) {
+        setOpenTabs([])
+        setActiveHref('')
+        persist([], ERP_WALLPAPER_HREF)
+        return
+      }
       persist([defaultTab], ih)
       return
     }
@@ -1078,6 +1099,11 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
     const normalized = normalizeHref(pathname)
     if (!pathnameSyncSkippedOnce.current) {
       pathnameSyncSkippedOnce.current = true
+      return
+    }
+    // Só com wallpaper, sem módulo ativo: não cria aba (evita "Início" como tab).
+    if (normalized === ERP_WALLPAPER_HREF) {
+      setActiveHref('')
       return
     }
     setActiveHref(normalized)
@@ -1139,12 +1165,19 @@ export function ErpTabsProvider({ children }: ErpTabsProviderProps) {
         // Sem abas: sempre sincronizar URL (antes só se "closingActive", e podia cair no else e não dar router)
         const mustSyncUrl = closingCurrentView || remaining.length === 0
         if (mustSyncUrl) {
-          setActiveHref(dest)
-          persist(remaining, dest)
-          queueMicrotask(() => {
-            // replace: substitui a rota "fantasma" (sem aba) e não acumula entrada extra no histórico
-            router.replace(dest)
-          })
+          if (remaining.length === 0) {
+            setActiveHref('')
+            persist(remaining, ERP_WALLPAPER_HREF)
+            queueMicrotask(() => {
+              router.replace(ERP_WALLPAPER_HREF)
+            })
+          } else {
+            setActiveHref(dest)
+            persist(remaining, dest)
+            queueMicrotask(() => {
+              router.replace(dest)
+            })
+          }
         } else {
           persist(remaining, pathAtClose)
         }

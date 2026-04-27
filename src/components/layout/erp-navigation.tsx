@@ -161,6 +161,7 @@ export const sections: NavSection[] = [
 
 const extraRouteLabels: Record<string, string> = {
   '/configuracoes': 'Configurações',
+  '/inicio': 'Início',
 }
 
 const routeLabelMap = sections.reduce<Record<string, string>>((acc, section) => {

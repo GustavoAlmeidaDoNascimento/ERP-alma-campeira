@@ -21,7 +21,7 @@ function getInitials(email: string) {
 }
 
 export function Sidebar() {
-  const { openTab, activeHref } = useErpTabs()
+  const { openTab, activeHref, openTabs } = useErpTabs()
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [permVer, setPermVer] = useState<Record<string, boolean> | null>(null)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
@@ -109,7 +109,9 @@ export function Sidebar() {
               </button>
               {/* Itens */}
               {expandedSections[section.label] && visibleItems.map((item) => {
-                const isActive = activeHref === item.href || activeHref.startsWith(item.href + '/')
+                const isActive =
+                  openTabs.length > 0 &&
+                  (activeHref === item.href || activeHref.startsWith(item.href + '/'))
                 return (
                   <button
                     key={item.href}
