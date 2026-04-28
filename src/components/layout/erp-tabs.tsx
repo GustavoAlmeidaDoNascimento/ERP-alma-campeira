@@ -58,6 +58,9 @@ const erpTabDataInflight = new Map<string, Promise<ErpTabData>>()
 /** Timeout vale só enquanto o fetch real está em execução, não a espera na fila abaixo. */
 const ERP_TAB_FETCH_TIMEOUT_MS = 120_000
 
+/** Sem conteúdo em cache: se não concluir neste tempo, reabre o carregamento da aba (`refreshTab`). */
+const ERP_TAB_LOAD_WATCHDOG_MS = 10_000
+
 /**
  * Evita abrir 10+ abas e disparar o mesmo número de server actions/HTTP em paralelo
  * (Next/Supabase filas ou pool — algumas requisições nunca concluíam a tempo).
@@ -319,6 +322,7 @@ function TabPane({
   active: boolean
   refreshSeq: number
 }) {
+  const { refreshTab } = useErpTabs()
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     cachedData ? 'ready' : 'loading'
   )
@@ -358,6 +362,15 @@ function TabPane({
     lastFetchedSeqRef.current = refreshSeq
 
     let cancelled = false
+    let watchdogTimer: ReturnType<typeof setTimeout> | undefined
+
+    const clearWatchdog = () => {
+      if (watchdogTimer !== undefined) {
+        clearTimeout(watchdogTimer)
+        watchdogTimer = undefined
+      }
+    }
+
     async function run() {
       try {
         if (LOG) console.log('[TABS] fetch start', { href })
@@ -366,18 +379,24 @@ function TabPane({
           setStatus('loading')
           setData(null)
           setErrMsg('')
+          watchdogTimer = setTimeout(() => {
+            if (cancelled) return
+            refreshTab(href)
+          }, ERP_TAB_LOAD_WATCHDOG_MS)
         } else {
           // Mantém o conteúdo atual enquanto busca em background
           setErrMsg('')
         }
 
         const d = await getErpTabDataDeduplicated(href, refreshSeq)
+        clearWatchdog()
         if (cancelled) return
         setData(d)
         setStatus('ready')
         onData?.(href, d)
         if (LOG) console.log('[TABS] fetch success', { href, kind: d.kind })
       } catch (e: unknown) {
+        clearWatchdog()
         const msg = e instanceof Error ? e.message : 'Erro ao carregar.'
         if (cancelled) return
         // Só exibe tela de erro se não houver dado (estado ou cache do preloader) para mostrar
@@ -393,11 +412,12 @@ function TabPane({
 
     return () => {
       cancelled = true
+      clearWatchdog()
     }
     // Não incluir `data` nas deps: setData(null) no início do fetch re-dispararia o efeito e rodaria run() de novo.
     // cachedData: preloader preenche o ref no pai.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [href, active, refreshSeq, cachedData])
+  }, [href, active, refreshSeq, cachedData, refreshTab])
 
   if (status === 'loading' && !contentData) return <TabSkeleton href={href} />
   if (status === 'error') {
