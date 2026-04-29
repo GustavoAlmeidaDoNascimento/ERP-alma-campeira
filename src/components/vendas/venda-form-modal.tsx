@@ -62,6 +62,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [dataPedido, setDataPedido] = useState(today())
   const [status, setStatus] = useState<StatusPedido>('em_espera')
   const [observacao, setObservacao] = useState('')
+  const [naturezaOperacao, setNaturezaOperacao] = useState('VENDA DE MERCADORIA')
   const [frete, setFrete] = useState(0)
   const [descontoTotalVal, setDescontoTotalVal] = useState(0)
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
@@ -95,6 +96,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setDataPedido(editando.data_pedido)
       setStatus(editando.status)
       setObservacao(editando.observacao ?? '')
+      setNaturezaOperacao(editando.natureza_operacao ?? 'VENDA DE MERCADORIA')
       setFrete(editando.frete ?? 0)
       {
         const subLinhas = editando.itens?.reduce((s, i) => s + i.subtotal, 0) ?? 0
@@ -120,6 +122,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setDataPedido(today())
       setStatus('em_espera')
       setObservacao('')
+      setNaturezaOperacao('VENDA DE MERCADORIA')
       setFrete(0)
       setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
@@ -240,6 +243,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         data_pedido: dataPedido,
         status,
         observacao,
+        natureza_operacao: naturezaOperacao,
         frete: frete || 0,
         desconto_total: descontoTotalAplicado,
         itens: itensValidos.map((i) => ({
@@ -379,6 +383,21 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             placeholder="Prazo de entrega, condições especiais..."
             rows={2}
             className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all resize-none"
+            style={inputStyle}
+            onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
+            onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
+          />
+        </div>
+
+        {/* Natureza da operação (NF-e) */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Natureza da operação (NF-e)</label>
+          <input
+            type="text"
+            value={naturezaOperacao}
+            onChange={(e) => setNaturezaOperacao(e.target.value)}
+            placeholder="VENDA DE MERCADORIA"
+            className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all"
             style={inputStyle}
             onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
             onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}

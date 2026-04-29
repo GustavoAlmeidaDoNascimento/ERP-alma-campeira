@@ -9,6 +9,7 @@ import { TIPOS_CLIENTE } from '@/types'
 import type { Cliente, TipoDocumento } from '@/types'
 import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
+import { SIGLAS_UF, INDICADORES_IE } from '@/lib/br/constants'
 
 type Props = {
   open: boolean
@@ -17,10 +18,7 @@ type Props = {
   onSaved?: () => void
 }
 
-const ESTADOS_BR = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
-  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-]
+const ESTADOS_BR = SIGLAS_UF
 
 const inputStyle = {
   background: 'var(--ac-card)',
@@ -46,6 +44,10 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
   const [bairro, setBairro] = useState('')
   const [cidade, setCidade] = useState('')
   const [estado, setEstado] = useState('')
+  const [razaoSocial, setRazaoSocial] = useState('')
+  const [ie, setIe] = useState('')
+  const [indicadorIe, setIndicadorIe] = useState<number>(9)
+  const [codigoIbge, setCodigoIbge] = useState('')
   const [loading, setLoading] = useState(false)
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [erro, setErro] = useState('')
@@ -68,6 +70,10 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
       setBairro(editando.bairro ?? '')
       setCidade(editando.cidade ?? '')
       setEstado(editando.estado ?? '')
+      setRazaoSocial(editando.razao_social ?? '')
+      setIe(editando.ie ?? '')
+      setIndicadorIe(editando.indicador_ie ?? 9)
+      setCodigoIbge(editando.codigo_municipio_ibge ?? '')
     } else {
       setNome('')
       setTipo('Lojista')
@@ -82,6 +88,10 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
       setBairro('')
       setCidade('')
       setEstado('RS')
+      setRazaoSocial('')
+      setIe('')
+      setIndicadorIe(9)
+      setCodigoIbge('')
     }
     setErro('')
   }, [open, editando])
@@ -120,6 +130,7 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
       setBairro((prev) => end.bairro || prev)
       setCidade((prev) => end.cidade || prev)
       setEstado((prev) => end.uf || prev)
+      if (end.ibge) setCodigoIbge(end.ibge)
     } catch {
       setErro('Não foi possível consultar o CEP. Tente novamente.')
     } finally {
@@ -146,6 +157,10 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
         bairro,
         cidade,
         estado,
+        razao_social: razaoSocial,
+        ie,
+        indicador_ie: indicadorIe,
+        codigo_municipio_ibge: codigoIbge,
       }
       if (editando) await atualizarCliente(editando.id, input)
       else await criarCliente(input)
@@ -217,6 +232,46 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
               onChange={(e) => onDocumentoInput(e.target.value)}
               autoComplete="off"
             />
+          </div>
+        </div>
+
+        {tipoDocumento === 'cnpj' && (
+          <div className="grid grid-cols-1 gap-3">
+            <Input
+              id="cli-razao-social"
+              label="Razão Social"
+              placeholder="Nome jurídico (se diferente do nome fantasia acima)"
+              value={razaoSocial}
+              onChange={(e) => setRazaoSocial(e.target.value)}
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Input
+            id="cli-ie"
+            label="Inscrição Estadual"
+            placeholder="ISENTO ou número"
+            value={ie}
+            onChange={(e) => setIe(e.target.value)}
+          />
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="cli-ind-ie" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Indicador IE</label>
+            <select
+              id="cli-ind-ie"
+              value={indicadorIe}
+              onChange={(e) => setIndicadorIe(Number(e.target.value))}
+              className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+              style={{
+                ...inputStyle,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '16px', paddingRight: '36px',
+              }}
+            >
+              {INDICADORES_IE.map((i) => (
+                <option key={i.codigo} value={i.codigo}>{i.codigo} — {i.descricao}</option>
+              ))}
+            </select>
           </div>
         </div>
 

@@ -113,6 +113,34 @@ export async function salvarFacaComFoto(formData: FormData) {
   const foto = formData.get('foto')
   const bomRaw = formData.get('bom')
 
+  // Campos fiscais (preparação NF-e — todos opcionais).
+  const fiscaisRaw = {
+    ncm: String(formData.get('ncm') ?? '').replace(/\D/g, '').trim(),
+    cfop_padrao: String(formData.get('cfop_padrao') ?? '').replace(/\D/g, '').trim(),
+    cst_icms: String(formData.get('cst_icms') ?? '').trim(),
+    cst_pis: String(formData.get('cst_pis') ?? '').trim(),
+    cst_cofins: String(formData.get('cst_cofins') ?? '').trim(),
+    origem: String(formData.get('origem') ?? '').trim(),
+    unidade: String(formData.get('unidade') ?? '').trim().toUpperCase(),
+    ean_gtin: String(formData.get('ean_gtin') ?? '').replace(/\D/g, '').trim(),
+  }
+  if (fiscaisRaw.ncm && fiscaisRaw.ncm.length !== 8) throw new Error('NCM deve ter 8 dígitos.')
+  if (fiscaisRaw.cfop_padrao && fiscaisRaw.cfop_padrao.length !== 4) throw new Error('CFOP deve ter 4 dígitos.')
+  const origemNum = fiscaisRaw.origem === '' ? null : Number(fiscaisRaw.origem)
+  if (origemNum != null && (!Number.isFinite(origemNum) || origemNum < 0 || origemNum > 8)) {
+    throw new Error('Origem da mercadoria inválida.')
+  }
+  const dadosFiscais = {
+    ncm: fiscaisRaw.ncm || null,
+    cfop_padrao: fiscaisRaw.cfop_padrao || null,
+    cst_icms: fiscaisRaw.cst_icms || null,
+    cst_pis: fiscaisRaw.cst_pis || null,
+    cst_cofins: fiscaisRaw.cst_cofins || null,
+    origem: origemNum,
+    unidade: fiscaisRaw.unidade || null,
+    ean_gtin: fiscaisRaw.ean_gtin || null,
+  }
+
   if (!nome) throw new Error('Nome é obrigatório.')
   if (!categoria) throw new Error('Categoria é obrigatória.')
   if (!Number.isFinite(estoque_atual)) throw new Error('Estoque atual inválido.')
@@ -168,6 +196,7 @@ export async function salvarFacaComFoto(formData: FormData) {
       preco_venda,
       estoque_atual,
       estoque_minimo,
+      ...dadosFiscais,
     }).eq('id', facaId)
     if (error) throw new Error(error.message)
   } else {
@@ -183,6 +212,7 @@ export async function salvarFacaComFoto(formData: FormData) {
         preco_venda,
         estoque_atual,
         estoque_minimo,
+        ...dadosFiscais,
       })
       .select('id')
       .single()

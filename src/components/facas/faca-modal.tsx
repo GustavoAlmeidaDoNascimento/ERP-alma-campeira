@@ -9,6 +9,14 @@ import { salvarFacaComFoto, getFacaBOM } from '@/lib/actions/facas'
 import type { Faca, CategoriaFacaDB, MateriaPrima, FacaMateriaPrima } from '@/types'
 import { calcularPrecoVendaFaca } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import {
+  ORIGENS_MERCADORIA,
+  UNIDADES_MEDIDA,
+  CFOPS_SAIDA,
+  CST_ICMS,
+  CSOSN_ICMS,
+  CST_PIS_COFINS,
+} from '@/lib/br/constants'
 
 type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
 
@@ -29,6 +37,28 @@ type Form = {
   estoque_minimo: string
 }
 
+type Fiscal = {
+  ncm: string
+  cfop_padrao: string
+  cst_icms: string
+  cst_pis: string
+  cst_cofins: string
+  origem: string
+  unidade: string
+  ean_gtin: string
+}
+
+const fiscalVazio: Fiscal = {
+  ncm: '',
+  cfop_padrao: '',
+  cst_icms: '',
+  cst_pis: '',
+  cst_cofins: '',
+  origem: '0',
+  unidade: 'UN',
+  ean_gtin: '',
+}
+
 type BomItem = {
   materia_prima_id: string
   quantidade: string
@@ -43,6 +73,8 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
     estoque_minimo: '0',
   })
   const [bomItens, setBomItens] = useState<BomItem[]>([])
+  const [fiscal, setFiscal] = useState<Fiscal>(fiscalVazio)
+  const [fiscalOpen, setFiscalOpen] = useState(false)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingBom, setLoadingBom] = useState(false)
@@ -83,6 +115,16 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         estoque_minimo: String(editando.estoque_minimo),
       })
       carregarBOM(editando.id)
+      setFiscal({
+        ncm: editando.ncm ?? '',
+        cfop_padrao: editando.cfop_padrao ?? '',
+        cst_icms: editando.cst_icms ?? '',
+        cst_pis: editando.cst_pis ?? '',
+        cst_cofins: editando.cst_cofins ?? '',
+        origem: editando.origem != null ? String(editando.origem) : '0',
+        unidade: editando.unidade ?? 'UN',
+        ean_gtin: editando.ean_gtin ?? '',
+      })
     } else {
       setForm({
         nome: '',
@@ -91,7 +133,9 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         estoque_minimo: '0',
       })
       setBomItens([])
+      setFiscal(fiscalVazio)
     }
+    setFiscalOpen(false)
     setErro('')
     setFotoFile(null)
     setFotoPreview('')
@@ -184,6 +228,16 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
       fd.append('estoque_atual', String(parseInt(form.estoque_atual) || 0))
       fd.append('estoque_minimo', String(parseInt(form.estoque_minimo) || 0))
       if (fotoFile) fd.append('foto', fotoFile, fotoFile.name)
+
+      // Campos fiscais (todos opcionais)
+      fd.append('ncm', fiscal.ncm)
+      fd.append('cfop_padrao', fiscal.cfop_padrao)
+      fd.append('cst_icms', fiscal.cst_icms)
+      fd.append('cst_pis', fiscal.cst_pis)
+      fd.append('cst_cofins', fiscal.cst_cofins)
+      fd.append('origem', fiscal.origem)
+      fd.append('unidade', fiscal.unidade)
+      fd.append('ean_gtin', fiscal.ean_gtin)
 
       // BOM como JSON
       fd.append('bom', JSON.stringify(bomItens.map((i) => ({
@@ -405,6 +459,142 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+
+        {/* ========== DADOS FISCAIS (colapsável) ========== */}
+        <div
+          className="rounded-lg"
+          style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
+        >
+          <button
+            type="button"
+            onClick={() => setFiscalOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 text-left"
+            style={{ color: 'var(--ac-text)' }}
+          >
+            <span className="text-sm font-semibold">Dados Fiscais (NF-e)</span>
+            <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+              {fiscalOpen ? 'Recolher ▲' : 'Expandir ▼'}
+            </span>
+          </button>
+          {fiscalOpen && (
+            <div className="px-3 pb-3 flex flex-col gap-3" style={{ borderTop: '1px solid var(--ac-border)' }}>
+              <p className="text-xs pt-2" style={{ color: 'var(--ac-muted)' }}>
+                Campos opcionais usados na futura emissão de NF-e. Preencha quando o produto já tiver definição fiscal.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  id="faca-ncm"
+                  label="NCM (8 dígitos)"
+                  placeholder="82119200"
+                  value={fiscal.ncm}
+                  onChange={(e) => setFiscal((f) => ({ ...f, ncm: e.target.value.replace(/\D/g, '').slice(0, 8) }))}
+                />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>CFOP padrão</label>
+                  <select
+                    value={fiscal.cfop_padrao}
+                    onChange={(e) => setFiscal((f) => ({ ...f, cfop_padrao: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                  >
+                    <option value="">— Não definido —</option>
+                    {CFOPS_SAIDA.map((c) => (
+                      <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>CST/CSOSN ICMS</label>
+                  <select
+                    value={fiscal.cst_icms}
+                    onChange={(e) => setFiscal((f) => ({ ...f, cst_icms: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                  >
+                    <option value="">— Não definido —</option>
+                    <optgroup label="CST (Regime Normal)">
+                      {CST_ICMS.map((c) => (
+                        <option key={`cst-${c.codigo}`} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="CSOSN (Simples Nacional)">
+                      {CSOSN_ICMS.map((c) => (
+                        <option key={`csosn-${c.codigo}`} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>CST PIS</label>
+                  <select
+                    value={fiscal.cst_pis}
+                    onChange={(e) => setFiscal((f) => ({ ...f, cst_pis: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                  >
+                    <option value="">— Não definido —</option>
+                    {CST_PIS_COFINS.map((c) => (
+                      <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>CST COFINS</label>
+                  <select
+                    value={fiscal.cst_cofins}
+                    onChange={(e) => setFiscal((f) => ({ ...f, cst_cofins: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                  >
+                    <option value="">— Não definido —</option>
+                    {CST_PIS_COFINS.map((c) => (
+                      <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Origem</label>
+                  <select
+                    value={fiscal.origem}
+                    onChange={(e) => setFiscal((f) => ({ ...f, origem: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                  >
+                    {ORIGENS_MERCADORIA.map((o) => (
+                      <option key={o.codigo} value={o.codigo}>{o.codigo} — {o.descricao}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Unidade</label>
+                  <select
+                    value={fiscal.unidade}
+                    onChange={(e) => setFiscal((f) => ({ ...f, unidade: e.target.value }))}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
+                    style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                  >
+                    {UNIDADES_MEDIDA.map((u) => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  id="faca-ean"
+                  label="EAN/GTIN (opcional)"
+                  placeholder="código de barras"
+                  value={fiscal.ean_gtin}
+                  onChange={(e) => setFiscal((f) => ({ ...f, ean_gtin: e.target.value.replace(/\D/g, '') }))}
+                />
+              </div>
             </div>
           )}
         </div>

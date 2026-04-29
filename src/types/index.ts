@@ -15,6 +15,10 @@ export type Fornecedor = {
   bairro: string | null
   cidade: string | null
   uf: string | null
+  // Campos fiscais (preparação NF-e — opcionais)
+  razao_social?: string | null
+  ie?: string | null
+  codigo_municipio_ibge?: string | null
   created_at: string
 }
 
@@ -53,6 +57,15 @@ export type Faca = {
   preco_venda: number
   estoque_atual: number
   estoque_minimo: number
+  // Campos fiscais (preparação NF-e — opcionais)
+  ncm?: string | null
+  cfop_padrao?: string | null
+  cst_icms?: string | null
+  cst_pis?: string | null
+  cst_cofins?: string | null
+  origem?: number | null
+  unidade?: string | null
+  ean_gtin?: string | null
   created_at: string
 }
 
@@ -254,6 +267,12 @@ export type Cliente = {
   bairro: string | null
   cidade: string | null
   estado: string | null
+  // Campos fiscais (preparação NF-e — opcionais)
+  razao_social?: string | null
+  ie?: string | null
+  /** 1=Contribuinte, 2=Isento, 9=Não contribuinte (default 9). */
+  indicador_ie?: number | null
+  codigo_municipio_ibge?: string | null
   created_at: string
 }
 
@@ -272,6 +291,9 @@ export type PedidoItem = {
   quantidade: number
   preco_unitario: number
   subtotal: number
+  // Snapshot fiscal copiado da faca no momento da venda (NF-e — opcionais)
+  ncm?: string | null
+  cfop?: string | null
   faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda' | 'foto_url'>
 }
 
@@ -287,6 +309,8 @@ export type Pedido = {
   frete: number
   /** Desconto em R$ sobre (soma dos itens + frete). Opcional até migração antiga. */
   desconto_total?: number
+  /** Natureza da operação para NF-e (default "VENDA DE MERCADORIA"). */
+  natureza_operacao?: string | null
   entregue_at: string | null
   created_at: string
   cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null
@@ -451,6 +475,32 @@ export type Consumivel = {
   created_at: string
   // join
   fornecedor?: Fornecedor | null
+}
+
+// ============================================================
+// Empresa (emitente NF-e) — single-row
+// ============================================================
+export type Empresa = {
+  id: string
+  razao_social: string
+  nome_fantasia: string | null
+  cnpj: string
+  ie: string | null
+  im: string | null
+  /** CRT: 1=Simples Nacional, 2=Simples excesso, 3=Regime Normal, 4=MEI. */
+  crt: number
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  codigo_municipio_ibge: string | null
+  telefone: string | null
+  email: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type CategoriaConsumivelDB = {

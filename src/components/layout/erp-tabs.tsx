@@ -519,6 +519,7 @@ function TabPane({
           categoriasConsumivel={contentData.categoriasConsumivel}
           taxasLucro={contentData.taxasLucro}
           permTaxasLucro={contentData.permTaxasLucro}
+          empresa={contentData.empresa}
         />
       )
     case 'metricas-relatorios':

@@ -214,7 +214,8 @@ declare
     'pedido_itens',
     'ordens_compra',
     'ordem_compra_itens',
-    'app_config'
+    'app_config',
+    'empresa'
   ];
 begin
   foreach t in array tables loop

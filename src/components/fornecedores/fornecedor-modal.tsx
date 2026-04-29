@@ -8,6 +8,7 @@ import { criarFornecedor, atualizarFornecedor } from '@/lib/actions/fornecedores
 import type { Fornecedor, TipoDocumento } from '@/types'
 import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
+import { SIGLAS_UF } from '@/lib/br/constants'
 
 type Props = {
   open: boolean
@@ -16,10 +17,7 @@ type Props = {
   onSaved?: () => void
 }
 
-const ESTADOS_BR = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG',
-  'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
-]
+const ESTADOS_BR = SIGLAS_UF
 
 const inputStyle = {
   background: 'var(--ac-card)',
@@ -40,6 +38,9 @@ type Form = {
   bairro: string
   cidade: string
   uf: string
+  razao_social: string
+  ie: string
+  codigo_municipio_ibge: string
 }
 
 const formVazio: Form = {
@@ -55,6 +56,9 @@ const formVazio: Form = {
   bairro: '',
   cidade: '',
   uf: '',
+  razao_social: '',
+  ie: '',
+  codigo_municipio_ibge: '',
 }
 
 function tipoDocDeFornecedor(f: Fornecedor): TipoDocumento {
@@ -84,6 +88,9 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         bairro: editando.bairro ?? '',
         cidade: editando.cidade ?? '',
         uf: editando.uf ?? '',
+        razao_social: editando.razao_social ?? '',
+        ie: editando.ie ?? '',
+        codigo_municipio_ibge: editando.codigo_municipio_ibge ?? '',
       })
     } else {
       setForm(formVazio)
@@ -137,6 +144,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         bairro: end.bairro || f.bairro,
         cidade: end.cidade || f.cidade,
         uf: end.uf || f.uf,
+        codigo_municipio_ibge: end.ibge || f.codigo_municipio_ibge,
       }))
     } catch {
       setErro('Não foi possível consultar o CEP. Tente novamente.')
@@ -169,6 +177,9 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         bairro: form.bairro,
         cidade: form.cidade,
         uf: form.uf,
+        razao_social: form.razao_social,
+        ie: form.ie,
+        codigo_municipio_ibge: form.codigo_municipio_ibge,
       }
       if (editando) {
         await atualizarFornecedor(editando.id, payload)
@@ -225,6 +236,24 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
             />
           </div>
         </div>
+
+        {form.tipo_documento === 'cnpj' && (
+          <Input
+            id="forn-razao-social"
+            label="Razão Social"
+            placeholder="Nome jurídico (se diferente do nome fantasia acima)"
+            value={form.razao_social}
+            onChange={(e) => set('razao_social', e.target.value)}
+          />
+        )}
+
+        <Input
+          id="forn-ie"
+          label="Inscrição Estadual"
+          placeholder="ISENTO ou número"
+          value={form.ie}
+          onChange={(e) => set('ie', e.target.value)}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <Input

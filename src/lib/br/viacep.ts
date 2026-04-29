@@ -5,6 +5,7 @@ export type ViaCepResposta = {
   bairro: string
   localidade: string
   uf: string
+  ibge?: string
   erro?: boolean
 }
 
@@ -14,6 +15,8 @@ export type EnderecoViaCep = {
   bairro: string
   cidade: string
   uf: string
+  /** Código IBGE de 7 dígitos do município (obrigatório em NF-e). */
+  ibge: string
 }
 
 /**
@@ -39,5 +42,6 @@ export async function buscarEnderecoPorCep(cepDigitos: string): Promise<Endereco
     bairro: data.bairro ?? '',
     cidade: data.localidade ?? '',
     uf: data.uf ?? '',
+    ibge: data.ibge ?? '',
   }
 }

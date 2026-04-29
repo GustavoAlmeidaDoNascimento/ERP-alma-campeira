@@ -56,6 +56,10 @@ type FornecedorInput = {
   bairro: string
   cidade: string
   uf: string
+  // Campos fiscais opcionais (preparação NF-e)
+  razao_social?: string
+  ie?: string
+  codigo_municipio_ibge?: string
 }
 
 function normalizarFornecedorPayload(input: FornecedorInput) {
@@ -72,6 +76,9 @@ function normalizarFornecedorPayload(input: FornecedorInput) {
   const uf = input.uf.trim().toUpperCase()
   if (uf && uf.length !== 2) throw new Error('UF deve ter 2 letras.')
 
+  const ibge = apenasDigitos(input.codigo_municipio_ibge ?? '')
+  if (ibge && ibge.length !== 7) throw new Error('Código IBGE do município deve ter 7 dígitos.')
+
   return {
     nome: input.nome.trim(),
     telefone: input.telefone.trim() || null,
@@ -85,6 +92,9 @@ function normalizarFornecedorPayload(input: FornecedorInput) {
     bairro: input.bairro.trim() || null,
     cidade: input.cidade.trim() || null,
     uf: uf || null,
+    razao_social: (input.razao_social ?? '').trim() || null,
+    ie: (input.ie ?? '').trim() || null,
+    codigo_municipio_ibge: ibge || null,
   }
 }
 

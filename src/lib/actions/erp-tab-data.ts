@@ -19,7 +19,8 @@ import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type Me
 import { getAuditLogs, getAuditLogTabelas, getAuditLogUsuarios, type AuditLog } from '@/lib/actions/auditoria'
 import { defaultDateRange } from '@/lib/metricas-periodos'
 import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
-import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Orcamento, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB } from '@/types'
+import { getEmpresa } from '@/lib/actions/empresa'
+import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Orcamento, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB, Empresa } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -118,6 +119,7 @@ export type ErpTabData =
       categoriasConsumivel: CategoriaConsumivelDB[]
       taxasLucro: TaxasLucroConfig
       permTaxasLucro: Perm
+      empresa: Empresa | null
     }
   | {
       kind: 'metricas-relatorios'
@@ -321,12 +323,13 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/configuracoes') {
-    const [perms, categorias, categoriasMateriaPrima, categoriasConsumivel, taxasLucro] = await Promise.all([
+    const [perms, categorias, categoriasMateriaPrima, categoriasConsumivel, taxasLucro, empresa] = await Promise.all([
       getPermissoesEfetivas(),
       getCategoriasFaca(),
       getCategoriasMateriaPrima(),
       getCategoriasConsumivel(),
       getTaxasLucroConfig(),
+      getEmpresa().catch(() => null),
     ])
     return {
       kind: 'configuracoes',
@@ -335,6 +338,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
       categoriasConsumivel,
       taxasLucro,
       permTaxasLucro: perms.taxas_lucro as Perm,
+      empresa,
     }
   }
 

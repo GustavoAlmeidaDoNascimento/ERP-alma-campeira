@@ -80,6 +80,7 @@ export type VendaInput = {
   status: StatusPedido
   frete: number
   desconto_total: number
+  natureza_operacao?: string
   itens: VendaItemInput[]
 }
 
@@ -88,12 +89,32 @@ async function inserirItensPedido(
   pedidoId: string,
   itens: VendaItemInput[]
 ) {
+  // Snapshot fiscal: copiamos NCM/CFOP atuais da faca para cada item, para
+  // que alterações futuras no cadastro não afetem notas já emitidas.
+  const facaIds = [...new Set(itens.map((i) => i.faca_id))]
+  const fiscalByFaca = new Map<string, { ncm: string | null; cfop: string | null }>()
+  if (facaIds.length > 0) {
+    const { data: fiscaisFacas } = await supabase
+      .from('facas')
+      .select('id, ncm, cfop_padrao')
+      .in('id', facaIds)
+    for (const f of fiscaisFacas ?? []) {
+      fiscalByFaca.set(f.id, {
+        ncm: (f as { ncm: string | null }).ncm ?? null,
+        cfop: (f as { cfop_padrao: string | null }).cfop_padrao ?? null,
+      })
+    }
+  }
+
   for (const item of itens) {
+    const fiscal = fiscalByFaca.get(item.faca_id) ?? { ncm: null, cfop: null }
     const { error } = await supabase.from('pedido_itens').insert({
       pedido_id: pedidoId,
       faca_id: item.faca_id,
       quantidade: item.quantidade,
       preco_unitario: item.preco_unitario,
+      ncm: fiscal.ncm,
+      cfop: fiscal.cfop,
     })
 
     if (error) {
@@ -143,6 +164,8 @@ export async function criarVenda(input: VendaInput) {
   // vai finalizar com status=entregue e entregue_at.
   const statusInsert = input.status === 'entregue' ? 'em_producao' : input.status
 
+  const natureza = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
+
   const { data: pedido, error } = await supabase
     .from('pedidos')
     .insert({
@@ -155,6 +178,7 @@ export async function criarVenda(input: VendaInput) {
       frete,
       desconto_total,
       valor_total,
+      natureza_operacao: natureza,
     })
     .select('id')
     .single()
@@ -258,6 +282,8 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   // executarEntregaPedido fará o update final com status=entregue e entregue_at.
   const statusUpdate = input.status === 'entregue' ? 'em_producao' : input.status
 
+  const naturezaUpd = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
+
   const { error } = await supabase
     .from('pedidos')
     .update({
@@ -269,6 +295,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
       frete,
       desconto_total,
       valor_total,
+      natureza_operacao: naturezaUpd,
     })
     .eq('id', id)
   if (error) throw new Error(error.message)

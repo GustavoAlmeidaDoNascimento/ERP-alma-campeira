@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation'
 import { CategoriasFacaSection } from './categorias-faca-section'
 import { CategoriasMateriaPrimaSection } from './categorias-materia-prima-section'
 import { CategoriasConsumivelSection } from './categorias-consumivel-section'
+import { EmpresaSection } from './empresa-section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { updateTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
-import type { CategoriaFacaDB, CategoriaMateriaPrimaDB, CategoriaConsumivelDB } from '@/types'
+import type { CategoriaFacaDB, CategoriaMateriaPrimaDB, CategoriaConsumivelDB, Empresa } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 const SENHA_MIN_LEN = 8
@@ -138,6 +139,7 @@ function PasswordInputToggle({
 
 const SETTINGS_SECTIONS = [
   { id: 'config-aparencia', label: 'Aparência' },
+  { id: 'config-empresa', label: 'Empresa' },
   { id: 'config-taxas-lucro', label: 'Taxa' },
   { id: 'categorias-faca', label: 'Facas' },
   { id: 'categorias-materia-prima', label: 'Matérias-primas' },
@@ -250,6 +252,7 @@ type Props = {
   categoriasConsumivel: CategoriaConsumivelDB[]
   taxasLucro: TaxasLucroConfig
   permTaxasLucro: PermTaxas
+  empresa: Empresa | null
 }
 
 export function ConfiguracoesClient({
@@ -258,6 +261,7 @@ export function ConfiguracoesClient({
   categoriasConsumivel,
   taxasLucro,
   permTaxasLucro,
+  empresa,
 }: Props) {
   const { theme, setTheme } = useTheme()
   const router = useRouter()
@@ -527,6 +531,8 @@ export function ConfiguracoesClient({
                 </div>
               )}
             </div>
+
+            <EmpresaSection empresa={empresa} podeEditar={permTaxasLucro.editar} />
 
             {permTaxasLucro.ver && (
               <div

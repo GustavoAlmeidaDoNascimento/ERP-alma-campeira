@@ -4,6 +4,7 @@ import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getTaxasLucroConfig } from '@/lib/actions/app-config'
+import { getEmpresa } from '@/lib/actions/empresa'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
 
@@ -21,12 +22,13 @@ export default async function ConfiguracoesPage() {
 }
 
 async function ConfiguracoesPageData() {
-  const [perms, categorias, categoriasMateriaPrima, categoriasConsumivel, taxasLucro] = await Promise.all([
+  const [perms, categorias, categoriasMateriaPrima, categoriasConsumivel, taxasLucro, empresa] = await Promise.all([
     getPermissoesEfetivas(),
     getCategoriasFaca(),
     getCategoriasMateriaPrima(),
     getCategoriasConsumivel(),
     getTaxasLucroConfig(),
+    getEmpresa().catch(() => null),
   ])
   return (
     <div data-nav-content-ready="Configurações">
@@ -36,6 +38,7 @@ async function ConfiguracoesPageData() {
         categoriasConsumivel={categoriasConsumivel}
         taxasLucro={taxasLucro}
         permTaxasLucro={perms.taxas_lucro}
+        empresa={empresa}
       />
     </div>
   )
