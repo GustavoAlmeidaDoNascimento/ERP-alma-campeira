@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { FacaModal } from './faca-modal'
-import { entradaEstoqueFaca, atualizarMovimentacaoFacaProducao } from '@/lib/actions/facas'
+import { entradaEstoqueFaca, atualizarMovimentacaoFacaProducao, getFacaBOM } from '@/lib/actions/facas'
 import { statusEstoqueFaca, STATUS_PEDIDO } from '@/types'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, CategoriaFacaDB, MateriaPrima } from '@/types'
 import type { FacaDetalheData } from '@/lib/actions/facas'
@@ -39,6 +39,9 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
   const [entradaLoading, setEntradaLoading] = useState(false)
   const [entradaErro, setEntradaErro] = useState('')
   const [entradaSucesso, setEntradaSucesso] = useState('')
+  /** BOM com estoque das MPs atualizado ao abrir o modal de entrada (evita dados stale do SSR/cache). */
+  const [bomEntrada, setBomEntrada] = useState(detalhe.bom)
+  const [bomEntradaLoading, setBomEntradaLoading] = useState(false)
   const [movimentacoesState, setMovimentacoesState] = useState<MovimentacaoEstoque[]>(movimentacoes)
   const [movEdicao, setMovEdicao] = useState<MovimentacaoEstoque | null>(null)
   const [movQtd, setMovQtd] = useState('')
@@ -50,6 +53,32 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
   useEffect(() => {
     setMovimentacoesState(movimentacoes)
   }, [movimentacoes])
+
+  useEffect(() => {
+    setBomEntrada(detalhe.bom)
+  }, [detalhe.bom])
+
+  useEffect(() => {
+    if (!entradaModalOpen) return
+    let cancelled = false
+    setBomEntradaLoading(true)
+    setEntradaErro('')
+    getFacaBOM(faca.id)
+      .then((fresh) => {
+        if (!cancelled) setBomEntrada(fresh)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setEntradaErro(e instanceof Error ? e.message : 'Erro ao carregar estoque das matérias-primas.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBomEntradaLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [entradaModalOpen, faca.id])
 
   const fotoUrl = faca.foto_url
     ? getOptimizedSupabaseImageUrl(faca.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
@@ -64,7 +93,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
 
   const mpFotoThumbById = useMemo(() => {
     const map = new Map<string, string>()
-    for (const item of bom) {
+    for (const item of detalhe.bom) {
       const mp = item.materia_prima
       if (!mp?.id || !mp?.foto_url) continue
       map.set(
@@ -73,12 +102,12 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
       )
     }
     return map
-  }, [bom])
+  }, [detalhe.bom])
 
-  // Preview de consumo de MPs para entrada de estoque
+  // Preview de consumo de MPs para entrada de estoque (usa BOM recém-buscado ao abrir o modal)
   const qtdProduzir = Number(quantidadeProduzir) || 0
   const previewConsumo = useMemo(() => {
-    return bom.map((item) => {
+    return bomEntrada.map((item) => {
       const mp = item.materia_prima
       const necessario = item.quantidade * qtdProduzir
       const disponivel = mp?.estoque_atual ?? 0
@@ -92,9 +121,10 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
         suficiente: restante >= 0,
       }
     })
-  }, [bom, qtdProduzir])
+  }, [bomEntrada, qtdProduzir])
 
-  const todosDisponíveis = previewConsumo.every((p) => p.suficiente)
+  const todosDisponíveis =
+    bomEntrada.length > 0 && previewConsumo.every((p) => p.suficiente)
 
   async function handleEntrada() {
     if (entradaLoading) return
@@ -594,8 +624,13 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
             )}
           </div>
 
-          {/* Preview de consumo */}
-          {qtdProduzir > 0 && bom.length > 0 && (
+          {/* Preview de consumo (estoque das MPs recarregado ao abrir o modal) */}
+          {bomEntradaLoading && (
+            <p className="text-sm text-center py-4" style={{ color: 'var(--ac-muted)' }}>
+              Atualizando quantidades disponíveis no estoque…
+            </p>
+          )}
+          {!bomEntradaLoading && qtdProduzir > 0 && bomEntrada.length > 0 && (
             <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-xs">
                 <thead>
@@ -631,7 +666,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
             </div>
           )}
 
-          {!todosDisponíveis && qtdProduzir > 0 && (
+          {!bomEntradaLoading && !todosDisponíveis && qtdProduzir > 0 && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
               Matérias-primas insuficientes para produzir {qtdProduzir} unidades.
             </p>
@@ -654,7 +689,7 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
             <Button
               onClick={handleEntrada}
               loading={entradaLoading}
-              disabled={!todosDisponíveis || qtdProduzir <= 0}
+              disabled={bomEntradaLoading || !todosDisponíveis || qtdProduzir <= 0}
             >
               Confirmar Produção
             </Button>
