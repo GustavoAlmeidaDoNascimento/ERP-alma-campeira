@@ -540,9 +540,64 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
   revalidateTag('ordens-compra-historico', 'max')
 }
 
-export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' | 'recebida') {
+export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' | 'pago' | 'recebida') {
   await assertPermissao('ordens_compra', 'editar')
   const supabase = await createClient()
+  const user = await getAuthenticatedUser()
+
+  if (status === 'pago') {
+    const { data: ocCabecalho, error: ocErr } = await supabase
+      .from('ordens_compra')
+      .select('codigo, fornecedor:fornecedores(nome)')
+      .eq('id', id)
+      .single()
+
+    if (ocErr) throw new Error(ocErr.message)
+
+    const { data: itens, error: itensErr } = await supabase
+      .from('ordem_compra_itens')
+      .select('quantidade, preco_unitario')
+      .eq('ordem_compra_id', id)
+
+    if (itensErr) throw new Error(itensErr.message)
+
+    const valorTotal = (itens ?? []).reduce(
+      (s, it) => s + Number(it.quantidade ?? 0) * Number(it.preco_unitario ?? 0),
+      0,
+    )
+
+    const fornecedor = Array.isArray(ocCabecalho?.fornecedor)
+      ? ocCabecalho?.fornecedor[0]
+      : ocCabecalho?.fornecedor
+    const fornecedorNome = fornecedor?.nome ?? null
+    const codigoOC = ocCabecalho?.codigo ?? ''
+    const descricao = fornecedorNome
+      ? `Pagamento OC ${codigoOC} — ${fornecedorNome}`
+      : `Pagamento OC ${codigoOC}`
+
+    // Evita duplicar se a OC já tinha um gasto vinculado (ex.: voltar de
+    // "recebida" para "pago" e marcar de novo).
+    const { data: gastoExistente } = await supabase
+      .from('gastos')
+      .select('id')
+      .eq('ordem_compra_id', id)
+      .limit(1)
+      .maybeSingle()
+
+    if (!gastoExistente) {
+      const hoje = new Date().toISOString().slice(0, 10)
+      const { error: gastoErr } = await supabase.from('gastos').insert({
+        tipo: 'pagamento_oc',
+        descricao,
+        valor: valorTotal,
+        forma_pagamento: 'transferencia',
+        data_gasto: hoje,
+        ordem_compra_id: id,
+        usuario_id: user?.id ?? null,
+      })
+      if (gastoErr) throw new Error(gastoErr.message)
+    }
+  }
 
   if (status === 'recebida') {
     const { data: ocCabecalho, error: ocErr } = await supabase
@@ -560,7 +615,6 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
 
     if (itensErr) throw new Error(itensErr.message)
 
-    const user = await getAuthenticatedUser()
     const observacaoRecebimento = ocCabecalho?.codigo
       ? `Recebimento — ${ocCabecalho.codigo}`
       : 'Recebimento OC'
@@ -596,8 +650,11 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
 
   if (error) throw new Error(error.message)
   revalidatePath('/ordens-compra')
+  revalidatePath('/gastos')
   revalidateTag('ordens-compra-historico', 'max')
   revalidateTag('metricas-estoque', 'max')
+  revalidateTag('gastos-list', 'max')
+  revalidateTag('metricas-financeiro', 'max')
 }
 
 export async function deletarOC(id: string) {
