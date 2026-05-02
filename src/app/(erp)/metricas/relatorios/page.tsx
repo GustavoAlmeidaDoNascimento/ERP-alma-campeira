@@ -1,4 +1,4 @@
-import { getMetricasEstoque, getMetricasVendas } from '@/lib/actions/metricas'
+import { getMetricasEstoque, getMetricasVendas, getMetricasFinanceiro } from '@/lib/actions/metricas'
 import { MetricasClient } from '@/components/metricas/metricas-client'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { defaultDateRange } from '@/lib/metricas-periodos'
@@ -15,9 +15,10 @@ export default async function MetricasRelatoriosPage() {
   const perms = await getPermissoesEfetivas()
   if (!perms.metricas.ver) redirect('/')
   const range = defaultDateRange()
-  const [vendas, estoque, auditoria, tabelas, usuarios] = await Promise.all([
+  const [vendas, estoque, financeiro, auditoria, tabelas, usuarios] = await Promise.all([
     getMetricasVendas(range),
     getMetricasEstoque(range),
+    getMetricasFinanceiro(range),
     getAuditLogs({ limit: 100 }),
     getAuditLogTabelas(),
     getAuditLogUsuarios(),
@@ -27,6 +28,7 @@ export default async function MetricasRelatoriosPage() {
       <MetricasClient
         vendasData={vendas}
         estoqueData={estoque}
+        financeiroData={financeiro}
         atividadeData={{
           logs: auditoria.logs,
           total: auditoria.total,
