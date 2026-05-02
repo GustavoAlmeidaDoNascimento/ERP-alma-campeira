@@ -105,6 +105,15 @@ const iconConsumivel = (
   </svg>
 )
 
+const iconGastos = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+    <path d="M5 3h11l3 3v15a1 1 0 0 1-1.5.87L15 20l-2.5 1.5L10 20l-2.5 1.5L5 20V3z" />
+    <path d="M9 9h6" />
+    <path d="M9 13h6" />
+    <path d="M9 17h3" />
+  </svg>
+)
+
 const iconOrcamento = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -140,6 +149,12 @@ export const sections: NavSection[] = [
     items: [
       { href: '/fornecedores',  label: 'Fornecedores',    available: true, icon: iconFornecedor, moduloKey: 'fornecedores'  },
       { href: '/ordens-compra', label: 'Ordens de Compra',available: true, icon: iconOC,         moduloKey: 'ordens_compra' },
+    ],
+  },
+  {
+    label: 'Financeiro',
+    items: [
+      { href: '/gastos', label: 'Gastos', available: true, icon: iconGastos, moduloKey: 'gastos' },
     ],
   },
   {
