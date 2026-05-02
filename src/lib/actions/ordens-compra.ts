@@ -338,13 +338,19 @@ export async function criarOrdemCompraManual(input: {
 
 // ─── Consultas de OC ──────────────────────────────────────────────────────────
 
+/** PostgREST pode devolver embed 1:1 como objeto ou array com um elemento. */
+function embedUm<T>(v: T | T[] | null | undefined): T | null {
+  if (v == null) return null
+  return Array.isArray(v) ? (v[0] ?? null) : v
+}
+
 async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('ordens_compra')
     .select(`
       *,
-      fornecedor:fornecedores(id, nome),
+      fornecedor:fornecedores!fornecedor_id(id, nome),
       fila:fila_reposicao(
         id,
         pedido:pedidos(
@@ -364,7 +370,13 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
 
   if (error) throw new Error(error.message)
 
-  return (data ?? []).map((row) => {
+  type RowOC = Record<string, unknown> & {
+    fornecedor?: unknown
+    fornecedores?: unknown
+    fornecedor_id?: string | null
+  }
+
+  const mapped = (data ?? []).map((row: RowOC) => {
     const fila = (Array.isArray(row.fila) ? row.fila[0] : row.fila) as {
       id: string
       pedido: { id: string; codigo: string; cliente: { nome: string } | { nome: string }[] | null } | { id: string; codigo: string; cliente: { nome: string } | { nome: string }[] | null }[] | null
@@ -375,13 +387,45 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     const cliente = pedido?.cliente
       ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
       : null
+    const fornecedor =
+      embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null) ??
+      embedUm(row.fornecedores as { id: string; nome: string } | { id: string; nome: string }[] | null)
     return {
       ...row,
+      fornecedor,
       pedido_id: pedido?.id ?? null,
       pedido_codigo: pedido?.codigo ?? null,
       cliente_nome: cliente?.nome ?? null,
     }
   }) as OrdemCompra[]
+
+  const idsFaltando = [
+    ...new Set(
+      mapped
+        .filter((oc) => oc.fornecedor_id && !oc.fornecedor?.nome)
+        .map((oc) => oc.fornecedor_id as string),
+    ),
+  ]
+
+  if (idsFaltando.length === 0) return mapped
+
+  const { data: fornecedoresExtras, error: fnErr } = await supabase
+    .from('fornecedores')
+    .select('id, nome')
+    .in('id', idsFaltando)
+
+  if (fnErr) throw new Error(fnErr.message)
+
+  const porId = new Map((fornecedoresExtras ?? []).map((f) => [f.id, f]))
+
+  return mapped.map((oc) => ({
+    ...oc,
+    fornecedor: oc.fornecedor?.nome
+      ? oc.fornecedor
+      : oc.fornecedor_id
+        ? (porId.get(oc.fornecedor_id) ?? oc.fornecedor ?? null)
+        : (oc.fornecedor ?? null),
+  }))
 }
 
 export async function getOrdensCompra(): Promise<OrdemCompra[]> {
