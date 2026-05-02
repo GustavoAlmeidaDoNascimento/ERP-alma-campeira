@@ -15,12 +15,13 @@ import { getUsuarios, getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
 import { getFilaReposicaoList, getOrdensCompra } from '@/lib/actions/ordens-compra'
 
-import { getMetricasVendas, getMetricasEstoque, type MetricasVendasData, type MetricasEstoqueData } from '@/lib/actions/metricas'
+import { getMetricasVendas, getMetricasEstoque, getMetricasFinanceiro, type MetricasVendasData, type MetricasEstoqueData, type MetricasFinanceiroData } from '@/lib/actions/metricas'
+import { listarGastos } from '@/lib/actions/gastos'
 import { getAuditLogs, getAuditLogTabelas, getAuditLogUsuarios, type AuditLog } from '@/lib/actions/auditoria'
 import { defaultDateRange } from '@/lib/metricas-periodos'
 import { getTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import { getEmpresa } from '@/lib/actions/empresa'
-import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Orcamento, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB, Empresa } from '@/types'
+import type { MateriaPrima, Fornecedor, Faca, CategoriaFacaDB, CategoriaMateriaPrimaDB, Pedido, Orcamento, Cliente, Usuario, Cargo, Consumivel, CategoriaConsumivelDB, Empresa, Gasto } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -125,12 +126,18 @@ export type ErpTabData =
       kind: 'metricas-relatorios'
       vendas: MetricasVendasData
       estoque: MetricasEstoqueData
+      financeiro: MetricasFinanceiroData
       atividade: {
         logs: AuditLog[]
         total: number
         tabelas: string[]
         usuarios: { id: string; nome: string }[]
       }
+    }
+  | {
+      kind: 'gastos'
+      gastos: Gasto[]
+      perm: Perm
     }
 
 function assertAllowed(perm: Perm | undefined, label: string): void {
@@ -279,6 +286,16 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     }
   }
 
+  if (path === '/gastos') {
+    const [perms, gastos] = await Promise.all([
+      getPermissoesEfetivas(),
+      listarGastos(),
+    ])
+    const perm = (perms as Record<string, Perm>).gastos
+    assertAllowed(perm, 'gastos')
+    return { kind: 'gastos', gastos, perm }
+  }
+
   if (path === '/clientes') {
     const [perms, clientes] = await Promise.all([
       getPermissoesEfetivas(),
@@ -354,9 +371,10 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
     const perm = perms.metricas as Perm
     assertAllowed(perm, 'metricas')
     const range = defaultDateRange()
-    const [vendas, estoque, auditoria, tabelas, usuarios] = await Promise.all([
+    const [vendas, estoque, financeiro, auditoria, tabelas, usuarios] = await Promise.all([
       getMetricasVendas(range),
       getMetricasEstoque(range),
+      getMetricasFinanceiro(range),
       getAuditLogs({ limit: 100 }),
       getAuditLogTabelas(),
       getAuditLogUsuarios(),
@@ -365,6 +383,7 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
       kind: 'metricas-relatorios',
       vendas,
       estoque,
+      financeiro,
       atividade: {
         logs: auditoria.logs,
         total: auditoria.total,
