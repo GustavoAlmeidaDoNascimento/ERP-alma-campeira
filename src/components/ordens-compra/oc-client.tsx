@@ -625,7 +625,16 @@ function OcDetalheModal({
               Marcar como Enviada
             </Button>
           )}
-          {perm.editar && oc.status === 'enviada' && !confirmandoRecebimento && (
+          {perm.editar && oc.status === 'enviada' && (
+            <Button
+              variant="primary"
+              loading={mudandoStatus}
+              onClick={() => mudarStatus('pago')}
+            >
+              Marcar como Pago
+            </Button>
+          )}
+          {perm.editar && oc.status === 'pago' && !confirmandoRecebimento && (
             <Button
               variant="primary"
               loading={mudandoStatus}
@@ -634,7 +643,7 @@ function OcDetalheModal({
               Confirmar Recebimento
             </Button>
           )}
-          {perm.editar && oc.status === 'enviada' && confirmandoRecebimento && (
+          {perm.editar && oc.status === 'pago' && confirmandoRecebimento && (
             <>
               <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>
                 Isso vai dar entrada no estoque. Confirmar?
@@ -1099,6 +1108,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
     { value: 'todas', label: 'Todas' },
     { value: 'pendente', label: 'Pendentes' },
     { value: 'enviada', label: 'Enviadas' },
+    { value: 'pago', label: 'Pagas' },
     { value: 'recebida', label: 'Recebidas' },
   ]
 
