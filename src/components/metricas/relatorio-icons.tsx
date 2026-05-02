@@ -134,6 +134,16 @@ export function IconRelatorioAbaAtividade({ className = 'size-5', ...p }: IconPr
   )
 }
 
+/** Aba financeiro (cifrão) */
+export function IconRelatorioAbaFinanceiro({ className = 'size-5', ...p }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden {...stroke} {...p}>
+      <line x1="12" y1="3" x2="12" y2="21" />
+      <path d="M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6" />
+    </svg>
+  )
+}
+
 /** Alertas */
 export function IconRelatorioAlerta({ className = 'size-5', ...p }: IconProps) {
   return (
