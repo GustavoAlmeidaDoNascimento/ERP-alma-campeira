@@ -3,7 +3,7 @@
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import type { StatusPedido, StatusOC } from '@/types'
+import type { StatusPedido, StatusOC, TipoGasto, FormaPagamento } from '@/types'
 import { type DateRange, defaultDateRange } from '@/lib/metricas-periodos'
 
 // ── Vendas Types ──────────────────────────────────────────────────────────────
@@ -652,5 +652,140 @@ export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange
       .sort((a, b) => b.totalMovimentacoes - a.totalMovimentacoes)
 
     return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas, dateRange }
+  })
+}
+
+// ── Financeiro ──────────────────────────────────────────────────────────────
+
+export type KpiFinanceiro = {
+  receitaTotal: number
+  despesaTotal: number
+  lucroLiquido: number
+  margemLiquida: number
+}
+
+export type DespesaPorTipo = {
+  tipo: TipoGasto
+  total: number
+  quantidade: number
+  percentual: number
+}
+
+export type DespesaPorMes = {
+  mes: string
+  mesLabel: string
+  receita: number
+  despesa: number
+}
+
+export type GastoTopo = {
+  id: string
+  data: string
+  tipo: TipoGasto
+  descricao: string
+  valor: number
+  forma_pagamento: FormaPagamento
+  ordem_compra_codigo: string | null
+}
+
+export type MetricasFinanceiroData = {
+  kpi: KpiFinanceiro
+  despesasPorTipo: DespesaPorTipo[]
+  serieMensal: DespesaPorMes[]
+  topGastos: GastoTopo[]
+  dateRange: DateRange
+}
+
+export async function getMetricasFinanceiro(
+  dateRange: DateRange = defaultDateRange(),
+): Promise<MetricasFinanceiroData> {
+  await requireAuthenticatedUserId()
+  await assertPermissao('metricas', 'ver')
+
+  return withSupabaseCookieContext(async () => {
+    const supabase = await createClient()
+
+    const [pedidosRes, gastosRes] = await Promise.all([
+      supabase
+        .from('pedidos')
+        .select('data_pedido, valor_total')
+        .gte('data_pedido', dateRange.desde)
+        .lte('data_pedido', dateRange.ate),
+      supabase
+        .from('gastos')
+        .select('id, tipo, descricao, valor, forma_pagamento, data_gasto, ordem_compra:ordens_compra(codigo)')
+        .gte('data_gasto', dateRange.desde)
+        .lte('data_gasto', dateRange.ate),
+    ])
+
+    if (pedidosRes.error) throw new Error(pedidosRes.error.message)
+    if (gastosRes.error) throw new Error(gastosRes.error.message)
+
+    const pedidos = pedidosRes.data ?? []
+    const gastos = gastosRes.data ?? []
+
+    const receitaTotal = pedidos.reduce((s, p) => s + Number(p.valor_total ?? 0), 0)
+    const despesaTotal = gastos.reduce((s, g) => s + Number(g.valor ?? 0), 0)
+    const lucroLiquido = receitaTotal - despesaTotal
+    const margemLiquida = receitaTotal > 0 ? (lucroLiquido / receitaTotal) * 100 : 0
+
+    const tipoMap = new Map<TipoGasto, { total: number; quantidade: number }>()
+    for (const g of gastos) {
+      const t = g.tipo as TipoGasto
+      const entry = tipoMap.get(t) ?? { total: 0, quantidade: 0 }
+      entry.total += Number(g.valor ?? 0)
+      entry.quantidade += 1
+      tipoMap.set(t, entry)
+    }
+
+    const despesasPorTipo: DespesaPorTipo[] = Array.from(tipoMap.entries())
+      .map(([tipo, v]) => ({
+        tipo,
+        total: v.total,
+        quantidade: v.quantidade,
+        percentual: despesaTotal > 0 ? (v.total / despesaTotal) * 100 : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+
+    const mesMap = new Map<string, { receita: number; despesa: number }>()
+    for (const p of pedidos) {
+      const d = new Date(p.data_pedido)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const e = mesMap.get(key) ?? { receita: 0, despesa: 0 }
+      e.receita += Number(p.valor_total ?? 0)
+      mesMap.set(key, e)
+    }
+    for (const g of gastos) {
+      const d = new Date(g.data_gasto)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const e = mesMap.get(key) ?? { receita: 0, despesa: 0 }
+      e.despesa += Number(g.valor ?? 0)
+      mesMap.set(key, e)
+    }
+
+    const serieMensal: DespesaPorMes[] = Array.from(mesMap.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([mes, v]) => ({ mes, mesLabel: mesLabel(mes), ...v }))
+
+    const topGastos: GastoTopo[] = gastos
+      .slice()
+      .sort((a, b) => Number(b.valor ?? 0) - Number(a.valor ?? 0))
+      .slice(0, 10)
+      .map((g) => {
+        const oc = Array.isArray(g.ordem_compra) ? g.ordem_compra[0] : g.ordem_compra
+        return {
+          id: g.id,
+          data: g.data_gasto,
+          tipo: g.tipo as TipoGasto,
+          descricao: g.descricao,
+          valor: Number(g.valor ?? 0),
+          forma_pagamento: g.forma_pagamento as FormaPagamento,
+          ordem_compra_codigo: oc?.codigo ?? null,
+        }
+      })
+
+    const kpi: KpiFinanceiro = { receitaTotal, despesaTotal, lucroLiquido, margemLiquida }
+
+    return { kpi, despesasPorTipo, serieMensal, topGastos, dateRange }
   })
 }
