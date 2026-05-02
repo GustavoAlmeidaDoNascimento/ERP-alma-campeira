@@ -501,6 +501,14 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
   const supabase = await createClient()
 
   if (status === 'recebida') {
+    const { data: ocCabecalho, error: ocErr } = await supabase
+      .from('ordens_compra')
+      .select('codigo')
+      .eq('id', id)
+      .single()
+
+    if (ocErr) throw new Error(ocErr.message)
+
     const { data: itens, error: itensErr } = await supabase
       .from('ordem_compra_itens')
       .select('materia_prima_id, quantidade')
@@ -509,6 +517,9 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
     if (itensErr) throw new Error(itensErr.message)
 
     const user = await getAuthenticatedUser()
+    const observacaoRecebimento = ocCabecalho?.codigo
+      ? `Recebimento — ${ocCabecalho.codigo}`
+      : 'Recebimento OC'
 
     for (const item of itens ?? []) {
       const { data: mp } = await supabase
@@ -528,7 +539,7 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
         tipo: 'entrada',
         materia_prima_id: item.materia_prima_id,
         quantidade: item.quantidade,
-        observacao: `Recebimento OC`,
+        observacao: observacaoRecebimento,
         usuario_id: user?.id ?? null,
       })
     }
