@@ -3,16 +3,20 @@
 import { useCallback, useState, useTransition } from 'react'
 import { VendasMetricsView } from './vendas-metrics'
 import { EstoqueMetricsView } from './estoque-metrics'
+import { FinanceiroMetricsView } from './financeiro-metrics'
 import {
   getMetricasVendas,
   getMetricasEstoque,
+  getMetricasFinanceiro,
   type MetricasVendasData,
   type MetricasEstoqueData,
+  type MetricasFinanceiroData,
 } from '@/lib/actions/metricas'
 import { type DateRange } from '@/lib/metricas-periodos'
 import {
   IconRelatorioAbaAtividade,
   IconRelatorioAbaEstoque,
+  IconRelatorioAbaFinanceiro,
   IconRelatorioAbaVendas,
 } from './relatorio-icons'
 import { AtividadeView } from '@/components/auditoria/atividade-view'
@@ -21,6 +25,7 @@ import type { AuditLog } from '@/lib/actions/auditoria'
 export type MetricasClientProps = {
   vendasData: MetricasVendasData
   estoqueData: MetricasEstoqueData
+  financeiroData: MetricasFinanceiroData
   atividadeData: {
     logs: AuditLog[]
     total: number
@@ -29,11 +34,12 @@ export type MetricasClientProps = {
   }
 }
 
-type PainelId = 'vendas' | 'estoque' | 'atividade'
+type PainelId = 'vendas' | 'financeiro' | 'estoque' | 'atividade'
 
 export function MetricasClient({
   vendasData: vendasInitial,
   estoqueData: estoqueInitial,
+  financeiroData: financeiroInitial,
   atividadeData,
 }: MetricasClientProps) {
   const initialRange: DateRange =
@@ -50,14 +56,20 @@ export function MetricasClient({
   const [ate, setAte] = useState(initialRange.ate)
   const [vData, setVData] = useState(vendasInitial)
   const [eData, setEData] = useState(estoqueInitial)
+  const [fData, setFData] = useState(financeiroInitial)
   const [painel, setPainel] = useState<PainelId>('vendas')
   const [isPending, startTransition] = useTransition()
 
   const fetchWithRange = useCallback((range: DateRange) => {
     startTransition(async () => {
-      const [v, e] = await Promise.all([getMetricasVendas(range), getMetricasEstoque(range)])
+      const [v, e, f] = await Promise.all([
+        getMetricasVendas(range),
+        getMetricasEstoque(range),
+        getMetricasFinanceiro(range),
+      ])
       setVData(v)
       setEData(e)
+      setFData(f)
     })
   }, [])
 
@@ -243,6 +255,38 @@ export function MetricasClient({
           <button
             type="button"
             role="tab"
+            aria-selected={painel === 'financeiro'}
+            id="tab-relatorio-financeiro"
+            aria-controls="panel-relatorio-financeiro"
+            onClick={() => setPainel('financeiro')}
+            className="flex flex-1 min-w-[5.5rem] sm:flex-none sm:min-w-0 items-start gap-2.5 rounded-lg px-3 py-2.5 sm:px-4 text-left text-sm font-semibold transition-all"
+            style={{
+              color: painel === 'financeiro' ? 'var(--ac-text)' : 'var(--ac-muted)',
+              background: painel === 'financeiro' ? 'var(--ac-card)' : 'transparent',
+              boxShadow: painel === 'financeiro' ? '0 1px 3px color-mix(in srgb, var(--ac-text) 12%, transparent)' : 'none',
+              border: painel === 'financeiro' ? '1px solid var(--ac-border)' : '1px solid transparent',
+            }}
+          >
+            <span
+              className="flex size-8 shrink-0 items-center justify-center rounded-md mt-0.5"
+              style={{
+                color: painel === 'financeiro' ? 'var(--ac-accent)' : 'var(--ac-muted)',
+                background: painel === 'financeiro' ? 'color-mix(in srgb, var(--ac-accent) 10%, transparent)' : 'transparent',
+              }}
+              aria-hidden
+            >
+              <IconRelatorioAbaFinanceiro className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">Financeiro</span>
+              <span className="block text-[11px] font-normal opacity-80 truncate" style={{ color: 'var(--ac-muted)' }}>
+                {fData.kpi.lucroLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} líq.
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={painel === 'estoque'}
             id="tab-relatorio-estoque"
             aria-controls="panel-relatorio-estoque"
@@ -359,6 +403,24 @@ export function MetricasClient({
               </div>
               <div className="p-3 sm:p-4 min-w-0">
                 <VendasMetricsView data={vData} />
+              </div>
+            </div>
+          ) : painel === 'financeiro' ? (
+            <div
+              role="tabpanel"
+              id="panel-relatorio-financeiro"
+              aria-labelledby="tab-relatorio-financeiro"
+              className="rounded-xl border min-w-0 overflow-hidden"
+              style={{ borderColor: 'var(--ac-border)', background: 'var(--ac-bg)' }}
+            >
+              <div
+                className="px-4 py-3 border-b text-sm font-medium"
+                style={{ borderColor: 'var(--ac-border)', color: 'var(--ac-muted)' }}
+              >
+                Receitas, despesas e lucro líquido no período selecionado.
+              </div>
+              <div className="p-3 sm:p-4 min-w-0">
+                <FinanceiroMetricsView data={fData} />
               </div>
             </div>
           ) : (
