@@ -180,6 +180,7 @@ export const MODULOS = [
   { key: 'orcamentos',      label: 'Orçamentos' },
   { key: 'clientes',        label: 'Clientes' },
   { key: 'ordens_compra',   label: 'Ordens de Compra' },
+  { key: 'gastos',          label: 'Gastos' },
   { key: 'usuarios',        label: 'Usuários' },
   { key: 'cargos',          label: 'Cargos' },
   { key: 'lucro',           label: 'Lucro (facas)' },
@@ -368,11 +369,12 @@ export type CategoriaFaca = (typeof CATEGORIAS_FACA)[number]
 // Ordens de Compra
 // ============================================================
 
-export type StatusOC = 'pendente' | 'enviada' | 'recebida'
+export type StatusOC = 'pendente' | 'enviada' | 'pago' | 'recebida'
 
 export const STATUS_OC: Record<StatusOC, { label: string; color: string; bg: string; border: string }> = {
   pendente: { label: 'Pendente', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
   enviada:  { label: 'Enviada',  color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
+  pago:     { label: 'Pago',     color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' },
   recebida: { label: 'Recebida', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
 }
 
@@ -514,4 +516,58 @@ export function statusEstoqueConsumivel(c: Consumivel): StatusEstoque {
   if (c.estoque_atual === 0) return 'critico'
   if (c.estoque_atual <= c.estoque_minimo) return 'atencao'
   return 'ok'
+}
+
+// ============================================================
+// Financeiro — Gastos
+// ============================================================
+
+export type TipoGasto =
+  | 'beneficios'
+  | 'investimento'
+  | 'material_consumo'
+  | 'administrativo'
+  | 'pagamento_oc'
+  | 'outros'
+
+export const TIPOS_GASTO: Record<TipoGasto, { label: string; color: string; bg: string; border: string }> = {
+  beneficios:       { label: 'Benefícios',           color: '#0e7490', bg: '#cffafe', border: '#a5f3fc' },
+  investimento:     { label: 'Investimento',         color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
+  material_consumo: { label: 'Material de consumo',  color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+  administrativo:   { label: 'Administrativo',       color: '#4338ca', bg: '#e0e7ff', border: '#c7d2fe' },
+  pagamento_oc:     { label: 'Pagamento de OC',      color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' },
+  outros:           { label: 'Outros',               color: '#475569', bg: '#f1f5f9', border: '#e2e8f0' },
+}
+
+export type FormaPagamento =
+  | 'pix'
+  | 'dinheiro'
+  | 'cartao_credito'
+  | 'cartao_debito'
+  | 'boleto'
+  | 'transferencia'
+  | 'outro'
+
+export const FORMAS_PAGAMENTO: Record<FormaPagamento, { label: string }> = {
+  pix:            { label: 'PIX' },
+  dinheiro:       { label: 'Dinheiro' },
+  cartao_credito: { label: 'Cartão de crédito' },
+  cartao_debito:  { label: 'Cartão de débito' },
+  boleto:         { label: 'Boleto' },
+  transferencia:  { label: 'Transferência' },
+  outro:          { label: 'Outro' },
+}
+
+export type Gasto = {
+  id: string
+  tipo: TipoGasto
+  descricao: string
+  valor: number
+  forma_pagamento: FormaPagamento
+  data_gasto: string
+  ordem_compra_id: string | null
+  observacao: string | null
+  usuario_id: string | null
+  created_at: string
+  ordem_compra?: Pick<OrdemCompra, 'id' | 'codigo'> | null
 }
