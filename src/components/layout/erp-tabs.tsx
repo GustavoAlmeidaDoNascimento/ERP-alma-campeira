@@ -18,6 +18,7 @@ import { OcClient } from '@/components/ordens-compra/oc-client'
 import { VendasClient } from '@/components/vendas/vendas-client'
 import { OrcamentosClient } from '@/components/orcamentos/orcamentos-client'
 import { ClientesClient } from '@/components/clientes/clientes-client'
+import { GastosClient } from '@/components/gastos/gastos-client'
 import { UsuariosClient } from '@/components/usuarios/usuarios-client'
 import { CargosClient } from '@/components/cargos/cargos-client'
 import { ConfiguracoesClient } from '@/components/configuracoes/configuracoes-client'
@@ -527,9 +528,12 @@ function TabPane({
         <MetricasClient
           vendasData={contentData.vendas}
           estoqueData={contentData.estoque}
+          financeiroData={contentData.financeiro}
           atividadeData={contentData.atividade}
         />
       )
+    case 'gastos':
+      return <GastosClient gastos={contentData.gastos} perm={contentData.perm} />
     default:
       return null
   }
