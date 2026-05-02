@@ -107,10 +107,10 @@ const iconConsumivel = (
 
 const iconGastos = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
-    <path d="M5 3h11l3 3v15a1 1 0 0 1-1.5.87L15 20l-2.5 1.5L10 20l-2.5 1.5L5 20V3z" />
-    <path d="M9 9h6" />
-    <path d="M9 13h6" />
-    <path d="M9 17h3" />
+    <rect x="2" y="6" width="20" height="13" rx="2" />
+    <path d="M2 10h20" />
+    <path d="M6 15h3" />
+    <circle cx="17" cy="15" r="1.2" fill="currentColor" stroke="none" />
   </svg>
 )
 

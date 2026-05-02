@@ -29,8 +29,18 @@ export function permissoesVazias(): PermMap {
 
 export function permissoesFromArray(arr: CargoPermissao[]): PermMap {
   const base = permissoesVazias()
+  const explicit = new Set<ModuloKey>()
   for (const p of arr) {
     base[p.modulo] = { ver: p.ver, criar: p.criar, editar: p.editar, deletar: p.deletar }
+    explicit.add(p.modulo)
+  }
+  // Fallback de seed: enquanto o módulo `gastos` não tiver linha própria em
+  // cargo_permissoes (migration_gastos_system.sql ainda não rodada para o
+  // cargo), espelha a permissão de `ordens_compra` — mesma estratégia do
+  // seed SQL. Assim o item aparece para quem já podia mexer em compras,
+  // sem depender de um redeploy de banco.
+  if (!explicit.has('gastos') && explicit.has('ordens_compra')) {
+    base.gastos = { ...base.ordens_compra }
   }
   return base
 }
