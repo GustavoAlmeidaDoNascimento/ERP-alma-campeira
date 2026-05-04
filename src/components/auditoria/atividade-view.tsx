@@ -610,10 +610,10 @@ function Diff({ log }: { log: AuditLog }) {
                   <td
                     className="px-3 py-2 align-top"
                     style={{
-                      background: 'color-mix(in srgb, #fee2e2 40%, transparent)',
-                      color: '#991b1b',
+                      background: 'var(--ac-diff-neg-bg)',
+                      color: 'var(--ac-diff-neg-text)',
                       textDecoration: 'line-through',
-                      textDecorationColor: 'color-mix(in srgb, #991b1b 40%, transparent)',
+                      textDecorationColor: 'color-mix(in srgb, var(--ac-diff-neg-text) 50%, transparent)',
                     }}
                   >
                     {fmtFieldValue(campo, antes)}
@@ -621,8 +621,8 @@ function Diff({ log }: { log: AuditLog }) {
                   <td
                     className="px-3 py-2 align-top"
                     style={{
-                      background: 'color-mix(in srgb, #dcfce7 40%, transparent)',
-                      color: '#166534',
+                      background: 'var(--ac-diff-pos-bg)',
+                      color: 'var(--ac-diff-pos-text)',
                       fontWeight: 500,
                     }}
                   >
@@ -656,15 +656,9 @@ function RegistroCampos({
   }
 
   const campos = ordenarCampos(data)
-  const cor = destaque === 'positivo' ? '#166534' : '#991b1b'
-  const bg =
-    destaque === 'positivo'
-      ? 'color-mix(in srgb, #dcfce7 30%, transparent)'
-      : 'color-mix(in srgb, #fee2e2 30%, transparent)'
-  const borda =
-    destaque === 'positivo'
-      ? 'color-mix(in srgb, #bbf7d0 60%, var(--ac-border))'
-      : 'color-mix(in srgb, #fecaca 60%, var(--ac-border))'
+  const cor = destaque === 'positivo' ? 'var(--ac-diff-pos-text)' : 'var(--ac-diff-neg-text)'
+  const bg = destaque === 'positivo' ? 'var(--ac-diff-pos-bg)' : 'var(--ac-diff-neg-bg)'
+  const borda = destaque === 'positivo' ? 'var(--ac-diff-pos-border)' : 'var(--ac-diff-neg-border)'
 
   return (
     <div className="space-y-2">
