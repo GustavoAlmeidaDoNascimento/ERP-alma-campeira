@@ -570,4 +570,5 @@ export type Gasto = {
   usuario_id: string | null
   created_at: string
   ordem_compra?: Pick<OrdemCompra, 'id' | 'codigo'> | null
+  usuario?: { id: string; nome: string } | null
 }
