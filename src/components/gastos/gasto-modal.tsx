@@ -83,6 +83,7 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
     const v = Number(valor.replace(',', '.'))
     if (!Number.isFinite(v) || v < 0) { setErro('Informe um valor válido.'); return }
     if (!dataGasto) { setErro('Informe a data do gasto.'); return }
+    if (!usuarioId) { setErro('Selecione quem está registrando.'); return }
 
     setErro('')
     setLoading(true)
