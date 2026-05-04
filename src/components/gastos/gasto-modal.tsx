@@ -12,6 +12,8 @@ type Props = {
   open: boolean
   onClose: () => void
   editando: Gasto | null
+  usuarios: { id: string; nome: string }[]
+  usuarioLogadoId: string | null
   onSaved?: () => void
 }
 
@@ -37,13 +39,14 @@ function hoje() {
   return `${yyyy}-${mm}-${dd}`
 }
 
-export function GastoModal({ open, onClose, editando, onSaved }: Props) {
+export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId, onSaved }: Props) {
   const [tipo, setTipo] = useState<TipoGasto>('material_consumo')
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState<string>('')
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('pix')
   const [dataGasto, setDataGasto] = useState<string>(hoje())
   const [observacao, setObservacao] = useState('')
+  const [usuarioId, setUsuarioId] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
