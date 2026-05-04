@@ -36,7 +36,17 @@ const selectChevron = {
   paddingRight: '36px',
 }
 
-export function GastosClient({ gastos, perm }: { gastos: Gasto[]; perm: Perm }) {
+export function GastosClient({
+  gastos,
+  usuarios,
+  usuarioLogadoId,
+  perm,
+}: {
+  gastos: Gasto[]
+  usuarios: { id: string; nome: string }[]
+  usuarioLogadoId: string | null
+  perm: Perm
+}) {
   const { refreshActiveTab } = useErpTabs()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Gasto | null>(null)
@@ -190,13 +200,14 @@ export function GastosClient({ gastos, perm }: { gastos: Gasto[]; perm: Perm }) 
                 <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Valor</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pagamento</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>OC vinculada</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Registrado por</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     {busca || filtroTipo || filtroForma
                       ? 'Nenhum lançamento corresponde aos filtros.'
                       : 'Nenhum gasto registrado ainda.'}
@@ -240,6 +251,9 @@ export function GastosClient({ gastos, perm }: { gastos: Gasto[]; perm: Perm }) 
                         <span style={{ color: 'var(--ac-muted)' }}>—</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
+                      {g.usuario?.nome ?? '—'}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {perm.editar && (
@@ -281,6 +295,8 @@ export function GastosClient({ gastos, perm }: { gastos: Gasto[]; perm: Perm }) 
         open={modalAberto}
         onClose={() => setModalAberto(false)}
         editando={editando}
+        usuarios={usuarios}
+        usuarioLogadoId={usuarioLogadoId}
         onSaved={refreshActiveTab}
       />
 

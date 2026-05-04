@@ -32,6 +32,7 @@ export type GastoInput = {
   data_gasto: string
   observacao?: string | null
   ordem_compra_id?: string | null
+  usuario_id?: string | null
 }
 
 function normalizarGastoPayload(input: GastoInput) {
@@ -59,7 +60,7 @@ export async function listarGastos(): Promise<Gasto[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('gastos')
-    .select('*, ordem_compra:ordens_compra(id, codigo)')
+    .select('*, ordem_compra:ordens_compra(id, codigo), usuario:usuarios_perfis(id, nome)')
     .order('data_gasto', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(500)
@@ -70,7 +71,9 @@ export async function listarGastos(): Promise<Gasto[]> {
 export async function criarGasto(input: GastoInput) {
   await assertPermissao('gastos', 'criar')
   const supabase = await createClient()
-  const usuario_id = await requireAuthenticatedUserId().catch(() => null)
+  // usuario_id vem do select "Quem está registrando" do modal; cai pro autenticado se não vier.
+  const usuario_id =
+    input.usuario_id ?? (await requireAuthenticatedUserId().catch(() => null))
   const row = { ...normalizarGastoPayload(input), usuario_id }
   const { error } = await supabase.from('gastos').insert(row)
   if (error) throw new Error(error.message)
@@ -82,7 +85,10 @@ export async function criarGasto(input: GastoInput) {
 export async function atualizarGasto(id: string, input: GastoInput) {
   await assertPermissao('gastos', 'editar')
   const supabase = await createClient()
-  const row = normalizarGastoPayload(input)
+  const row = {
+    ...normalizarGastoPayload(input),
+    ...(input.usuario_id !== undefined ? { usuario_id: input.usuario_id } : {}),
+  }
   const { error } = await supabase.from('gastos').update(row).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/gastos')

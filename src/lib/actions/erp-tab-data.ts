@@ -137,6 +137,8 @@ export type ErpTabData =
   | {
       kind: 'gastos'
       gastos: Gasto[]
+      usuarios: { id: string; nome: string }[]
+      usuarioLogadoId: string | null
       perm: Perm
     }
 
@@ -287,13 +289,15 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   }
 
   if (path === '/gastos') {
-    const [perms, gastos] = await Promise.all([
+    const [perms, gastos, usuarios, authUser] = await Promise.all([
       getPermissoesEfetivas(),
       listarGastos(),
+      getUsuariosPerfisList(),
+      getAuthenticatedUser(),
     ])
     const perm = (perms as Record<string, Perm>).gastos
     assertAllowed(perm, 'gastos')
-    return { kind: 'gastos', gastos, perm }
+    return { kind: 'gastos', gastos, usuarios, usuarioLogadoId: authUser?.id ?? null, perm }
   }
 
   if (path === '/clientes') {

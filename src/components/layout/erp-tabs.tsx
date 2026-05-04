@@ -561,7 +561,14 @@ function TabPane({
         />
       )
     case 'gastos':
-      return <GastosClient gastos={contentData.gastos} perm={contentData.perm} />
+      return (
+        <GastosClient
+          gastos={contentData.gastos}
+          usuarios={contentData.usuarios}
+          usuarioLogadoId={contentData.usuarioLogadoId}
+          perm={contentData.perm}
+        />
+      )
     default:
       return null
   }
