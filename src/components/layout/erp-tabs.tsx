@@ -59,7 +59,7 @@ const erpTabDataInflight = new Map<string, Promise<ErpTabData>>()
 /** Timeout vale só enquanto o fetch real está em execução, não a espera na fila abaixo. */
 const ERP_TAB_FETCH_TIMEOUT_MS = 120_000
 
-/** Sem conteúdo em cache: se não concluir neste tempo, reabre o carregamento da aba (`refreshTab`). */
+/** Sem conteúdo em cache: se não concluir neste tempo, exibe aviso "está demorando" — sem refetar em paralelo. */
 const ERP_TAB_LOAD_WATCHDOG_MS = 10_000
 
 /**
@@ -323,12 +323,12 @@ function TabPane({
   active: boolean
   refreshSeq: number
 }) {
-  const { refreshTab } = useErpTabs()
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     cachedData ? 'ready' : 'loading'
   )
   const [data, setData] = useState<ErpTabData | null>(cachedData ?? null)
   const [errMsg, setErrMsg] = useState<string>('')
+  const [slow, setSlow] = useState<boolean>(false)
 
   // Último refreshSeq atendido. Evite "loadedRef": ref podia ficar true com fetch cancelado + data null.
   const lastFetchedSeqRef = useRef(cachedData ? 0 : -1)
@@ -380,9 +380,12 @@ function TabPane({
           setStatus('loading')
           setData(null)
           setErrMsg('')
+          setSlow(false)
+          // Watchdog apenas sinaliza "está demorando" — não dispara refetch em paralelo
+          // (evita cascata em rede ruim: o fetch original continua e a deduplicação fica respeitada).
           watchdogTimer = setTimeout(() => {
             if (cancelled) return
-            refreshTab(href)
+            setSlow(true)
           }, ERP_TAB_LOAD_WATCHDOG_MS)
         } else {
           // Mantém o conteúdo atual enquanto busca em background
@@ -394,6 +397,7 @@ function TabPane({
         if (cancelled) return
         setData(d)
         setStatus('ready')
+        setSlow(false)
         onData?.(href, d)
         if (LOG) console.log('[TABS] fetch success', { href, kind: d.kind })
       } catch (e: unknown) {
@@ -418,9 +422,20 @@ function TabPane({
     // Não incluir `data` nas deps: setData(null) no início do fetch re-dispararia o efeito e rodaria run() de novo.
     // cachedData: preloader preenche o ref no pai.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [href, active, refreshSeq, cachedData, refreshTab])
+  }, [href, active, refreshSeq, cachedData])
 
-  if (status === 'loading' && !contentData) return <TabSkeleton href={href} />
+  if (status === 'loading' && !contentData) {
+    return (
+      <>
+        <TabSkeleton href={href} />
+        {slow ? (
+          <div className="px-6 sm:px-8 -mt-2 text-xs" style={{ color: 'var(--ac-muted)' }}>
+            Está demorando mais que o normal — aguardando resposta do servidor…
+          </div>
+        ) : null}
+      </>
+    )
+  }
   if (status === 'error') {
     const isAcessoNegado = errMsg.toLowerCase().includes('acesso negado')
     return (

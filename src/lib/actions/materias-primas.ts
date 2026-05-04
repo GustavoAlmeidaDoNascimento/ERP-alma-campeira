@@ -12,11 +12,10 @@ import { gerarCodigoForte } from '@/lib/utils/codigo'
 const getMateriasPrimasCached = unstable_cache(
   async (_userId: string, limit: number): Promise<MateriaPrima[]> => {
     const supabase = await createClient()
+    // Listagem só usa nome do fornecedor (mp-client.tsx). Detalhe completo vem de getMPDetalhe.
     const { data, error } = await supabase
       .from('materias_primas')
-      .select(
-        '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
-      )
+      .select('*, fornecedor:fornecedores(id, nome)')
       .order('codigo')
       .limit(limit)
     if (error) throw new Error(error.message)

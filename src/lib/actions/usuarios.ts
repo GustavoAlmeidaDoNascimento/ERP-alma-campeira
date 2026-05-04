@@ -147,8 +147,10 @@ export async function atualizarPerfil(
     if (permError) throw new Error(permError.message)
   }
 
-  // Invalida apenas o cache de permissões deste usuário específico
-  revalidateTag(`user-permissions-${id}`, 'max')
+  // Invalida o cache global de permissões (todos os usuários).
+  // A tag específica por id não existe no unstable_cache atual; usar a tag global
+  // garante que o usuário afetado vai recarregar suas permissões na próxima requisição.
+  revalidateTag('user-permissions', 'max')
   revalidatePath('/usuarios')
   revalidateTag('usuarios-list', 'max')
 }

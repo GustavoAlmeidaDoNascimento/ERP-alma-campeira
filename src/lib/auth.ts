@@ -70,7 +70,9 @@ const getPermissoesEfetivasCached = unstable_cache(
     return permissoesFromArray(cargo.permissoes)
   },
   ['user-permissions'],
-  { revalidate: 30, tags: ['user-permissions'] }
+  // Permissões mudam raramente. Cache de 10min reduz drasticamente queries em toda
+  // server action. Mutações em cargos/permissões já chamam revalidateTag('user-permissions').
+  { revalidate: 600, tags: ['user-permissions'] }
 )
 
 /**
