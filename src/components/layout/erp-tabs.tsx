@@ -504,7 +504,18 @@ function TabPane({
         />
       )
     case 'faca-detalhe':
-      return <FacaDetalheClient detalhe={contentData.detalhe} materiasPrimas={contentData.materiasPrimas} categorias={contentData.categorias} perm={contentData.perm} verPrecoVenda={contentData.verPrecoVenda} usuarios={contentData.usuarios} permEditarMovAdmin={contentData.permEditarMovAdmin} />
+      return (
+        <FacaDetalheClient
+          detalhe={contentData.detalhe}
+          materiasPrimas={contentData.materiasPrimas}
+          categorias={contentData.categorias}
+          perm={contentData.perm}
+          verPrecoVenda={contentData.verPrecoVenda}
+          usuarios={contentData.usuarios}
+          usuarioAtualId={contentData.usuarioAtualId}
+          permEditarMovAdmin={contentData.permEditarMovAdmin}
+        />
+      )
     case 'fornecedores':
       return <FornecedoresClient fornecedores={contentData.fornecedores} perm={contentData.perm} />
     case 'ordens-compra':
