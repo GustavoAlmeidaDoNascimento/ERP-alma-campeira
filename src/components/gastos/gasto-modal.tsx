@@ -96,6 +96,7 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
         data_gasto: dataGasto,
         observacao,
         ordem_compra_id: editando?.ordem_compra_id ?? null,
+        usuario_id: usuarioId,
       }
       if (editando) await atualizarGasto(editando.id, input)
       else await criarGasto(input)
