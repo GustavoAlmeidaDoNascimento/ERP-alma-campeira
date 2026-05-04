@@ -25,10 +25,22 @@ type Props = {
   verPrecoVenda: boolean
   taxasLucro?: TaxasLucro
   usuarios?: { id: string; nome: string }[]
+  /** Id do utilizador em sessão (auth = perfil); usado para pré-selecionar "Registrado por". */
+  usuarioAtualId?: string
   permEditarMovAdmin?: boolean
 }
 
-export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, verPrecoVenda, taxasLucro, usuarios = [], permEditarMovAdmin = false }: Props) {
+export function FacaDetalheClient({
+  detalhe,
+  materiasPrimas,
+  categorias,
+  perm,
+  verPrecoVenda,
+  taxasLucro,
+  usuarios = [],
+  usuarioAtualId,
+  permEditarMovAdmin = false,
+}: Props) {
   const { faca, bom, vendas, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 
@@ -125,6 +137,11 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
 
   const todosDisponíveis =
     bomEntrada.length > 0 && previewConsumo.every((p) => p.suficiente)
+
+  function usuarioRegistroPadraoId(): string {
+    if (!usuarioAtualId) return ''
+    return usuarios.some((u) => u.id === usuarioAtualId) ? usuarioAtualId : ''
+  }
 
   async function handleEntrada() {
     if (entradaLoading) return
@@ -314,7 +331,14 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
               </Button>
             )}
             {perm.editar && (
-              <Button onClick={() => { setEntradaModalOpen(true); setEntradaErro(''); setEntradaSucesso('') }}>
+              <Button
+                onClick={() => {
+                  setEntradaModalOpen(true)
+                  setEntradaErro('')
+                  setEntradaSucesso('')
+                  setUsuarioEntradaId(usuarioRegistroPadraoId())
+                }}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
                   <path d="M12 5v14M5 12h14" strokeLinecap="round" />
                 </svg>
@@ -471,7 +495,24 @@ export function FacaDetalheClient({ detalhe, materiasPrimas, categorias, perm, v
 
         {/* ========== Movimentações ========== */}
         <section>
-          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>Movimentações de Estoque</h3>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h3 className="text-lg font-semibold m-0" style={{ color: 'var(--ac-text)' }}>Movimentações de Estoque</h3>
+            <Button
+              type="button"
+              variant="secondary"
+              className="shrink-0 text-sm"
+              onClick={() => refreshActiveTab()}
+              title="Atualizar lista de movimentações"
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4 shrink-0" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 9a7 7 0 0 1 12.9-2.6M19 15a7 7 0 0 1-12.9 2.6" />
+                </svg>
+                Atualizar
+              </span>
+            </Button>
+          </div>
           {movimentacoesState.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentação registrada.</p>
           ) : (
