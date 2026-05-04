@@ -317,9 +317,26 @@ export function MPDetalheClient({ detalhe, perm, permEditarMov = false, permVerM
         {/* ========== Movimentações ========== */}
         {permVerMov && (
         <section>
-          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>
-            Movimentações de Estoque
-          </h3>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h3 className="text-lg font-semibold m-0" style={{ color: 'var(--ac-text)' }}>
+              Movimentações de Estoque
+            </h3>
+            <Button
+              type="button"
+              variant="secondary"
+              className="shrink-0 text-sm"
+              onClick={() => refreshActiveTab()}
+              title="Atualizar lista de movimentações"
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4 shrink-0" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 9a7 7 0 0 1 12.9-2.6M19 15a7 7 0 0 1-12.9 2.6" />
+                </svg>
+                Atualizar
+              </span>
+            </Button>
+          </div>
           {movimentacoes.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentação registrada.</p>
           ) : (
