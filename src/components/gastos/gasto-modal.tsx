@@ -185,6 +185,21 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Quem está registrando *</label>
+          <select
+            value={usuarioId}
+            onChange={(e) => setUsuarioId(e.target.value)}
+            className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+            style={{ ...inputStyle, ...selectChevron }}
+          >
+            <option value="">Selecione um usuário</option>
+            {usuarios.map((u) => (
+              <option key={u.id} value={u.id}>{u.nome}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Observação</label>
           <textarea
             value={observacao}
