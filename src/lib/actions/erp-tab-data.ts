@@ -1,6 +1,6 @@
 'use server'
 
-import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
+import { getAuthenticatedUser, getPermissoesEfetivas, requireAuthenticatedUserId } from '@/lib/auth'
 import { getMatériasPrimas, getMPDetalhe, type MPDetalheData } from '@/lib/actions/materias-primas'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getFacas, getFacaDetalhe, type FacaDetalheData } from '@/lib/actions/facas'
@@ -58,6 +58,8 @@ export type ErpTabData =
       perm: Perm
       verPrecoVenda: boolean
       usuarios: { id: string; nome: string }[]
+      /** auth user id — mesmo id da lista `usuarios` (perfil). */
+      usuarioAtualId: string
       permEditarMovAdmin: boolean
     }
   | {
@@ -208,18 +210,29 @@ export async function getErpTabData(href: string): Promise<ErpTabData> {
   const facaDetalheMatch = path.match(/^\/facas\/([a-f0-9-]+)$/)
   if (facaDetalheMatch) {
     const facaId = facaDetalheMatch[1]
-    const [perms, detalhe, materiasPrimas, categorias, todosUsuarios] = await Promise.all([
+    const [perms, detalhe, materiasPrimas, categorias, todosUsuarios, usuarioAtualId] = await Promise.all([
       getPermissoesEfetivas(),
       getFacaDetalhe(facaId),
       getMatériasPrimas(200),
       getCategoriasFaca(),
       getUsuarios(200),
+      requireAuthenticatedUserId(),
     ])
     const perm = perms.facas as Perm
     assertAllowed(perm, 'facas')
     const usuarios = todosUsuarios.map((u: Usuario) => ({ id: u.id, nome: u.nome }))
     const permEditarMovAdmin = !!(perms as any).usuarios?.editar
-    return { kind: 'faca-detalhe', detalhe, materiasPrimas, categorias, perm, verPrecoVenda: perms.preco_venda.ver, usuarios, permEditarMovAdmin }
+    return {
+      kind: 'faca-detalhe',
+      detalhe,
+      materiasPrimas,
+      categorias,
+      perm,
+      verPrecoVenda: perms.preco_venda.ver,
+      usuarios,
+      usuarioAtualId,
+      permEditarMovAdmin,
+    }
   }
 
   if (path === '/fornecedores') {
