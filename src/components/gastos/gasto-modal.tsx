@@ -81,7 +81,7 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
   async function salvar() {
     if (!descricao.trim()) { setErro('Descrição é obrigatória.'); return }
     const v = Number(valor.replace(',', '.'))
-    if (!Number.isFinite(v) || v < 0) { setErro('Informe um valor válido.'); return }
+    if (!Number.isFinite(v) || v <= 0) { setErro('Informe um valor maior que zero.'); return }
     if (!dataGasto) { setErro('Informe a data do gasto.'); return }
     if (!usuarioId) { setErro('Selecione quem está registrando.'); return }
 
@@ -162,7 +162,7 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
             label="Valor (R$) *"
             type="number"
             step="0.01"
-            min="0"
+            min="0.01"
             value={valor}
             onChange={(e) => setValor(e.target.value)}
             placeholder="0,00"
