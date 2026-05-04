@@ -41,7 +41,7 @@ function normalizarGastoPayload(input: GastoInput) {
   const descricao = (input.descricao ?? '').trim()
   if (!descricao) throw new Error('Descrição é obrigatória.')
   const valor = Number(input.valor)
-  if (!Number.isFinite(valor) || valor < 0) throw new Error('Valor inválido.')
+  if (!Number.isFinite(valor) || valor <= 0) throw new Error('Informe um valor maior que zero.')
   if (!input.data_gasto) throw new Error('Data do gasto é obrigatória.')
 
   return {
