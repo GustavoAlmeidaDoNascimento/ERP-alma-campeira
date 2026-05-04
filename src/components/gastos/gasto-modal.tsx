@@ -61,6 +61,7 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
       setFormaPagamento(editando.forma_pagamento)
       setDataGasto(editando.data_gasto.slice(0, 10))
       setObservacao(editando.observacao ?? '')
+      setUsuarioId(editando.usuario_id ?? '')
     } else {
       setTipo('material_consumo')
       setDescricao('')
@@ -68,9 +69,14 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
       setFormaPagamento('pix')
       setDataGasto(hoje())
       setObservacao('')
+      // Padrão: usuário logado se ele estiver na lista de ativos.
+      const defaultId = usuarioLogadoId && usuarios.some((u) => u.id === usuarioLogadoId)
+        ? usuarioLogadoId
+        : ''
+      setUsuarioId(defaultId)
     }
     setErro('')
-  }, [open, editando])
+  }, [open, editando, usuarioLogadoId, usuarios])
 
   async function salvar() {
     if (!descricao.trim()) { setErro('Descrição é obrigatória.'); return }
