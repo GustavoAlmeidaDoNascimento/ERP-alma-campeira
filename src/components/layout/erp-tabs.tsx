@@ -59,8 +59,11 @@ const erpTabDataInflight = new Map<string, Promise<ErpTabData>>()
 /** Timeout vale só enquanto o fetch real está em execução, não a espera na fila abaixo. */
 const ERP_TAB_FETCH_TIMEOUT_MS = 120_000
 
-/** Sem conteúdo em cache: se não concluir neste tempo, exibe aviso "está demorando" — sem refetar em paralelo. */
-const ERP_TAB_LOAD_WATCHDOG_MS = 10_000
+/** Sem conteúdo em cache: se não concluir neste tempo, recarrega a aba (refreshTab). */
+const ERP_TAB_LOAD_WATCHDOG_MS = 4_000
+
+/** Limite de recargas automáticas consecutivas pelo watchdog antes de exibir erro. */
+const ERP_TAB_WATCHDOG_MAX_RETRIES = 3
 
 /**
  * Evita abrir 10+ abas e disparar o mesmo número de server actions/HTTP em paralelo
@@ -323,12 +326,14 @@ function TabPane({
   active: boolean
   refreshSeq: number
 }) {
+  const { refreshTab } = useErpTabs()
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
     cachedData ? 'ready' : 'loading'
   )
   const [data, setData] = useState<ErpTabData | null>(cachedData ?? null)
   const [errMsg, setErrMsg] = useState<string>('')
   const [slow, setSlow] = useState<boolean>(false)
+  const watchdogRetriesRef = useRef(0)
 
   // Último refreshSeq atendido. Evite "loadedRef": ref podia ficar true com fetch cancelado + data null.
   const lastFetchedSeqRef = useRef(cachedData ? 0 : -1)
@@ -381,11 +386,18 @@ function TabPane({
           setData(null)
           setErrMsg('')
           setSlow(false)
-          // Watchdog apenas sinaliza "está demorando" — não dispara refetch em paralelo
-          // (evita cascata em rede ruim: o fetch original continua e a deduplicação fica respeitada).
+          // Watchdog: se passar de ERP_TAB_LOAD_WATCHDOG_MS sem terminar, recarrega a aba
+          // (refreshTab incrementa refreshSeq → novo fetch). Limitado a ERP_TAB_WATCHDOG_MAX_RETRIES
+          // pra evitar loop infinito quando o backend simplesmente está fora.
           watchdogTimer = setTimeout(() => {
             if (cancelled) return
-            setSlow(true)
+            if (watchdogRetriesRef.current >= ERP_TAB_WATCHDOG_MAX_RETRIES) {
+              setSlow(true)
+              return
+            }
+            watchdogRetriesRef.current += 1
+            if (LOG) console.log('[TABS] watchdog reload', { href, attempt: watchdogRetriesRef.current })
+            refreshTab(href)
           }, ERP_TAB_LOAD_WATCHDOG_MS)
         } else {
           // Mantém o conteúdo atual enquanto busca em background
@@ -398,6 +410,7 @@ function TabPane({
         setData(d)
         setStatus('ready')
         setSlow(false)
+        watchdogRetriesRef.current = 0
         onData?.(href, d)
         if (LOG) console.log('[TABS] fetch success', { href, kind: d.kind })
       } catch (e: unknown) {
@@ -422,7 +435,7 @@ function TabPane({
     // Não incluir `data` nas deps: setData(null) no início do fetch re-dispararia o efeito e rodaria run() de novo.
     // cachedData: preloader preenche o ref no pai.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [href, active, refreshSeq, cachedData])
+  }, [href, active, refreshSeq, cachedData, refreshTab])
 
   if (status === 'loading' && !contentData) {
     return (
@@ -430,7 +443,7 @@ function TabPane({
         <TabSkeleton href={href} />
         {slow ? (
           <div className="px-6 sm:px-8 -mt-2 text-xs" style={{ color: 'var(--ac-muted)' }}>
-            Está demorando mais que o normal — aguardando resposta do servidor…
+            Várias tentativas falharam em carregar a aba — verifique sua conexão e atualize a página.
           </div>
         ) : null}
       </>
