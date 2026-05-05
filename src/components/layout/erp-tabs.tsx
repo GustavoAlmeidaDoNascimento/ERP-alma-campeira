@@ -60,7 +60,7 @@ const erpTabDataInflight = new Map<string, Promise<ErpTabData>>()
 const ERP_TAB_FETCH_TIMEOUT_MS = 120_000
 
 /** Sem conteúdo em cache: se não concluir neste tempo, recarrega a aba (refreshTab). */
-const ERP_TAB_LOAD_WATCHDOG_MS = 4_000
+const ERP_TAB_LOAD_WATCHDOG_MS = 2_500
 
 /** Limite de recargas automáticas consecutivas pelo watchdog antes de exibir erro. */
 const ERP_TAB_WATCHDOG_MAX_RETRIES = 3
