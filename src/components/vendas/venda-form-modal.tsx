@@ -211,6 +211,15 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   }
 
   async function salvar() {
+    if (!clienteId.trim()) {
+      setErro('Selecione um cliente.')
+      return
+    }
+    if (!vendedorId.trim()) {
+      setErro('Selecione um vendedor.')
+      return
+    }
+
     const itensValidos = itens.filter((i) => i.faca_id)
     if (itensValidos.length === 0) { setErro('Adicione ao menos um item com faca selecionada.'); return }
 
@@ -238,8 +247,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
     setErro(''); setLoading(true)
     try {
       const input = {
-        cliente_id: clienteId || null,
-        vendedor_id: vendedorId || null,
+        cliente_id: clienteId.trim(),
+        vendedor_id: vendedorId.trim(),
         data_pedido: dataPedido,
         status,
         observacao,
@@ -319,7 +328,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
               onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
             >
-              <option value="">— Sem cliente —</option>
+              <option value="">Selecione um cliente…</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
@@ -335,7 +344,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
               onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
             >
-              <option value="">— Sem vendedor —</option>
+              <option value="">Selecione um vendedor…</option>
               {usuarios.map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
