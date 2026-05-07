@@ -125,9 +125,20 @@ async function inserirItensPedido(
   }
 }
 
+function assertClienteEVendedorObrigatorios(input: VendaInput) {
+  if (!input.cliente_id?.trim()) {
+    throw new Error('Selecione um cliente.')
+  }
+  if (!input.vendedor_id?.trim()) {
+    throw new Error('Selecione um vendedor.')
+  }
+}
+
 export async function criarVenda(input: VendaInput) {
   await assertPermissao('vendas', 'criar')
   const supabase = await createClient()
+
+  assertClienteEVendedorObrigatorios(input)
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
 
@@ -172,8 +183,8 @@ export async function criarVenda(input: VendaInput) {
     .from('pedidos')
     .insert({
       codigo,
-      cliente_id: input.cliente_id || null,
-      vendedor_id: input.vendedor_id || null,
+      cliente_id: input.cliente_id!.trim(),
+      vendedor_id: input.vendedor_id!.trim(),
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
       status: statusInsert,
@@ -216,6 +227,8 @@ export async function criarVenda(input: VendaInput) {
 export async function atualizarVenda(id: string, input: VendaInput) {
   await assertPermissao('vendas', 'editar')
   const supabase = await createClient()
+
+  assertClienteEVendedorObrigatorios(input)
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
 
@@ -289,8 +302,8 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   const { error } = await supabase
     .from('pedidos')
     .update({
-      cliente_id: input.cliente_id || null,
-      vendedor_id: input.vendedor_id || null,
+      cliente_id: input.cliente_id!.trim(),
+      vendedor_id: input.vendedor_id!.trim(),
       data_pedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
       status: statusUpdate,
