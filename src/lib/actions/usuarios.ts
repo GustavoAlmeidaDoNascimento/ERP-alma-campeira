@@ -10,6 +10,7 @@ import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 
 export async function getUsuariosPerfisList(): Promise<{ id: string; nome: string }[]> {
+  await assertPermissao('usuarios', 'ver')
   await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data } = await supabase
@@ -59,11 +60,13 @@ const getUsuariosCached = unstable_cache(
 )
 
 export async function getUsuarios(limit = 100): Promise<Usuario[]> {
+  await assertPermissao('usuarios', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getUsuariosCached(userId, limit))
 }
 
 export async function getPermissoesUsuario(userId: string): Promise<PermMap | null> {
+  await assertPermissao('usuarios', 'ver')
   const supabase = await createClient()
   const { data } = await supabase
     .from('usuario_permissoes')

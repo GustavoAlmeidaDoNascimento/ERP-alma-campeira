@@ -26,6 +26,7 @@ const getMateriasPrimasCached = unstable_cache(
 )
 
 export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
+  await assertPermissao('materias_primas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getMateriasPrimasCached(userId, limit))
 }
@@ -294,6 +295,7 @@ const getMPDetalheCached = unstable_cache(
 )
 
 export async function getMPDetalhe(mpId: string): Promise<MPDetalheData> {
+  await assertPermissao('materias_primas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getMPDetalheCached(userId, mpId))
 }

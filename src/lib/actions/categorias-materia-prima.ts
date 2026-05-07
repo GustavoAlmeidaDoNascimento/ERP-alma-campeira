@@ -28,6 +28,7 @@ const getCategoriasMateriaPrimaCached = unstable_cache(
 )
 
 export async function getCategoriasMateriaPrima(): Promise<CategoriaMateriaPrimaDB[]> {
+  await assertPermissao('materias_primas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getCategoriasMateriaPrimaCached(userId))
 }

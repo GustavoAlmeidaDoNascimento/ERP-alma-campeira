@@ -25,6 +25,7 @@ const getConsumiveisCached = unstable_cache(
 )
 
 export async function getConsumiveis(limit = 120): Promise<Consumivel[]> {
+  await assertPermissao('consumiveis', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getConsumiveisCached(userId, limit))
 }

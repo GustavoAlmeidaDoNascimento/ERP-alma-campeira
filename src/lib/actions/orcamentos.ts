@@ -28,11 +28,13 @@ const getOrcamentosCached = unstable_cache(
 )
 
 export async function getOrcamentos(limit = 80): Promise<Orcamento[]> {
+  await assertPermissao('orcamentos', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getOrcamentosCached(userId, limit))
 }
 
 export async function getOrcamentoDetalhe(id: string): Promise<Orcamento> {
+  await assertPermissao('orcamentos', 'ver')
   await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase

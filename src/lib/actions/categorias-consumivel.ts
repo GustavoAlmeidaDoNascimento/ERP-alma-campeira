@@ -28,6 +28,7 @@ const getCategoriasConsumivelCached = unstable_cache(
 )
 
 export async function getCategoriasConsumivel(): Promise<CategoriaConsumivelDB[]> {
+  await assertPermissao('consumiveis', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getCategoriasConsumivelCached(userId))
 }

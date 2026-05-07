@@ -26,6 +26,7 @@ export type EmpresaInput = {
 }
 
 export async function getEmpresa(): Promise<Empresa | null> {
+  await assertPermissao('taxas_lucro', 'ver')
   await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase

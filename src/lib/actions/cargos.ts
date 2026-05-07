@@ -23,6 +23,7 @@ const getCargosCached = unstable_cache(
 )
 
 export async function getCargos(limit = 50): Promise<Cargo[]> {
+  await assertPermissao('cargos', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getCargosCached(userId, limit))
 }

@@ -23,6 +23,7 @@ const getClientesCached = unstable_cache(
 )
 
 export async function getClientes(limit = 50): Promise<Cliente[]> {
+  await assertPermissao('clientes', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getClientesCached(userId, limit))
 }

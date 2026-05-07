@@ -23,6 +23,7 @@ const getFornecedoresCached = unstable_cache(
 )
 
 export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
+  await assertPermissao('fornecedores', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getFornecedoresCached(userId, limit))
 }
@@ -32,6 +33,7 @@ export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
  * Use em fluxos que precisam refletir cadastro recente imediatamente.
  */
 export async function getFornecedoresSemCache(limit = 50): Promise<Fornecedor[]> {
+  await assertPermissao('fornecedores', 'ver')
   await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase

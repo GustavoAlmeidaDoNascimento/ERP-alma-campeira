@@ -26,6 +26,7 @@ const getFacasCached = unstable_cache(
 )
 
 export async function getFacas(limit = 80): Promise<Faca[]> {
+  await assertPermissao('facas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getFacasCached(userId, limit))
 }
@@ -402,6 +403,7 @@ export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar
 // ============================================================
 
 export async function getFacaBOM(facaId: string): Promise<FacaMateriaPrima[]> {
+  await assertPermissao('facas', 'ver')
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('faca_materias_primas')
@@ -475,6 +477,7 @@ const getFacaDetalheCached = unstable_cache(
 )
 
 export async function getFacaDetalhe(facaId: string): Promise<FacaDetalheData> {
+  await assertPermissao('facas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getFacaDetalheCached(userId, facaId))
 }

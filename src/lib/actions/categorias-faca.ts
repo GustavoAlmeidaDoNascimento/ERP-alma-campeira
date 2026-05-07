@@ -20,6 +20,7 @@ const getCategoriasFacaCached = unstable_cache(
 )
 
 export async function getCategoriasFaca(): Promise<CategoriaFacaDB[]> {
+  await assertPermissao('facas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getCategoriasFacaCached(userId))
 }

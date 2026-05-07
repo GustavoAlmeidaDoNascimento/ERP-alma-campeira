@@ -40,11 +40,13 @@ const getVendasCached = unstable_cache(
 )
 
 export async function getVendas(limit = 80): Promise<Pedido[]> {
+  await assertPermissao('vendas', 'ver')
   const userId = await requireAuthenticatedUserId()
   return withSupabaseCookieContext(() => getVendasCached(userId, limit))
 }
 
 export async function getVendaDetalhe(id: string): Promise<Pedido> {
+  await assertPermissao('vendas', 'ver')
   await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase

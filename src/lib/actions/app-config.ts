@@ -28,6 +28,7 @@ function isAppConfigUnavailable(error: { message?: string }): boolean {
 }
 
 export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
+  await assertPermissao('taxas_lucro', 'ver')
   await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase
