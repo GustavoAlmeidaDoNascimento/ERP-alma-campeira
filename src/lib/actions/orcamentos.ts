@@ -225,6 +225,12 @@ export async function transformarOrcamentoEmVenda(
 
   const itens = (orc.itens ?? []) as { faca_id: string; quantidade: number; preco_unitario: number }[]
   if (itens.length === 0) throw new Error('Orçamento sem itens não pode virar venda.')
+  if (!orc.cliente_id?.trim()) {
+    throw new Error('O orçamento precisa ter um cliente cadastrado para virar venda.')
+  }
+  if (!orc.vendedor_id?.trim()) {
+    throw new Error('O orçamento precisa ter um vendedor cadastrado para virar venda.')
+  }
 
   // Validação de estoque para o status pretendido — só faz sentido em em_producao,
   // mas em_espera também não consome; mantemos a validação leve apenas se houver
