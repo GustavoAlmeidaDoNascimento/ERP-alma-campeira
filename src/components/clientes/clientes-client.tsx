@@ -8,6 +8,7 @@ import { deletarCliente } from '@/lib/actions/clientes'
 import type { Cliente } from '@/types'
 import { apenasDigitos, formatarDocumento } from '@/lib/br/documento'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useClientes } from '@/lib/query/hooks'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -17,8 +18,9 @@ const TIPO_STYLE: Record<string, React.CSSProperties> = {
   'Pessoa Física':{ color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb' },
 }
 
-export function ClientesClient({ clientes, perm }: { clientes: Cliente[]; perm: Perm }) {
+export function ClientesClient({ clientes: initialClientes, perm }: { clientes: Cliente[]; perm: Perm }) {
   const { refreshActiveTab, refreshTab } = useErpTabs()
+  const { data: clientes = initialClientes } = useClientes({ initialData: initialClientes })
   const [modalAberto, setModalAberto] = useState(false)
   const [detalheAberto, setDetalheAberto] = useState<Cliente | null>(null)
   const [editando, setEditando] = useState<Cliente | null>(null)
