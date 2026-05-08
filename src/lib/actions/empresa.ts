@@ -1,8 +1,7 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { assertPermissao } from '@/lib/auth'
 import type { Empresa } from '@/types'
 import { apenasDigitos, validarCnpj } from '@/lib/br/documento'
 
@@ -27,7 +26,6 @@ export type EmpresaInput = {
 
 export async function getEmpresa(): Promise<Empresa | null> {
   await assertPermissao('taxas_lucro', 'ver')
-  await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('empresa')
@@ -103,6 +101,4 @@ export async function salvarEmpresa(input: EmpresaInput): Promise<void> {
     const { error } = await supabase.from('empresa').insert(row)
     if (error) throw new Error(error.message)
   }
-
-  revalidatePath('/configuracoes')
 }
