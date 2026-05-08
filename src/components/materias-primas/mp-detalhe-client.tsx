@@ -11,6 +11,7 @@ import { statusEstoque } from '@/types'
 import type { MPDetalheData, MPEditModalData } from '@/lib/actions/materias-primas'
 import type { MovimentacaoEstoque } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useMPDetalhe } from '@/lib/query/hooks'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
 
@@ -30,7 +31,8 @@ const tipoMovLabel: Record<string, { label: string; color: string; bg: string }>
   ajuste:       { label: 'Ajuste',    color: '#6b7280', bg: '#f3f4f6' },
 }
 
-export function MPDetalheClient({ detalhe, perm, permEditarMov = false, permVerMov = false }: Props) {
+export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov = false, permVerMov = false }: Props) {
+  const { data: detalhe = initialDetalhe } = useMPDetalhe(initialDetalhe.mp.id, { initialData: initialDetalhe })
   const { mp, facasQueUsam, movimentacoes, usuariosRegistro } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 

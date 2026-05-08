@@ -8,11 +8,13 @@ import { deletarFornecedor } from '@/lib/actions/fornecedores'
 import type { Fornecedor } from '@/types'
 import { apenasDigitos, formatarDocumento } from '@/lib/br/documento'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useFornecedores } from '@/lib/query/hooks'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
-export function FornecedoresClient({ fornecedores, perm }: { fornecedores: Fornecedor[]; perm: Perm }) {
+export function FornecedoresClient({ fornecedores: initialFornecedores, perm }: { fornecedores: Fornecedor[]; perm: Perm }) {
   const { refreshActiveTab } = useErpTabs()
+  const { data: fornecedores = initialFornecedores } = useFornecedores({ initialData: initialFornecedores })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Fornecedor | null>(null)
   const [deletando, setDeletando] = useState<Fornecedor | null>(null)

@@ -7,6 +7,7 @@ import { OrcamentoFormModal } from './orcamento-form-modal'
 import { OrcamentoDetalheModal } from './orcamento-detalhe-modal'
 import { getOrcamentoDetalhe, getOrcamentos } from '@/lib/actions/orcamentos'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useOrcamentos } from '@/lib/query/hooks'
 import type { Orcamento, Cliente, Faca } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -65,6 +66,10 @@ export function OrcamentosClient({
   const isOrcamentosRoute = pathname === '/orcamentos'
 
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>(orcamentosIniciais)
+  const { data: orcamentosHook } = useOrcamentos({ initialData: orcamentosIniciais })
+  useEffect(() => {
+    if (orcamentosHook) setOrcamentos(orcamentosHook)
+  }, [orcamentosHook])
   const { refreshActiveTab, refreshTab } = useErpTabs()
   const [formAberto, setFormAberto] = useState(false)
   const [editando, setEditando] = useState<Orcamento | null>(null)

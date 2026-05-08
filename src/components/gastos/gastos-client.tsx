@@ -9,6 +9,7 @@ import { deletarGasto } from '@/lib/actions/gastos'
 import { TIPOS_GASTO, FORMAS_PAGAMENTO } from '@/types'
 import type { Gasto, TipoGasto, FormaPagamento } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useGastos } from '@/lib/query/hooks'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -37,7 +38,7 @@ const selectChevron = {
 }
 
 export function GastosClient({
-  gastos,
+  gastos: initialGastos,
   usuarios,
   usuarioLogadoId,
   perm,
@@ -48,6 +49,7 @@ export function GastosClient({
   perm: Perm
 }) {
   const { refreshActiveTab } = useErpTabs()
+  const { data: gastos = initialGastos } = useGastos({ initialData: initialGastos })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Gasto | null>(null)
   const [deletando, setDeletando] = useState<Gasto | null>(null)

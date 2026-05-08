@@ -3,18 +3,21 @@
 /**
  * Shim de compatibilidade do antigo sistema de abas customizado.
  *
- * O motor real foi removido — agora a navegação usa o router nativo do Next.js.
+ * O motor real foi removido — agora a navegação usa o router nativo do Next.js
+ * e os dados vivem no cache do TanStack Query (com Realtime invalidando entre
+ * abas/sessões automaticamente).
+ *
  * Este arquivo mantém a API pública (`useErpTabs`, `ErpTabsProvider`, `ErpTabs`)
  * para os ~19 componentes que ainda chamam `refreshActiveTab()` / `openTab()`,
  * sem precisar refatorar todos de uma vez.
  *
  * - `openTab(href)` → `router.push(href)`
- * - `refreshActiveTab()` / `refreshTab()` → `router.refresh()`
+ * - `refreshActiveTab()` / `refreshTab()` → invalida TODAS as queries
+ *   (forçando refetch imediato após mutações locais) + `router.refresh()`
  * - `activeHref` → `usePathname()`
- * - `openTabs` → array de 1 elemento com a rota atual (preserva checks de length>0)
- * - `closeTab` / `reorderTabs` / `updateTabLabel` → no-ops
  */
 
+import { useQueryClient } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 
@@ -44,6 +47,7 @@ export function useErpTabs(): ErpTabsContextValue {
 export function ErpTabsProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname() || '/'
+  const queryClient = useQueryClient()
 
   const openTab = useCallback(
     (href: string) => {
@@ -52,15 +56,23 @@ export function ErpTabsProvider({ children }: { children: ReactNode }) {
     [router],
   )
 
+  /**
+   * Após mutação local, invalida tudo (refetch imediato) e dá um `router.refresh()`
+   * para revalidar o RSC. O Realtime do Supabase também vai disparar invalidações
+   * em outras abas — isto aqui é só para a aba que originou a mutação responder
+   * sem esperar o WebSocket.
+   */
   const refreshActiveTab = useCallback(() => {
+    queryClient.invalidateQueries()
     router.refresh()
-  }, [router])
+  }, [router, queryClient])
 
   const refreshTab = useCallback(
     (_href: string) => {
+      queryClient.invalidateQueries()
       router.refresh()
     },
-    [router],
+    [router, queryClient],
   )
 
   const noop = useCallback(() => {}, [])

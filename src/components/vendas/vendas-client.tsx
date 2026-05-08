@@ -10,6 +10,7 @@ import { deletarVenda, getVendaDetalhe, getVendas } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useVendas } from '@/lib/query/hooks'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -89,10 +90,14 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
     })
   }
 
-  // Sincroniza quando TabPane re-busca dados (ex: ao reabrir a aba)
+  // Sincroniza com props (SSR) e com o cache do TanStack Query (Realtime).
   useEffect(() => {
     setPedidos(pedidosIniciais)
   }, [pedidosIniciais])
+  const { data: vendasHook } = useVendas({ initialData: pedidosIniciais })
+  useEffect(() => {
+    if (vendasHook) setPedidos(vendasHook)
+  }, [vendasHook])
 
   useEffect(() => {
     if (!isVendasRoute) return

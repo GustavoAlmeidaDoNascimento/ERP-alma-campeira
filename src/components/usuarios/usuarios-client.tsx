@@ -7,6 +7,7 @@ import { UsuarioModal } from './usuario-modal'
 import { deletarUsuario } from '@/lib/actions/usuarios'
 import type { Usuario, Cargo } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useUsuarios, useCargos } from '@/lib/query/hooks'
 
 // Badge de cargo ou "Personalizado"
 function CargoBadge({ usuario }: { usuario: Usuario }) {
@@ -52,8 +53,10 @@ type Props = {
   perm: Perm
 }
 
-export function UsuariosClient({ usuarios, cargos, perm }: Props) {
+export function UsuariosClient({ usuarios: initialUsuarios, cargos: initialCargos, perm }: Props) {
   const { refreshActiveTab } = useErpTabs()
+  const { data: usuarios = initialUsuarios } = useUsuarios({ initialData: initialUsuarios })
+  const { data: cargos = initialCargos } = useCargos({ initialData: initialCargos })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Usuario | null>(null)
   const [deletando, setDeletando] = useState<Usuario | null>(null)

@@ -9,6 +9,7 @@ import { deletarMateriaPrima } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
 import type { MateriaPrima, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useMateriasPrimas, useFornecedores, useCategoriasMateriaPrima } from '@/lib/query/hooks'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -20,8 +21,18 @@ type Props = {
   perm: Perm
 }
 
-export function MPClient({ materiasPrimas, fornecedores, categoriasMateriaPrima, perm }: Props) {
+export function MPClient({
+  materiasPrimas: initialMP,
+  fornecedores: initialFornecedores,
+  categoriasMateriaPrima: initialCategorias,
+  perm,
+}: Props) {
   const { refreshActiveTab, openTab } = useErpTabs()
+  const { data: materiasPrimas = initialMP } = useMateriasPrimas({ initialData: initialMP })
+  const { data: fornecedores = initialFornecedores } = useFornecedores({ initialData: initialFornecedores })
+  const { data: categoriasMateriaPrima = initialCategorias } = useCategoriasMateriaPrima({
+    initialData: initialCategorias,
+  })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<MateriaPrima | null>(null)
   const [deletando, setDeletando] = useState<MateriaPrima | null>(null)

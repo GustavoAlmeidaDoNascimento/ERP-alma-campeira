@@ -10,6 +10,7 @@ import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { statusEstoqueFaca, type Faca, type CategoriaFacaDB, type MateriaPrima, type StatusEstoque } from '@/types'
 import { lucroUnitarioFaca } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useFacas, useCategoriasFaca, useMateriasPrimas } from '@/lib/query/hooks'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -37,8 +38,19 @@ type Props = {
   taxasLucro: TaxasLucro
 }
 
-export function FacasClient({ facas, categorias, materiasPrimas, perm, verPrecoVenda, verLucro, taxasLucro }: Props) {
+export function FacasClient({
+  facas: initialFacas,
+  categorias: initialCategorias,
+  materiasPrimas: initialMP,
+  perm,
+  verPrecoVenda,
+  verLucro,
+  taxasLucro,
+}: Props) {
   const { refreshActiveTab, openTab } = useErpTabs()
+  const { data: facas = initialFacas } = useFacas({ initialData: initialFacas })
+  const { data: categorias = initialCategorias } = useCategoriasFaca({ initialData: initialCategorias })
+  const { data: materiasPrimas = initialMP } = useMateriasPrimas({ initialData: initialMP })
   const badgeCategoria = useMemo(() => {
     const map: Record<string, React.CSSProperties> = {}
     for (const cat of categorias) {
