@@ -10,11 +10,13 @@ import { permissoesFromArray } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 import type { Cargo } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useCargos } from '@/lib/query/hooks'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
-export function CargosClient({ cargos, perm }: { cargos: Cargo[]; perm: Perm }) {
+export function CargosClient({ cargos: initialCargos, perm }: { cargos: Cargo[]; perm: Perm }) {
   const { refreshActiveTab } = useErpTabs()
+  const { data: cargos = initialCargos } = useCargos({ initialData: initialCargos })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Cargo | null>(null)
   const [visualizando, setVisualizando] = useState<Cargo | null>(null)
