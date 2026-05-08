@@ -5,8 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { OrcamentoFormModal } from './orcamento-form-modal'
 import { OrcamentoDetalheModal } from './orcamento-detalhe-modal'
-import { getOrcamentoDetalhe } from '@/lib/actions/orcamentos'
-import { getErpTabData } from '@/lib/actions/erp-tab-data'
+import { getOrcamentoDetalhe, getOrcamentos } from '@/lib/actions/orcamentos'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import type { Orcamento, Cliente, Faca } from '@/types'
 
@@ -207,8 +206,8 @@ export function OrcamentosClient({
 
   async function handleSaved() {
     try {
-      const fresh = await getErpTabData('/orcamentos')
-      if (fresh.kind === 'orcamentos') setOrcamentos(fresh.orcamentos)
+      const fresh = await getOrcamentos()
+      setOrcamentos(fresh)
     } catch {
       // mantém otimismo
     } finally {
@@ -219,8 +218,8 @@ export function OrcamentosClient({
   async function handleConvertido() {
     // Atualiza orçamentos (campo convertido_pedido_id) e a aba de vendas (novo pedido).
     try {
-      const fresh = await getErpTabData('/orcamentos')
-      if (fresh.kind === 'orcamentos') setOrcamentos(fresh.orcamentos)
+      const fresh = await getOrcamentos()
+      setOrcamentos(fresh)
     } catch {
       // ignora
     } finally {
