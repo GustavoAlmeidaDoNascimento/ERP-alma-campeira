@@ -1,31 +1,20 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { assertPermissao } from '@/lib/auth'
 import type { Cliente, TipoDocumento } from '@/types'
 import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
 
-const getClientesCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Cliente[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('clientes')
-      .select('*')
-      .order('nome')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return data as Cliente[]
-  },
-  ['clientes-list'],
-  { revalidate: 60, tags: ['clientes-list'] }
-)
-
 export async function getClientes(limit = 50): Promise<Cliente[]> {
   await assertPermissao('clientes', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getClientesCached(userId, limit))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('*')
+    .order('nome')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data as Cliente[]
 }
 
 type ClienteInput = {
@@ -99,8 +88,6 @@ export async function criarCliente(input: ClienteInput) {
   const row = normalizarClientePayload(input)
   const { error } = await supabase.from('clientes').insert(row)
   if (error) throw new Error(error.message)
-  revalidatePath('/clientes')
-  revalidateTag('clientes-list', 'max')
 }
 
 export async function atualizarCliente(id: string, input: ClienteInput) {
@@ -109,10 +96,6 @@ export async function atualizarCliente(id: string, input: ClienteInput) {
   const row = normalizarClientePayload(input)
   const { error } = await supabase.from('clientes').update(row).eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/clientes')
-  revalidatePath('/vendas')
-  revalidateTag('clientes-list', 'max')
-  revalidateTag('vendas-list', 'max')
 }
 
 export async function deletarCliente(id: string) {
@@ -131,7 +114,4 @@ export async function deletarCliente(id: string) {
 
   const { error } = await supabase.from('clientes').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/clientes')
-  revalidateTag('clientes-list', 'max')
-  revalidateTag('vendas-list', 'max')
 }
