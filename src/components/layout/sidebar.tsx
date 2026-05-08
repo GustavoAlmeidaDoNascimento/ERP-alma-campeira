@@ -1,9 +1,10 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { sections } from '@/components/layout/erp-navigation'
-import { useErpTabs } from '@/components/layout/erp-tabs'
 import { getMinhasPermissoesVer } from '@/lib/actions/permissoes-client'
 
 const iconGear = (
@@ -21,7 +22,7 @@ function getInitials(email: string) {
 }
 
 export function Sidebar() {
-  const { openTab, activeHref, openTabs } = useErpTabs()
+  const pathname = usePathname() || '/'
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [permVer, setPermVer] = useState<Record<string, boolean> | null>(null)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
@@ -40,12 +41,13 @@ export function Sidebar() {
   }, [])
 
   function isItemVisible(moduloKey?: string): boolean {
-    // Sem mapeamento de módulo = sempre visível (ex: configurações, dashboard)
     if (!moduloKey) return true
-    // Enquanto carrega as permissões, mostra tudo para evitar flash
     if (permVer === null) return true
     return permVer[moduloKey] === true
   }
+
+  const isActiveHref = (href: string) =>
+    pathname === href || pathname.startsWith(href + '/')
 
   return (
     <aside
@@ -79,7 +81,6 @@ export function Sidebar() {
           if (visibleItems.length === 0) return null
           return (
             <div key={section.label} className="mb-1">
-              {/* Label da seção */}
               <button
                 type="button"
                 onClick={() => {
@@ -107,40 +108,35 @@ export function Sidebar() {
                   <path d="m6 9 6 6 6-6" />
                 </svg>
               </button>
-              {/* Itens */}
               {expandedSections[section.label] && visibleItems.map((item) => {
-                const isActive =
-                  openTabs.length > 0 &&
-                  (activeHref === item.href || activeHref.startsWith(item.href + '/'))
+                const isActive = isActiveHref(item.href)
+                if (!item.available) {
+                  return (
+                    <span
+                      key={item.href}
+                      className="flex w-[calc(100%-1rem)] items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm opacity-35 cursor-not-allowed"
+                      style={{ color: 'var(--ac-muted)' }}
+                    >
+                      <span>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </span>
+                  )
+                }
                 return (
-                  <button
+                  <Link
                     key={item.href}
-                    type="button"
-                    onClick={() => {
-                      if (!item.available) return
-                      openTab(item.href)
-                    }}
+                    href={item.href}
+                    prefetch
                     className={[
                       'flex w-[calc(100%-1rem)] items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors',
-                      item.available && !isActive
-                        ? 'hover:bg-[color-mix(in_srgb,var(--ac-accent)_8%,transparent)]'
-                        : '',
-                      isActive
-                        ? 'bg-[color-mix(in_srgb,var(--ac-accent)_10%,transparent)]'
-                        : '',
-                      isActive
-                        ? 'font-semibold'
-                        : item.available
-                        ? 'font-normal'
-                        : 'opacity-35 cursor-not-allowed pointer-events-none',
+                      !isActive ? 'hover:bg-[color-mix(in_srgb,var(--ac-accent)_8%,transparent)]' : '',
+                      isActive ? 'bg-[color-mix(in_srgb,var(--ac-accent)_10%,transparent)] font-semibold' : 'font-normal',
                     ].join(' ')}
-                    style={{
-                      color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)',
-                    }}
+                    style={{ color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)' }}
                   >
                     <span style={{ color: isActive ? 'var(--ac-accent)' : 'var(--ac-muted)' }}>{item.icon}</span>
                     <span>{item.label}</span>
-                  </button>
+                  </Link>
                 )
               })}
             </div>
@@ -151,7 +147,6 @@ export function Sidebar() {
       {/* Rodapé — usuário logado */}
       <div className="px-3 py-3" style={{ borderTop: '1px solid var(--ac-border)' }}>
         <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg" style={{ background: 'color-mix(in srgb, var(--ac-muted) 8%, transparent)' }}>
-          {/* Avatar com iniciais */}
           <div
             className="size-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
             style={{ background: 'var(--ac-accent)', color: '#111827' }}
@@ -159,7 +154,6 @@ export function Sidebar() {
             {userEmail ? getInitials(userEmail) : '…'}
           </div>
 
-          {/* E-mail truncado */}
           <span
             className="flex-1 text-xs truncate"
             style={{ color: 'var(--ac-muted)' }}
@@ -168,21 +162,20 @@ export function Sidebar() {
             {userEmail ?? 'Carregando...'}
           </span>
 
-          {/* Engrenagem → configurações */}
-          <button
-            type="button"
+          <Link
+            href="/configuracoes"
+            prefetch
             className="flex-shrink-0 p-1 rounded-md transition-colors hover:opacity-80"
             style={{
-              color: activeHref.startsWith('/configuracoes') ? 'var(--ac-accent)' : 'var(--ac-muted)',
-              background: activeHref.startsWith('/configuracoes')
+              color: pathname.startsWith('/configuracoes') ? 'var(--ac-accent)' : 'var(--ac-muted)',
+              background: pathname.startsWith('/configuracoes')
                 ? 'color-mix(in srgb, var(--ac-accent) 12%, transparent)'
                 : 'transparent',
             }}
             title="Configurações"
-            onClick={() => openTab('/configuracoes')}
           >
             {iconGear}
-          </button>
+          </Link>
         </div>
       </div>
     </aside>
