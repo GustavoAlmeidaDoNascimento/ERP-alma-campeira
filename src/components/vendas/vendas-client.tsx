@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { VendaFormModal } from './venda-form-modal'
 import { VendaDetalheModal } from './venda-detalhe-modal'
-import { deletarVenda, getVendaDetalhe } from '@/lib/actions/vendas'
-import { getErpTabData } from '@/lib/actions/erp-tab-data'
+import { deletarVenda, getVendaDetalhe, getVendas } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
@@ -138,8 +137,8 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
     )
     // 2. Re-fetch em background para garantir dados frescos do servidor
     try {
-      const fresh = await getErpTabData('/vendas')
-      if (fresh.kind === 'vendas') setPedidos(fresh.pedidos)
+      const fresh = await getVendas()
+      setPedidos(fresh)
     } catch {
       // Optimistic update continua válido se falhar
     }
@@ -239,8 +238,8 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
   async function handleVendaSaved() {
     // Atualiza imediatamente a tabela local para refletir a venda recém-criada/editada.
     try {
-      const fresh = await getErpTabData('/vendas')
-      if (fresh.kind === 'vendas') setPedidos(fresh.pedidos)
+      const fresh = await getVendas()
+      setPedidos(fresh)
     } catch {
       // Se falhar, ainda dispara refresh da aba ativa como fallback.
     } finally {
