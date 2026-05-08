@@ -1,28 +1,18 @@
 'use server'
 
-import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { assertPermissao } from '@/lib/auth'
 import type { CategoriaFacaDB } from '@/types'
-
-const getCategoriasFacaCached = unstable_cache(
-  async (_userId: string): Promise<CategoriaFacaDB[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('categorias_faca')
-      .select('*')
-      .order('ordem')
-    if (error) throw new Error(error.message)
-    return data as CategoriaFacaDB[]
-  },
-  ['categorias-faca-list'],
-  { revalidate: 60, tags: ['categorias-faca-list'] }
-)
 
 export async function getCategoriasFaca(): Promise<CategoriaFacaDB[]> {
   await assertPermissao('facas', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getCategoriasFacaCached(userId))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('categorias_faca')
+    .select('*')
+    .order('ordem')
+  if (error) throw new Error(error.message)
+  return data as CategoriaFacaDB[]
 }
 
 type CategoriaInput = {
@@ -53,9 +43,6 @@ export async function criarCategoriaFaca(input: CategoriaInput) {
     ordem,
   })
   if (error) throw new Error(error.message)
-  revalidatePath('/configuracoes')
-  revalidatePath('/facas')
-  revalidateTag('categorias-faca-list', 'max')
 }
 
 export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) {
@@ -72,9 +59,6 @@ export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) 
     })
     .eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/configuracoes')
-  revalidatePath('/facas')
-  revalidateTag('categorias-faca-list', 'max')
 }
 
 export async function deletarCategoriaFaca(id: string) {
@@ -82,7 +66,4 @@ export async function deletarCategoriaFaca(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('categorias_faca').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/configuracoes')
-  revalidatePath('/facas')
-  revalidateTag('categorias-faca-list', 'max')
 }
