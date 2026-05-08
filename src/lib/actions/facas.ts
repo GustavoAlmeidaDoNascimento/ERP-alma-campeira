@@ -1,34 +1,23 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { assertPermissao } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 
-const getFacasCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Faca[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('facas')
-      .select('*')
-      .order('codigo')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    const facas = data as Faca[]
-    const custoByFaca = await calcularPrecoCustoPorFaca(supabase, facas)
-    return facas.map((f) => ({ ...f, preco_custo: custoByFaca.get(f.id) ?? 0 }))
-  },
-  ['facas-list'],
-  { revalidate: 60, tags: ['facas-list'] }
-)
-
 export async function getFacas(limit = 80): Promise<Faca[]> {
   await assertPermissao('facas', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getFacasCached(userId, limit))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('facas')
+    .select('*')
+    .order('codigo')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  const facas = data as Faca[]
+  const custoByFaca = await calcularPrecoCustoPorFaca(supabase, facas)
+  return facas.map((f) => ({ ...f, preco_custo: custoByFaca.get(f.id) ?? 0 }))
 }
 
 export async function gerarCodigoFaca(): Promise<string> {
@@ -421,65 +410,56 @@ export type FacaDetalheData = {
   movimentacoes: MovimentacaoEstoque[]
 }
 
-const getFacaDetalheCached = unstable_cache(
-  async (_userId: string, facaId: string): Promise<FacaDetalheData> => {
-    const supabase = await createClient()
-    const admin = createAdminClient()
-
-    const [facaRes, bomRes, vendasRes, movRes, usuariosRes] = await Promise.all([
-      supabase.from('facas').select('*').eq('id', facaId).single(),
-      supabase
-        .from('faca_materias_primas')
-        .select('*, materia_prima:materias_primas(id, codigo, nome, preco_custo, estoque_atual, estoque_minimo, foto_url, fornecedor_id, created_at)')
-        .eq('faca_id', facaId)
-        .order('id'),
-      supabase
-        .from('pedido_itens')
-        .select('*, pedido:pedidos(id, codigo, status, data_pedido)')
-        .eq('faca_id', facaId)
-        .order('id', { ascending: false })
-        .limit(50),
-      // Não usa join para usuario_id -> usuarios_perfis para evitar falha quando
-      // a FK não estiver declarada no banco; enriquecemos manualmente abaixo.
-      admin
-        .from('movimentacoes_estoque')
-        .select('*, materia_prima:materias_primas(id, codigo, nome)')
-        .eq('faca_id', facaId)
-        .is('materia_prima_id', null)
-        .order('created_at', { ascending: false })
-        .limit(50),
-      supabase
-        .from('usuarios_perfis')
-        .select('id, nome')
-        .eq('ativo', true)
-        .order('nome'),
-    ])
-
-    if (facaRes.error) throw new Error(facaRes.error.message)
-    if (!facaRes.data) throw new Error('Faca não encontrada.')
-    if (movRes.error) throw new Error(`Erro ao buscar movimentações da faca: ${movRes.error.message}`)
-
-    const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }]))
-    const movimentacoes = (movRes.data ?? []).map((mov) => ({
-      ...mov,
-      usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
-    })) as MovimentacaoEstoque[]
-
-    return {
-      faca: facaRes.data as Faca,
-      bom: (bomRes.data ?? []) as FacaMateriaPrima[],
-      vendas: (vendasRes.data ?? []) as PedidoItemComPedido[],
-      movimentacoes,
-    }
-  },
-  ['faca-detalhe'],
-  { revalidate: 30, tags: ['faca-detalhe'] }
-)
-
 export async function getFacaDetalhe(facaId: string): Promise<FacaDetalheData> {
   await assertPermissao('facas', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getFacaDetalheCached(userId, facaId))
+  const supabase = await createClient()
+  const admin = createAdminClient()
+
+  const [facaRes, bomRes, vendasRes, movRes, usuariosRes] = await Promise.all([
+    supabase.from('facas').select('*').eq('id', facaId).single(),
+    supabase
+      .from('faca_materias_primas')
+      .select('*, materia_prima:materias_primas(id, codigo, nome, preco_custo, estoque_atual, estoque_minimo, foto_url, fornecedor_id, created_at)')
+      .eq('faca_id', facaId)
+      .order('id'),
+    supabase
+      .from('pedido_itens')
+      .select('*, pedido:pedidos(id, codigo, status, data_pedido)')
+      .eq('faca_id', facaId)
+      .order('id', { ascending: false })
+      .limit(50),
+    // Não usa join para usuario_id -> usuarios_perfis para evitar falha quando
+    // a FK não estiver declarada no banco; enriquecemos manualmente abaixo.
+    admin
+      .from('movimentacoes_estoque')
+      .select('*, materia_prima:materias_primas(id, codigo, nome)')
+      .eq('faca_id', facaId)
+      .is('materia_prima_id', null)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('usuarios_perfis')
+      .select('id, nome')
+      .eq('ativo', true)
+      .order('nome'),
+  ])
+
+  if (facaRes.error) throw new Error(facaRes.error.message)
+  if (!facaRes.data) throw new Error('Faca não encontrada.')
+  if (movRes.error) throw new Error(`Erro ao buscar movimentações da faca: ${movRes.error.message}`)
+
+  const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }]))
+  const movimentacoes = (movRes.data ?? []).map((mov) => ({
+    ...mov,
+    usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
+  })) as MovimentacaoEstoque[]
+
+  return {
+    faca: facaRes.data as Faca,
+    bom: (bomRes.data ?? []) as FacaMateriaPrima[],
+    vendas: (vendasRes.data ?? []) as PedidoItemComPedido[],
+    movimentacoes,
+  }
 }
 
 async function calcularPrecoCustoPorFaca(
