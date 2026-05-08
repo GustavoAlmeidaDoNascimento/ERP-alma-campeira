@@ -26,7 +26,6 @@ create index if not exists idx_faca_mp_materia_prima_id on public.faca_materias_
 create index if not exists idx_mov_estoque_created_at on public.movimentacoes_estoque (created_at desc);
 create index if not exists idx_mov_estoque_materia_prima_id on public.movimentacoes_estoque (materia_prima_id);
 create index if not exists idx_mov_estoque_faca_id on public.movimentacoes_estoque (faca_id);
-create index if not exists idx_mov_estoque_consumivel_id on public.movimentacoes_estoque (consumivel_id);
 create index if not exists idx_mov_estoque_usuario_id on public.movimentacoes_estoque (usuario_id);
 
 -- consumiveis: listagem ordena por codigo
@@ -60,7 +59,7 @@ create index if not exists idx_orcamento_itens_faca_id on public.orcamento_itens
 
 create index if not exists idx_ordens_compra_fornecedor_id on public.ordens_compra (fornecedor_id);
 create index if not exists idx_ordens_compra_status on public.ordens_compra (status);
-create index if not exists idx_ordem_compra_itens_ordem_id on public.ordem_compra_itens (ordem_id);
+create index if not exists idx_ordem_compra_itens_ordem_compra_id on public.ordem_compra_itens (ordem_compra_id);
 create index if not exists idx_ordem_compra_itens_materia_prima_id on public.ordem_compra_itens (materia_prima_id);
 
 create index if not exists idx_fila_reposicao_status on public.fila_reposicao (status);
