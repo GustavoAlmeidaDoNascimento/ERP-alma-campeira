@@ -1,7 +1,44 @@
-/**
- * Rota necessária para o Next.js reconhecer URLs como /materias-primas/{uuid}.
- * O conteúdo é renderizado por ErpTabs (layout do ERP não usa {children}).
- */
-export default function MateriaPrimaDetalhePage() {
-  return null
+import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
+import { getMPDetalhe } from '@/lib/actions/materias-primas'
+import { getPermissoesEfetivas } from '@/lib/auth'
+import { MPDetalheClient } from '@/components/materias-primas/mp-detalhe-client'
+import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+
+type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
+
+export const metadata = { title: 'Matéria-Prima — Alma Campeira' }
+
+export default async function MateriaPrimaDetalhePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  return (
+    <>
+      <PageShellTitle title="Matéria-Prima" subtitle="Carregando detalhe..." />
+      <Suspense fallback={<PageShellFallback />}>
+        <MateriaPrimaDetalhePageData id={id} />
+      </Suspense>
+    </>
+  )
+}
+
+async function MateriaPrimaDetalhePageData({ id }: { id: string }) {
+  const perms = await getPermissoesEfetivas()
+  if (!perms.materias_primas.ver) redirect('/')
+
+  const detalhe = await getMPDetalhe(id)
+
+  const perm = perms.materias_primas as Perm
+  const permEditarMov = !!perms.movimentacoes_estoque?.editar
+  const permVerMov = !!perms.movimentacoes_estoque?.ver
+
+  return (
+    <div data-nav-content-ready="Matéria-Prima">
+      <MPDetalheClient
+        detalhe={detalhe}
+        perm={perm}
+        permEditarMov={permEditarMov}
+        permVerMov={permVerMov}
+      />
+    </div>
+  )
 }
