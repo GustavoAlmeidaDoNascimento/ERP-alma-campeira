@@ -1,4 +1,3 @@
-import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 
@@ -108,9 +107,6 @@ export async function gerarOCsDeFilaItens(
     .update({ status: 'convertida', updated_at: new Date().toISOString() })
     .eq('id', fila_id)
 
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
-  revalidateTag('ordens-compra-fila', 'max')
 
   return codigos
 }

@@ -1,41 +1,29 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 import type { Orcamento, StatusPedido } from '@/types'
 
-const getOrcamentosCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Orcamento[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('orcamentos')
-      .select(`
-        *,
-        cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
-        vendedor:usuarios_perfis(id, nome),
-        itens:orcamento_itens(*)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return data as Orcamento[]
-  },
-  ['orcamentos-list'],
-  { revalidate: 30, tags: ['orcamentos-list'] }
-)
-
 export async function getOrcamentos(limit = 80): Promise<Orcamento[]> {
   await assertPermissao('orcamentos', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getOrcamentosCached(userId, limit))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('orcamentos')
+    .select(`
+      *,
+      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
+      vendedor:usuarios_perfis(id, nome),
+      itens:orcamento_itens(*)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data as Orcamento[]
 }
 
 export async function getOrcamentoDetalhe(id: string): Promise<Orcamento> {
   await assertPermissao('orcamentos', 'ver')
-  await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('orcamentos')
@@ -130,8 +118,6 @@ export async function criarOrcamento(input: OrcamentoInput): Promise<{ id: strin
     throw e
   }
 
-  revalidatePath('/orcamentos')
-  revalidateTag('orcamentos-list', 'max')
 
   return { id: orcamento.id }
 }
@@ -177,8 +163,6 @@ export async function atualizarOrcamento(id: string, input: OrcamentoInput) {
     throw e
   }
 
-  revalidatePath('/orcamentos')
-  revalidateTag('orcamentos-list', 'max')
 }
 
 export async function deletarOrcamento(id: string) {
@@ -188,8 +172,6 @@ export async function deletarOrcamento(id: string) {
   // Em orçamentos qualquer pode ser excluído (ao contrário de pedidos, não há lock por status).
   const { error } = await supabase.from('orcamentos').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/orcamentos')
-  revalidateTag('orcamentos-list', 'max')
 }
 
 /**
@@ -298,11 +280,6 @@ export async function transformarOrcamentoEmVenda(
     throw new Error(`Falha ao marcar orçamento como convertido: ${updErr.message}`)
   }
 
-  revalidatePath('/orcamentos')
-  revalidatePath('/vendas')
-  revalidateTag('orcamentos-list', 'max')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
 
   return { pedido_id: pedido.id, pedido_codigo: pedido.codigo }
 }

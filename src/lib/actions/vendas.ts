@@ -1,8 +1,6 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
 import { analisarReposicaoParaPedido } from '@/lib/ordens-compra/analisar-reposicao'
 import type { Pedido, StatusPedido } from '@/types'
@@ -19,35 +17,25 @@ function normalizePedido(pedido: Pedido): Pedido {
   return { ...pedido, status: normalizeStatusPedido(String(pedido.status)) }
 }
 
-const getVendasCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Pedido[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select(`
-        *,
-        cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
-        vendedor:usuarios_perfis(id, nome),
-        itens:pedido_itens(*)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return (data as Pedido[]).map(normalizePedido)
-  },
-  ['vendas-list'],
-  { revalidate: 30, tags: ['vendas-list'] }
-)
-
 export async function getVendas(limit = 80): Promise<Pedido[]> {
   await assertPermissao('vendas', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getVendasCached(userId, limit))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select(`
+      *,
+      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
+      vendedor:usuarios_perfis(id, nome),
+      itens:pedido_itens(*)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return (data as Pedido[]).map(normalizePedido)
 }
 
 export async function getVendaDetalhe(id: string): Promise<Pedido> {
   await assertPermissao('vendas', 'ver')
-  await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('pedidos')
@@ -211,17 +199,8 @@ export async function criarVenda(input: VendaInput) {
   if (input.status === 'entregue') {
     const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
     await executarEntregaPedido(supabase, pedido.id, itensEntrega)
-    revalidatePath('/facas')
-    revalidatePath('/ordens-compra')
-    revalidateTag('facas-list', 'max')
-    revalidateTag('metricas-estoque', 'max')
-    revalidateTag('ordens-compra-historico', 'max')
-    revalidateTag('ordens-compra-fila', 'max')
   }
 
-  revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
 }
 
 export async function atualizarVenda(id: string, input: VendaInput) {
@@ -328,17 +307,8 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   if (input.status === 'entregue') {
     const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
     await executarEntregaPedido(supabase, id, itensEntrega)
-    revalidatePath('/facas')
-    revalidatePath('/ordens-compra')
-    revalidateTag('facas-list', 'max')
-    revalidateTag('metricas-estoque', 'max')
-    revalidateTag('ordens-compra-historico', 'max')
-    revalidateTag('ordens-compra-fila', 'max')
   }
 
-  revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
 }
 
 export async function avancarStatus(id: string, novoStatus: 'em_producao') {
@@ -351,9 +321,6 @@ export async function avancarStatus(id: string, novoStatus: 'em_producao') {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
 }
 
 async function executarEntregaPedido(
@@ -435,15 +402,6 @@ export async function marcarEntregue(id: string) {
   const itens = pedido.itens as { faca_id: string; quantidade: number }[]
   await executarEntregaPedido(supabase, id, itens)
 
-  revalidatePath('/vendas')
-  revalidatePath('/facas')
-  revalidatePath('/ordens-compra')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
-  revalidateTag('facas-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
-  revalidateTag('ordens-compra-historico', 'max')
-  revalidateTag('ordens-compra-fila', 'max')
 }
 
 export async function deletarVenda(id: string) {
@@ -462,7 +420,4 @@ export async function deletarVenda(id: string) {
 
   const { error } = await supabase.from('pedidos').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/vendas')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
 }

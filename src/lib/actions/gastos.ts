@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { FormaPagamento, Gasto, TipoGasto } from '@/types'
@@ -77,9 +76,6 @@ export async function criarGasto(input: GastoInput) {
   const row = { ...normalizarGastoPayload(input), usuario_id }
   const { error } = await supabase.from('gastos').insert(row)
   if (error) throw new Error(error.message)
-  revalidatePath('/gastos')
-  revalidateTag('gastos-list', 'max')
-  revalidateTag('metricas-financeiro', 'max')
 }
 
 export async function atualizarGasto(id: string, input: GastoInput) {
@@ -91,9 +87,6 @@ export async function atualizarGasto(id: string, input: GastoInput) {
   }
   const { error } = await supabase.from('gastos').update(row).eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/gastos')
-  revalidateTag('gastos-list', 'max')
-  revalidateTag('metricas-financeiro', 'max')
 }
 
 export async function deletarGasto(id: string) {
@@ -101,7 +94,4 @@ export async function deletarGasto(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('gastos').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/gastos')
-  revalidateTag('gastos-list', 'max')
-  revalidateTag('metricas-financeiro', 'max')
 }
