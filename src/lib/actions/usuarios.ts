@@ -1,9 +1,8 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
+import { revalidateTag } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import type { Usuario, PerfilUsuario } from '@/types'
 import type { PermMap } from '@/lib/permissoes'
@@ -11,7 +10,6 @@ import { MODULOS } from '@/types'
 
 export async function getUsuariosPerfisList(): Promise<{ id: string; nome: string }[]> {
   await assertPermissao('usuarios', 'ver')
-  await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data } = await supabase
     .from('usuarios_perfis')
@@ -21,48 +19,39 @@ export async function getUsuariosPerfisList(): Promise<{ id: string; nome: strin
   return data ?? []
 }
 
-const getUsuariosCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Usuario[]> => {
-    const supabase = await createClient()
-
-    const admin = createAdminClient()
-    const { data: authData, error: authError } = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: limit,
-    })
-    if (authError) throw new Error(authError.message)
-
-    const [{ data: perfis }, { data: userPerms }] = await Promise.all([
-      supabase.from('usuarios_perfis').select('*, cargo:cargos(id, nome, cor, permissoes:cargo_permissoes(*))'),
-      supabase.from('usuario_permissoes').select('usuario_id'),
-    ])
-
-    const perfisMap = new Map((perfis ?? []).map((p) => [p.id, p]))
-    const customIds = new Set((userPerms ?? []).map((p) => p.usuario_id))
-
-    return authData.users.map((u) => {
-      const perfil = perfisMap.get(u.id)
-      return {
-        id: u.id,
-        email: u.email ?? '',
-        nome: perfil?.nome ?? u.email?.split('@')[0] ?? '',
-        perfil: (perfil?.perfil ?? 'vendas') as PerfilUsuario,
-        ativo: perfil?.ativo ?? true,
-        cargo_id: perfil?.cargo_id ?? null,
-        cargo: perfil?.cargo ?? null,
-        permissoes_customizadas: customIds.has(u.id),
-        created_at: u.created_at,
-      }
-    }) as Usuario[]
-  },
-  ['usuarios-list'],
-  { revalidate: 60, tags: ['usuarios-list'] }
-)
-
 export async function getUsuarios(limit = 100): Promise<Usuario[]> {
   await assertPermissao('usuarios', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getUsuariosCached(userId, limit))
+  const supabase = await createClient()
+
+  const admin = createAdminClient()
+  const { data: authData, error: authError } = await admin.auth.admin.listUsers({
+    page: 1,
+    perPage: limit,
+  })
+  if (authError) throw new Error(authError.message)
+
+  const [{ data: perfis }, { data: userPerms }] = await Promise.all([
+    supabase.from('usuarios_perfis').select('*, cargo:cargos(id, nome, cor, permissoes:cargo_permissoes(*))'),
+    supabase.from('usuario_permissoes').select('usuario_id'),
+  ])
+
+  const perfisMap = new Map((perfis ?? []).map((p) => [p.id, p]))
+  const customIds = new Set((userPerms ?? []).map((p) => p.usuario_id))
+
+  return authData.users.map((u) => {
+    const perfil = perfisMap.get(u.id)
+    return {
+      id: u.id,
+      email: u.email ?? '',
+      nome: perfil?.nome ?? u.email?.split('@')[0] ?? '',
+      perfil: (perfil?.perfil ?? 'vendas') as PerfilUsuario,
+      ativo: perfil?.ativo ?? true,
+      cargo_id: perfil?.cargo_id ?? null,
+      cargo: perfil?.cargo ?? null,
+      permissoes_customizadas: customIds.has(u.id),
+      created_at: u.created_at,
+    }
+  }) as Usuario[]
 }
 
 export async function getPermissoesUsuario(userId: string): Promise<PermMap | null> {
@@ -110,8 +99,6 @@ export async function criarUsuario({
     cargo_id: cargo_id || null,
   })
   if (perfilError) throw new Error(perfilError.message)
-  revalidatePath('/usuarios')
-  revalidateTag('usuarios-list', 'max')
 }
 
 export async function atualizarPerfil(
@@ -154,8 +141,6 @@ export async function atualizarPerfil(
   // A tag específica por id não existe no unstable_cache atual; usar a tag global
   // garante que o usuário afetado vai recarregar suas permissões na próxima requisição.
   revalidateTag('user-permissions', 'max')
-  revalidatePath('/usuarios')
-  revalidateTag('usuarios-list', 'max')
 }
 
 export async function deletarUsuario(id: string) {
@@ -189,9 +174,4 @@ export async function deletarUsuario(id: string) {
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/usuarios')
-  revalidatePath('/vendas')
-  revalidateTag('usuarios-list', 'max')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
 }

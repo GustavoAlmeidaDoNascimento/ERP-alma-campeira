@@ -1,33 +1,23 @@
 'use server'
 
-import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Consumivel } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 
-const getConsumiveisCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Consumivel[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('consumiveis')
-      .select(
-        '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
-      )
-      .order('codigo')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return data as Consumivel[]
-  },
-  ['consumiveis-list'],
-  { revalidate: 60, tags: ['consumiveis-list'] }
-)
-
 export async function getConsumiveis(limit = 120): Promise<Consumivel[]> {
   await assertPermissao('consumiveis', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getConsumiveisCached(userId, limit))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('consumiveis')
+    .select(
+      '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
+    )
+    .order('codigo')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data as Consumivel[]
 }
 
 export async function gerarCodigoConsumivel(): Promise<string> {
@@ -140,8 +130,6 @@ export async function salvarConsumivelComFoto(formData: FormData) {
     }
   }
 
-  revalidatePath('/consumiveis')
-  revalidateTag('consumiveis-list', 'max')
 }
 
 export async function deletarConsumivel(id: string) {
@@ -149,8 +137,6 @@ export async function deletarConsumivel(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('consumiveis').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/consumiveis')
-  revalidateTag('consumiveis-list', 'max')
 }
 
 // ============================================================
@@ -196,9 +182,6 @@ export async function entradaEstoqueConsumivel(
     .eq('id', consumivelId)
   if (updErr) throw new Error(updErr.message)
 
-  revalidatePath('/consumiveis')
-  revalidateTag('consumiveis-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }
 
 export async function baixaEstoqueConsumivel(
@@ -245,7 +228,4 @@ export async function baixaEstoqueConsumivel(
     .eq('id', consumivelId)
   if (updErr) throw new Error(updErr.message)
 
-  revalidatePath('/consumiveis')
-  revalidateTag('consumiveis-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }

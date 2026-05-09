@@ -1,34 +1,24 @@
 'use server'
 
-import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { assertPermissao } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { MateriaPrima, MovimentacaoEstoque, Faca, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 
-const getMateriasPrimasCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<MateriaPrima[]> => {
-    const supabase = await createClient()
-    // Listagem só usa nome do fornecedor (mp-client.tsx). Detalhe completo vem de getMPDetalhe.
-    const { data, error } = await supabase
-      .from('materias_primas')
-      .select('*, fornecedor:fornecedores(id, nome)')
-      .order('codigo')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return data as MateriaPrima[]
-  },
-  ['materias-primas-list'],
-  { revalidate: 60, tags: ['materias-primas-list'] }
-)
-
 export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
   await assertPermissao('materias_primas', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getMateriasPrimasCached(userId, limit))
+  const supabase = await createClient()
+  // Listagem só usa nome do fornecedor (mp-client.tsx). Detalhe completo vem de getMPDetalhe.
+  const { data, error } = await supabase
+    .from('materias_primas')
+    .select('*, fornecedor:fornecedores(id, nome)')
+    .order('codigo')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data as MateriaPrima[]
 }
 
 export async function gerarCodigoMP(): Promise<string> {
@@ -60,9 +50,6 @@ export async function criarMateriaPrima(input: MPInput) {
   })
 
   if (error) throw new Error(error.message)
-  revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }
 
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
@@ -82,9 +69,6 @@ export async function atualizarMateriaPrima(id: string, input: MPInput) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }
 
 const FOTO_BUCKET_MP = 'materias-primas-fotos'
@@ -193,9 +177,6 @@ export async function salvarMPComFoto(formData: FormData) {
     }
   }
 
-  revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }
 
 export async function deletarMateriaPrima(id: string) {
@@ -214,9 +195,6 @@ export async function deletarMateriaPrima(id: string) {
 
   const { error } = await supabase.from('materias_primas').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }
 
 // ============================================================
@@ -232,72 +210,62 @@ export type MPDetalheData = {
   usuariosRegistro: { id: string; nome: string }[]
 }
 
-const getMPDetalheCached = unstable_cache(
-  async (_userId: string, mpId: string): Promise<MPDetalheData> => {
-    const supabase = await createClient()
-    const admin = createAdminClient()
-
-    const [mpRes, bomRes, movRes, usuariosRes] = await Promise.all([
-      supabase
-        .from('materias_primas')
-        .select(
-          '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
-        )
-        .eq('id', mpId)
-        .single(),
-      supabase
-        .from('faca_materias_primas')
-        .select('quantidade, faca:facas(id, codigo, nome, categoria, estoque_atual)')
-        .eq('materia_prima_id', mpId)
-        .order('faca_id'),
-      // Não usa join para usuario_id → usuarios_perfis para evitar falha silenciosa
-      // caso a FK não esteja declarada no banco. O merge é feito manualmente abaixo.
-      admin
-        .from('movimentacoes_estoque')
-        .select('*, faca:facas(id, codigo, nome)')
-        .eq('materia_prima_id', mpId)
-        .order('created_at', { ascending: false })
-        .limit(100),
-      supabase
-        .from('usuarios_perfis')
-        .select('id, nome')
-        .eq('ativo', true)
-        .order('nome'),
-    ])
-
-    if (mpRes.error) throw new Error(mpRes.error.message)
-    if (!mpRes.data) throw new Error('Matéria-prima não encontrada.')
-    if (movRes.error) throw new Error(`Erro ao buscar movimentações: ${movRes.error.message}`)
-
-    const facasQueUsam: FacaComQuantidade[] = (bomRes.data ?? []).map((row) => {
-      const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'>
-      return { ...faca, quantidade: Number(row.quantidade) || 0 }
-    })
-
-    // Monta mapa de usuários para enriquecer movimentações sem depender de FK no banco
-    const usuariosMap = new Map(
-      (usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }])
-    )
-    const movimentacoes = (movRes.data ?? []).map((mov) => ({
-      ...mov,
-      usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
-    })) as MovimentacaoEstoque[]
-
-    return {
-      mp: mpRes.data as MateriaPrima,
-      facasQueUsam,
-      movimentacoes,
-      usuariosRegistro: (usuariosRes.data ?? []) as { id: string; nome: string }[],
-    }
-  },
-  ['mp-detalhe'],
-  { revalidate: 30, tags: ['mp-detalhe'] }
-)
-
 export async function getMPDetalhe(mpId: string): Promise<MPDetalheData> {
   await assertPermissao('materias_primas', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getMPDetalheCached(userId, mpId))
+  const supabase = await createClient()
+  const admin = createAdminClient()
+
+  const [mpRes, bomRes, movRes, usuariosRes] = await Promise.all([
+    supabase
+      .from('materias_primas')
+      .select(
+        '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
+      )
+      .eq('id', mpId)
+      .single(),
+    supabase
+      .from('faca_materias_primas')
+      .select('quantidade, faca:facas(id, codigo, nome, categoria, estoque_atual)')
+      .eq('materia_prima_id', mpId)
+      .order('faca_id'),
+    // Não usa join para usuario_id → usuarios_perfis para evitar falha silenciosa
+    // caso a FK não esteja declarada no banco. O merge é feito manualmente abaixo.
+    admin
+      .from('movimentacoes_estoque')
+      .select('*, faca:facas(id, codigo, nome)')
+      .eq('materia_prima_id', mpId)
+      .order('created_at', { ascending: false })
+      .limit(100),
+    supabase
+      .from('usuarios_perfis')
+      .select('id, nome')
+      .eq('ativo', true)
+      .order('nome'),
+  ])
+
+  if (mpRes.error) throw new Error(mpRes.error.message)
+  if (!mpRes.data) throw new Error('Matéria-prima não encontrada.')
+  if (movRes.error) throw new Error(`Erro ao buscar movimentações: ${movRes.error.message}`)
+
+  const facasQueUsam: FacaComQuantidade[] = (bomRes.data ?? []).map((row) => {
+    const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'>
+    return { ...faca, quantidade: Number(row.quantidade) || 0 }
+  })
+
+  const usuariosMap = new Map(
+    (usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }])
+  )
+  const movimentacoes = (movRes.data ?? []).map((mov) => ({
+    ...mov,
+    usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
+  })) as MovimentacaoEstoque[]
+
+  return {
+    mp: mpRes.data as MateriaPrima,
+    facasQueUsam,
+    movimentacoes,
+    usuariosRegistro: (usuariosRes.data ?? []) as { id: string; nome: string }[],
+  }
 }
 
 // ============================================================
@@ -374,10 +342,6 @@ export async function entradaEstoqueMP(
     .eq('id', mpId)
   if (updErr) throw new Error(updErr.message)
 
-  revalidatePath('/materias-primas')
-  revalidateTag('materias-primas-list', 'max')
-  revalidateTag('mp-detalhe', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }
 
 // ============================================================
@@ -490,9 +454,4 @@ export async function atualizarMovimentacaoMP(input: AtualizarMovInput): Promise
   }
 
   // 7. Invalida caches relacionados
-  revalidatePath('/materias-primas')
-  revalidatePath(`/materias-primas/${movAtual.materia_prima_id}`)
-  revalidateTag('materias-primas-list', 'max')
-  revalidateTag('mp-detalhe', 'max')
-  revalidateTag('metricas-estoque', 'max')
 }

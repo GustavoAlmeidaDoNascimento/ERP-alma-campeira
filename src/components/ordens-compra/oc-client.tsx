@@ -19,6 +19,7 @@ import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
 import type { FilaReposicao, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useOrdensCompra, useFilaReposicao } from '@/lib/query/hooks'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { FilaReposicaoDetalheModal } from '@/components/ordens-compra/fila-reposicao-detalhe'
@@ -991,11 +992,13 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [ordensState, setOrdensState] = useState<OrdemCompra[]>(ordens)
   const [loadingHistorico, setLoadingHistorico] = useState(false)
 
-  // Sincroniza com props quando a aba é recarregada por refreshTab('/ordens-compra')
-  // (ex.: ao entregar uma venda em /vendas). Sem isso, o useState acima só
-  // pega o valor inicial e a fila nova nunca aparece sem F5.
+  // Sincroniza com props (SSR) e com cache TanStack Query (Realtime).
   useEffect(() => { setFilaState(fila) }, [fila])
   useEffect(() => { setOrdensState(ordens) }, [ordens])
+  const { data: ordensHook } = useOrdensCompra({ initialData: ordens })
+  const { data: filaHook } = useFilaReposicao({ initialData: fila })
+  useEffect(() => { if (ordensHook) setOrdensState(ordensHook) }, [ordensHook])
+  useEffect(() => { if (filaHook) setFilaState(filaHook) }, [filaHook])
   const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null)
   const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null)
   const [deletando, setDeletando] = useState<OrdemCompra | null>(null)

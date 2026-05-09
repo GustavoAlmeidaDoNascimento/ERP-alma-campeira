@@ -21,13 +21,15 @@ alter publication supabase_realtime add table public.clientes;
 -- Suprimentos
 alter publication supabase_realtime add table public.fornecedores;
 alter publication supabase_realtime add table public.ordens_compra;
+alter publication supabase_realtime add table public.ordem_compra_itens;
 alter publication supabase_realtime add table public.fila_reposicao;
+alter publication supabase_realtime add table public.fila_reposicao_itens;
 
 -- Financeiro
 alter publication supabase_realtime add table public.gastos;
 
 -- Pessoas
-alter publication supabase_realtime add table public.usuarios;
+alter publication supabase_realtime add table public.usuarios_perfis;
 alter publication supabase_realtime add table public.cargos;
 
 -- Categorias

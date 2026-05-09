@@ -1,8 +1,7 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { assertPermissao } from '@/lib/auth'
 
 export type TaxasLucroConfig = {
   /** Valor fixo em R$ adicionado ao custo de materiais (ex.: 27.00). */
@@ -29,7 +28,6 @@ function isAppConfigUnavailable(error: { message?: string }): boolean {
 
 export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
   await assertPermissao('taxas_lucro', 'ver')
-  await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('app_config')
@@ -82,6 +80,4 @@ export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
     if (isAppConfigUnavailable(error)) throw new Error(APP_CONFIG_MISSING_MSG)
     throw new Error(error.message)
   }
-  revalidatePath('/configuracoes')
-  revalidatePath('/facas')
 }

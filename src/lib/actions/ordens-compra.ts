@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser } from '@/lib/auth'
 import {
@@ -206,16 +205,12 @@ export async function atualizarItemFila(
     .eq('id', item_id)
 
   if (error) throw new Error(error.message)
-  revalidateTag('ordens-compra-fila', 'max')
 }
 
 export async function gerarOCsDaFila(fila_id: string): Promise<string[]> {
   await assertPermissao('ordens_compra', 'criar')
   const supabase = await createClient()
   const codigos = await gerarOCsDeFilaItens(supabase, fila_id)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
-  revalidateTag('ordens-compra-fila', 'max')
   return codigos
 }
 
@@ -229,8 +224,6 @@ export async function dispensarFila(fila_id: string): Promise<void> {
     .eq('id', fila_id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-fila', 'max')
 }
 
 // ─── OC Manual ────────────────────────────────────────────────────────────────
@@ -331,8 +324,6 @@ export async function criarOrdemCompraManual(input: {
     throw new Error(itensErr.message)
   }
 
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
   return codigo
 }
 
@@ -458,8 +449,6 @@ export async function atualizarQuantidadeItem(item_id: string, quantidade: numbe
     .eq('id', item_id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
 }
 
 export async function atualizarUnidadesAdicionaisItem(item_id: string, quantidade_adicional: number) {
@@ -489,8 +478,6 @@ export async function atualizarUnidadesAdicionaisItem(item_id: string, quantidad
     .eq('id', item_id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
 }
 
 export async function criarItemOrdemCompra(
@@ -523,8 +510,6 @@ export async function criarItemOrdemCompra(
   })
 
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
 }
 
 export async function atualizarObservacaoOC(id: string, observacao: string) {
@@ -536,8 +521,6 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
 }
 
 export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' | 'pago' | 'recebida') {
@@ -649,12 +632,6 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
     .eq('id', id)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidatePath('/gastos')
-  revalidateTag('ordens-compra-historico', 'max')
-  revalidateTag('metricas-estoque', 'max')
-  revalidateTag('gastos-list', 'max')
-  revalidateTag('metricas-financeiro', 'max')
 }
 
 export async function deletarOC(id: string) {
@@ -671,6 +648,4 @@ export async function deletarOC(id: string) {
 
   const { error } = await supabase.from('ordens_compra').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/ordens-compra')
-  revalidateTag('ordens-compra-historico', 'max')
 }

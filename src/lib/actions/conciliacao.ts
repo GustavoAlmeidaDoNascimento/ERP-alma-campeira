@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
-import { revalidatePath, revalidateTag } from 'next/cache'
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -317,13 +316,6 @@ export async function corrigirDivergenciaVenda(pedidoId: string, facaId: string)
     .eq('id', facaId)
   if (estoqueErr) throw new Error(`Erro ao atualizar estoque: ${estoqueErr.message}`)
 
-  revalidatePath('/metricas/relatorios')
-  revalidatePath('/vendas')
-  revalidatePath('/facas')
-  revalidateTag('vendas-list', 'max')
-  revalidateTag('metricas-vendas', 'max')
-  revalidateTag('facas-list', 'max')
-  revalidateTag('metricas-estoque', 'max')
 
   return { corrigido: faltante }
 }

@@ -1,40 +1,12 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
+import { assertPermissao } from '@/lib/auth'
 import type { Fornecedor, TipoDocumento } from '@/types'
 import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
 
-const getFornecedoresCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Fornecedor[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('fornecedores')
-      .select('*')
-      .order('nome')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return data as Fornecedor[]
-  },
-  ['fornecedores-list'],
-  { revalidate: 60, tags: ['fornecedores-list'] }
-)
-
 export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
   await assertPermissao('fornecedores', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getFornecedoresCached(userId, limit))
-}
-
-/**
- * Lista fornecedores sem camada de cache.
- * Use em fluxos que precisam refletir cadastro recente imediatamente.
- */
-export async function getFornecedoresSemCache(limit = 50): Promise<Fornecedor[]> {
-  await assertPermissao('fornecedores', 'ver')
-  await requireAuthenticatedUserId()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('fornecedores')
@@ -43,6 +15,11 @@ export async function getFornecedoresSemCache(limit = 50): Promise<Fornecedor[]>
     .limit(limit)
   if (error) throw new Error(error.message)
   return data as Fornecedor[]
+}
+
+/** Mantido para compatibilidade — agora idêntico a `getFornecedores`. */
+export async function getFornecedoresSemCache(limit = 50): Promise<Fornecedor[]> {
+  return getFornecedores(limit)
 }
 
 type FornecedorInput = {
@@ -58,7 +35,6 @@ type FornecedorInput = {
   bairro: string
   cidade: string
   uf: string
-  // Campos fiscais opcionais (preparação NF-e)
   razao_social?: string
   ie?: string
   codigo_municipio_ibge?: string
@@ -106,8 +82,6 @@ export async function criarFornecedor(input: FornecedorInput) {
   const row = normalizarFornecedorPayload(input)
   const { error } = await supabase.from('fornecedores').insert(row)
   if (error) throw new Error(error.message)
-  revalidatePath('/fornecedores')
-  revalidateTag('fornecedores-list', 'max')
 }
 
 export async function atualizarFornecedor(id: string, input: FornecedorInput) {
@@ -116,8 +90,6 @@ export async function atualizarFornecedor(id: string, input: FornecedorInput) {
   const row = normalizarFornecedorPayload(input)
   const { error } = await supabase.from('fornecedores').update(row).eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/fornecedores')
-  revalidateTag('fornecedores-list', 'max')
 }
 
 export async function deletarFornecedor(id: string) {
@@ -136,6 +108,4 @@ export async function deletarFornecedor(id: string) {
 
   const { error } = await supabase.from('fornecedores').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  revalidatePath('/fornecedores')
-  revalidateTag('fornecedores-list', 'max')
 }

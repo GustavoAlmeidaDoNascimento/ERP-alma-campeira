@@ -11,6 +11,7 @@ import { statusEstoqueFaca, STATUS_PEDIDO } from '@/types'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, CategoriaFacaDB, MateriaPrima } from '@/types'
 import type { FacaDetalheData } from '@/lib/actions/facas'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useFacaDetalhe, useMateriasPrimas } from '@/lib/query/hooks'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -31,8 +32,8 @@ type Props = {
 }
 
 export function FacaDetalheClient({
-  detalhe,
-  materiasPrimas,
+  detalhe: initialDetalhe,
+  materiasPrimas: initialMP,
   categorias,
   perm,
   verPrecoVenda,
@@ -41,6 +42,10 @@ export function FacaDetalheClient({
   usuarioAtualId,
   permEditarMovAdmin = false,
 }: Props) {
+  const { data: detalhe = initialDetalhe } = useFacaDetalhe(initialDetalhe.faca.id, {
+    initialData: initialDetalhe,
+  })
+  const { data: materiasPrimas = initialMP } = useMateriasPrimas({ initialData: initialMP })
   const { faca, bom, vendas, movimentacoes } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
 

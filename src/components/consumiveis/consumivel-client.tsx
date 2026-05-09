@@ -10,6 +10,7 @@ import { baixaEstoqueConsumivel, deletarConsumivel, entradaEstoqueConsumivel } f
 import { statusEstoqueConsumivel } from '@/types'
 import type { Consumivel, Fornecedor, CategoriaConsumivelDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useConsumiveis, useFornecedores, useCategoriasConsumivel } from '@/lib/query/hooks'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -21,8 +22,16 @@ type Props = {
   perm: Perm
 }
 
-export function ConsumivelClient({ consumiveis, fornecedores, categoriasConsumivel, perm }: Props) {
+export function ConsumivelClient({
+  consumiveis: initialConsumiveis,
+  fornecedores: initialFornecedores,
+  categoriasConsumivel: initialCategorias,
+  perm,
+}: Props) {
   const { refreshActiveTab } = useErpTabs()
+  const { data: consumiveis = initialConsumiveis } = useConsumiveis({ initialData: initialConsumiveis })
+  const { data: fornecedores = initialFornecedores } = useFornecedores({ initialData: initialFornecedores })
+  const { data: categoriasConsumivel = initialCategorias } = useCategoriasConsumivel({ initialData: initialCategorias })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Consumivel | null>(null)
   const [deletando, setDeletando] = useState<Consumivel | null>(null)

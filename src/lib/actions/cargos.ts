@@ -1,31 +1,21 @@
 'use server'
 
-import { revalidatePath, revalidateTag } from 'next/cache'
-import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { revalidateTag } from 'next/cache'
+import { createClient } from '@/lib/supabase/server'
+import { assertPermissao } from '@/lib/auth'
 import type { Cargo, ModuloKey } from '@/types'
 import { MODULOS } from '@/types'
 
-const getCargosCached = unstable_cache(
-  async (_userId: string, limit: number): Promise<Cargo[]> => {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('cargos')
-      .select('*, permissoes:cargo_permissoes(*)')
-      .order('nome')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    return data as Cargo[]
-  },
-  ['cargos-list'],
-  { revalidate: 60, tags: ['cargos-list'] }
-)
-
 export async function getCargos(limit = 50): Promise<Cargo[]> {
   await assertPermissao('cargos', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withSupabaseCookieContext(() => getCargosCached(userId, limit))
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('cargos')
+    .select('*, permissoes:cargo_permissoes(*)')
+    .order('nome')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data as Cargo[]
 }
 
 type CargoInput = {
@@ -56,11 +46,9 @@ export async function criarCargo(input: CargoInput) {
   const { error: permError } = await supabase.from('cargo_permissoes').insert(permissoes)
   if (permError) throw new Error(permError.message)
 
-  // Invalida o cache de permissões de todos os usuários (cargo novo afeta quem for atribuído a ele)
+  // Permissões são cacheadas em auth.ts via unstable_cache. Invalidar essa tag
+  // específica garante que o próximo `assertPermissao` releia do banco.
   revalidateTag('user-permissions', 'max')
-  revalidatePath('/cargos')
-  revalidatePath('/usuarios')
-  revalidateTag('cargos-list', 'max')
 }
 
 export async function atualizarCargo(id: string, input: CargoInput) {
@@ -86,11 +74,7 @@ export async function atualizarCargo(id: string, input: CargoInput) {
 
   if (permError) throw new Error(permError.message)
 
-  // Invalida o cache de permissões de todos os usuários (cargo alterado afeta todos os membros)
   revalidateTag('user-permissions', 'max')
-  revalidatePath('/cargos')
-  revalidatePath('/usuarios')
-  revalidateTag('cargos-list', 'max')
 }
 
 export async function deletarCargo(id: string) {
@@ -109,7 +93,4 @@ export async function deletarCargo(id: string) {
 
   const { error } = await supabase.from('cargos').delete().eq('id', id)
   if (error) throw new Error(error.message)
-
-  revalidatePath('/cargos')
-  revalidateTag('cargos-list', 'max')
 }
