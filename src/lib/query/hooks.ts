@@ -51,6 +51,7 @@ export function useMateriasPrimas(opts: Opts<MateriaPrima[]> = {}) {
     queryKey: qk.materiasPrimas.list(),
     queryFn: () => getMatériasPrimas(120),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -59,6 +60,7 @@ export function useMPDetalhe(id: string, opts: Opts<MPDetalheData> = {}) {
     queryKey: qk.materiasPrimas.detalhe(id),
     queryFn: () => getMPDetalhe(id),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
     enabled: !!id,
   })
 }
@@ -68,6 +70,7 @@ export function useFacas(opts: Opts<Faca[]> = {}) {
     queryKey: qk.facas.list(),
     queryFn: () => getFacas(120),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -76,6 +79,7 @@ export function useFacaDetalhe(id: string, opts: Opts<FacaDetalheData> = {}) {
     queryKey: qk.facas.detalhe(id),
     queryFn: () => getFacaDetalhe(id),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
     enabled: !!id,
   })
 }
@@ -94,6 +98,7 @@ export function useFornecedores(opts: Opts<Fornecedor[]> = {}) {
     queryKey: qk.fornecedores.list(),
     queryFn: () => getFornecedores(80),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -102,6 +107,7 @@ export function useClientes(opts: Opts<Cliente[]> = {}) {
     queryKey: qk.clientes.list(),
     queryFn: () => getClientes(120),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -110,6 +116,7 @@ export function useVendas(opts: Opts<Pedido[]> = {}) {
     queryKey: qk.vendas.list(),
     queryFn: () => getVendas(80),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -118,6 +125,7 @@ export function useOrcamentos(opts: Opts<Orcamento[]> = {}) {
     queryKey: qk.orcamentos.list(),
     queryFn: () => getOrcamentos(80),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -126,6 +134,7 @@ export function useOrdensCompra(opts: Opts<Awaited<ReturnType<typeof getOrdensCo
     queryKey: qk.ordensCompra.list(),
     queryFn: () => getOrdensCompra(),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -134,6 +143,7 @@ export function useFilaReposicao(opts: Opts<Awaited<ReturnType<typeof getFilaRep
     queryKey: qk.ordensCompra.fila(),
     queryFn: () => getFilaReposicaoList(),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -142,6 +152,7 @@ export function useConsumiveis(opts: Opts<Consumivel[]> = {}) {
     queryKey: qk.consumiveis.list(),
     queryFn: () => getConsumiveis(120),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -150,6 +161,7 @@ export function useGastos(opts: Opts<Gasto[]> = {}) {
     queryKey: qk.gastos.list(),
     queryFn: () => listarGastos(),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -158,6 +170,7 @@ export function useUsuarios(opts: Opts<Usuario[]> = {}) {
     queryKey: qk.usuarios.list(),
     queryFn: () => getUsuarios(100),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -166,6 +179,7 @@ export function useCargos(opts: Opts<Cargo[]> = {}) {
     queryKey: qk.cargos.list(),
     queryFn: () => getCargos(50),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -174,6 +188,7 @@ export function useCategoriasFaca(opts: Opts<CategoriaFacaDB[]> = {}) {
     queryKey: qk.categorias.faca(),
     queryFn: () => getCategoriasFaca(),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -182,6 +197,7 @@ export function useCategoriasMateriaPrima(opts: Opts<CategoriaMateriaPrimaDB[]> 
     queryKey: qk.categorias.materiaPrima(),
     queryFn: () => getCategoriasMateriaPrima(),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }
 
@@ -190,5 +206,6 @@ export function useCategoriasConsumivel(opts: Opts<CategoriaConsumivelDB[]> = {}
     queryKey: qk.categorias.consumivel(),
     queryFn: () => getCategoriasConsumivel(),
     initialData: opts.initialData,
+    initialDataUpdatedAt: 0,
   })
 }

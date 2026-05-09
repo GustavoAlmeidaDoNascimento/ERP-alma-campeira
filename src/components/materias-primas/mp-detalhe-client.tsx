@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,7 @@ const tipoMovLabel: Record<string, { label: string; color: string; bg: string }>
 }
 
 export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov = false, permVerMov = false }: Props) {
+  const router = useRouter()
   const { data: detalhe = initialDetalhe } = useMPDetalhe(initialDetalhe.mp.id, { initialData: initialDetalhe })
   const { mp, facasQueUsam, movimentacoes, usuariosRegistro } = detalhe
   const { refreshActiveTab, openTab } = useErpTabs()
@@ -142,6 +144,21 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
     <>
       {/* Header */}
       <div className="px-8 py-6" style={{ borderBottom: '1px solid var(--ac-border)' }}>
+        {/* Botão voltar */}
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 text-sm mb-4 transition-colors"
+          style={{ color: 'var(--ac-muted)' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ac-accent)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ac-muted)')}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Voltar
+        </button>
+
         <div className="flex items-start gap-6">
           {/* Foto */}
           <div
