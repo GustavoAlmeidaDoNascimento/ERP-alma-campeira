@@ -29,7 +29,7 @@ async function OrcamentosPageData() {
   const [orcamentos, clientes, facas, usuarios, authUser] = await Promise.all([
     getOrcamentos(80),
     getClientes(80),
-    getFacas(120),
+    getFacas(120, { comCusto: false }),
     getUsuariosPerfisList(),
     getAuthenticatedUser(),
   ])

@@ -7,8 +7,9 @@ import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, 
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 import { withTiming } from '@/lib/perf/timing'
 
-export async function getFacas(limit = 80): Promise<Faca[]> {
-  return withTiming('getFacas', async () => {
+export async function getFacas(limit = 80, options?: { comCusto?: boolean }): Promise<Faca[]> {
+  const comCusto = options?.comCusto ?? true
+  return withTiming(`getFacas${comCusto ? '' : '(sem custo)'}`, async () => {
     await assertPermissao('facas', 'ver')
     const supabase = await createClient()
     const { data, error } = await supabase
@@ -18,6 +19,11 @@ export async function getFacas(limit = 80): Promise<Faca[]> {
       .limit(limit)
     if (error) throw new Error(error.message)
     const facas = data as Faca[]
+    if (!comCusto) {
+      // Quando o consumidor não usa preco_custo (ex.: dropdown em /vendas, /orcamentos),
+      // pular o JOIN com BOM economiza ~600-800ms.
+      return facas.map((f) => ({ ...f, preco_custo: 0 }))
+    }
     const custoByFaca = await calcularPrecoCustoPorFaca(supabase, facas)
     return facas.map((f) => ({ ...f, preco_custo: custoByFaca.get(f.id) ?? 0 }))
   })

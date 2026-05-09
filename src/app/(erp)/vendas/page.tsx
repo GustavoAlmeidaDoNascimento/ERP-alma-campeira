@@ -27,7 +27,7 @@ async function VendasPageData() {
   const [pedidos, clientes, facas, usuarios, authUser] = await Promise.all([
     getVendas(80),
     getClientes(80),
-    getFacas(120),
+    getFacas(120, { comCusto: false }),
     getUsuariosPerfisList(),
     getAuthenticatedUser(),
   ])
