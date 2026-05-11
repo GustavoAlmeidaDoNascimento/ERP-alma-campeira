@@ -265,38 +265,6 @@ function exportarPDFMultiplas(ocs: OrdemCompra[]) {
   win.document.close()
 }
 
-// ─── Helpers de período ──────────────────────────────────────────────────────
-
-type Periodo = 'todas' | 'hoje' | 'semana' | 'mes' | 'personalizado'
-
-/** Retorna [inicio, fim] em ISO yyyy-mm-dd inclusive, ou null para 'todas'. */
-function intervaloPeriodo(p: Periodo, customIni: string, customFim: string): [string, string] | null {
-  if (p === 'todas') return null
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const fmtISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  if (p === 'hoje') {
-    const s = fmtISO(hoje)
-    return [s, s]
-  }
-  if (p === 'semana') {
-    // Semana começa segunda (ISO). Domingo = 0 → recua 6 dias.
-    const dow = hoje.getDay()
-    const diff = dow === 0 ? 6 : dow - 1
-    const ini = new Date(hoje); ini.setDate(hoje.getDate() - diff)
-    const fim = new Date(ini); fim.setDate(ini.getDate() + 6)
-    return [fmtISO(ini), fmtISO(fim)]
-  }
-  if (p === 'mes') {
-    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
-    return [fmtISO(ini), fmtISO(fim)]
-  }
-  // personalizado
-  if (!customIni || !customFim) return null
-  return [customIni, customFim]
-}
-
 // ─── Badge de Status OC ──────────────────────────────────────────────────────
 
 function BadgeStatus({ status }: { status: StatusOC }) {
@@ -1218,23 +1186,22 @@ export function OcClient({ fila, ordens, perm }: Props) {
   }
 
   const [agruparPorPedido, setAgruparPorPedido] = useState(true)
-  const [periodo, setPeriodo] = useState<Periodo>('todas')
   const [periodoIni, setPeriodoIni] = useState('')
   const [periodoFim, setPeriodoFim] = useState('')
   const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set())
 
   const ordensFiltradas = useMemo(() => {
     let lista = filtroStatus === 'todas' ? ordensState : ordensState.filter((o) => o.status === filtroStatus)
-    const intervalo = intervaloPeriodo(periodo, periodoIni, periodoFim)
-    if (intervalo) {
-      const [ini, fim] = intervalo
+    if (periodoIni || periodoFim) {
       lista = lista.filter((o) => {
         const d = (o.data_geracao || '').slice(0, 10)
-        return d >= ini && d <= fim
+        if (periodoIni && d < periodoIni) return false
+        if (periodoFim && d > periodoFim) return false
+        return true
       })
     }
     return lista
-  }, [ordensState, filtroStatus, periodo, periodoIni, periodoFim])
+  }, [ordensState, filtroStatus, periodoIni, periodoFim])
 
   // Limpa seleções que saíram do filtro para evitar imprimir OCs invisíveis.
   useEffect(() => {
@@ -1513,45 +1480,32 @@ export function OcClient({ fila, ordens, perm }: Props) {
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
               Período:
             </span>
-            {([
-              { value: 'todas', label: 'Todas' },
-              { value: 'hoje', label: 'Hoje' },
-              { value: 'semana', label: 'Esta semana' },
-              { value: 'mes', label: 'Este mês' },
-              { value: 'personalizado', label: 'Personalizado' },
-            ] as { value: Periodo; label: string }[]).map((p) => (
+            <input
+              type="date"
+              value={periodoIni}
+              onChange={(e) => setPeriodoIni(e.target.value)}
+              max={periodoFim || undefined}
+              className="px-2 py-1 rounded text-sm"
+              style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+            />
+            <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>até</span>
+            <input
+              type="date"
+              value={periodoFim}
+              onChange={(e) => setPeriodoFim(e.target.value)}
+              min={periodoIni || undefined}
+              className="px-2 py-1 rounded text-sm"
+              style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+            />
+            {(periodoIni || periodoFim) && (
               <button
-                key={p.value}
-                onClick={() => setPeriodo(p.value)}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-                style={{
-                  background: periodo === p.value
-                    ? 'var(--ac-accent)'
-                    : 'color-mix(in srgb, var(--ac-border) 40%, transparent)',
-                  color: periodo === p.value ? '#111827' : 'var(--ac-muted)',
-                }}
+                onClick={() => { setPeriodoIni(''); setPeriodoFim('') }}
+                className="px-2 py-1 rounded text-xs font-medium"
+                style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)', color: 'var(--ac-muted)' }}
+                title="Limpar período"
               >
-                {p.label}
+                Limpar
               </button>
-            ))}
-            {periodo === 'personalizado' && (
-              <>
-                <input
-                  type="date"
-                  value={periodoIni}
-                  onChange={(e) => setPeriodoIni(e.target.value)}
-                  className="px-2 py-1 rounded text-sm"
-                  style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
-                />
-                <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>até</span>
-                <input
-                  type="date"
-                  value={periodoFim}
-                  onChange={(e) => setPeriodoFim(e.target.value)}
-                  className="px-2 py-1 rounded text-sm"
-                  style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
-                />
-              </>
             )}
             {selecionadasIds.size > 0 && (
               <div className="ml-auto flex items-center gap-2">
