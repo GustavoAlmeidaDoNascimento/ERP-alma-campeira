@@ -167,6 +167,136 @@ function exportarPDF(oc: OrdemCompra) {
   win.document.close()
 }
 
+/** HTML de uma OC sem <head>/<style> — para concatenar várias num único PDF. */
+function ocBodyHtml(oc: OrdemCompra) {
+  const itens = oc.itens ?? []
+  const total = totalOC(itens)
+  const linhasItens = itens
+    .map((item) => {
+      const sub = (item.preco_unitario ?? 0) * item.quantidade
+      return `
+        <tr>
+          <td>${item.materia_prima?.codigo ?? '—'}</td>
+          <td>${item.materia_prima?.nome ?? '—'}</td>
+          <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : '—'}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : '—'}</td>
+        </tr>`
+    })
+    .join('')
+
+  return `
+  <section class="oc-page">
+    <h1>ORDEM DE COMPRA — ${oc.codigo}</h1>
+    <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+    <div class="meta">
+      <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span></div>
+      <div><strong>Data de Geração</strong><span>${fmtData(oc.data_geracao)}</span></div>
+      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}</span></div>
+      ${oc.pedido_codigo ? `
+      <div><strong>Pedido de Origem</strong><span>${oc.pedido_codigo}</span></div>
+      <div><strong>Cliente</strong><span>${oc.cliente_nome ?? '—'}</span></div>` : ''}
+    </div>
+    <table>
+      <thead>
+        <tr><th>Código</th><th>Item</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr>
+      </thead>
+      <tbody>
+        ${linhasItens}
+        <tr class="total-row">
+          <td colspan="4" style="text-align:right">TOTAL</td>
+          <td style="text-align:right">${fmt(total)}</td>
+        </tr>
+      </tbody>
+    </table>
+    ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ''}
+    <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
+  </section>`
+}
+
+function exportarPDFMultiplas(ocs: OrdemCompra[]) {
+  if (ocs.length === 0) return
+  const paginas = ocs.map(ocBodyHtml).join('')
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Ordens de Compra (${ocs.length})</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; }
+    .oc-page { padding: 40px; page-break-after: always; }
+    .oc-page:last-child { page-break-after: auto; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+    .subtitle { font-size: 12px; color: #555; margin-bottom: 24px; }
+    .meta { display: flex; gap: 40px; margin-bottom: 24px; flex-wrap: wrap; }
+    .meta div { display: flex; flex-direction: column; gap: 2px; }
+    .meta strong { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
+    .meta span { font-size: 13px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    thead tr { background: #f3f4f6; }
+    th { padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase;
+         letter-spacing: 0.05em; color: #555; border-bottom: 2px solid #e5e7eb; }
+    th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: right; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+    .total-row { font-weight: 700; font-size: 14px; }
+    .total-row td { border-top: 2px solid #111; border-bottom: none; padding-top: 10px; }
+    .obs { margin-top: 20px; padding: 12px 16px; background: #f9fafb;
+           border: 1px solid #e5e7eb; border-radius: 6px; }
+    .obs strong { display: block; font-size: 10px; text-transform: uppercase;
+                  letter-spacing: 0.05em; color: #888; margin-bottom: 4px; }
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
+              font-size: 11px; color: #888; text-align: center; }
+    @media print {
+      .oc-page { padding: 20px; }
+      @page { margin: 1.5cm; }
+    }
+  </style>
+</head>
+<body>
+  ${paginas}
+  <script>window.onload = () => { window.print() }</script>
+</body>
+</html>`
+
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+}
+
+// ─── Helpers de período ──────────────────────────────────────────────────────
+
+type Periodo = 'todas' | 'hoje' | 'semana' | 'mes' | 'personalizado'
+
+/** Retorna [inicio, fim] em ISO yyyy-mm-dd inclusive, ou null para 'todas'. */
+function intervaloPeriodo(p: Periodo, customIni: string, customFim: string): [string, string] | null {
+  if (p === 'todas') return null
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const fmtISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  if (p === 'hoje') {
+    const s = fmtISO(hoje)
+    return [s, s]
+  }
+  if (p === 'semana') {
+    // Semana começa segunda (ISO). Domingo = 0 → recua 6 dias.
+    const dow = hoje.getDay()
+    const diff = dow === 0 ? 6 : dow - 1
+    const ini = new Date(hoje); ini.setDate(hoje.getDate() - diff)
+    const fim = new Date(ini); fim.setDate(ini.getDate() + 6)
+    return [fmtISO(ini), fmtISO(fim)]
+  }
+  if (p === 'mes') {
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+    return [fmtISO(ini), fmtISO(fim)]
+  }
+  // personalizado
+  if (!customIni || !customFim) return null
+  return [customIni, customFim]
+}
+
 // ─── Badge de Status OC ──────────────────────────────────────────────────────
 
 function BadgeStatus({ status }: { status: StatusOC }) {
@@ -1088,11 +1218,59 @@ export function OcClient({ fila, ordens, perm }: Props) {
   }
 
   const [agruparPorPedido, setAgruparPorPedido] = useState(true)
+  const [periodo, setPeriodo] = useState<Periodo>('todas')
+  const [periodoIni, setPeriodoIni] = useState('')
+  const [periodoFim, setPeriodoFim] = useState('')
+  const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set())
 
   const ordensFiltradas = useMemo(() => {
-    if (filtroStatus === 'todas') return ordensState
-    return ordensState.filter((o) => o.status === filtroStatus)
-  }, [ordensState, filtroStatus])
+    let lista = filtroStatus === 'todas' ? ordensState : ordensState.filter((o) => o.status === filtroStatus)
+    const intervalo = intervaloPeriodo(periodo, periodoIni, periodoFim)
+    if (intervalo) {
+      const [ini, fim] = intervalo
+      lista = lista.filter((o) => {
+        const d = (o.data_geracao || '').slice(0, 10)
+        return d >= ini && d <= fim
+      })
+    }
+    return lista
+  }, [ordensState, filtroStatus, periodo, periodoIni, periodoFim])
+
+  // Limpa seleções que saíram do filtro para evitar imprimir OCs invisíveis.
+  useEffect(() => {
+    setSelecionadasIds((prev) => {
+      const visiveis = new Set(ordensFiltradas.map((o) => o.id))
+      let mudou = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (visiveis.has(id)) next.add(id)
+        else mudou = true
+      }
+      return mudou ? next : prev
+    })
+  }, [ordensFiltradas])
+
+  function toggleSelecionada(id: string) {
+    setSelecionadasIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelecionarTudo() {
+    setSelecionadasIds((prev) => {
+      const todasIds = ordensFiltradas.map((o) => o.id)
+      const todasMarcadas = todasIds.length > 0 && todasIds.every((id) => prev.has(id))
+      return todasMarcadas ? new Set() : new Set(todasIds)
+    })
+  }
+
+  function imprimirSelecionadas() {
+    const mapa = new Map(ordensFiltradas.map((o) => [o.id, o]))
+    const ocs = Array.from(selecionadasIds).map((id) => mapa.get(id)).filter((o): o is OrdemCompra => !!o)
+    exportarPDFMultiplas(ocs)
+  }
 
   // Agrupa OCs pelo pedido de origem. OCs manuais (sem pedido_id) ficam num
   // grupo "Sem pedido (manuais)". Mantém a ordem decrescente de created_at ao
@@ -1330,6 +1508,71 @@ export function OcClient({ fila, ordens, perm }: Props) {
             </label>
           </div>
 
+          {/* Filtro de período + ação de impressão em massa */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+              Período:
+            </span>
+            {([
+              { value: 'todas', label: 'Todas' },
+              { value: 'hoje', label: 'Hoje' },
+              { value: 'semana', label: 'Esta semana' },
+              { value: 'mes', label: 'Este mês' },
+              { value: 'personalizado', label: 'Personalizado' },
+            ] as { value: Periodo; label: string }[]).map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriodo(p.value)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={{
+                  background: periodo === p.value
+                    ? 'var(--ac-accent)'
+                    : 'color-mix(in srgb, var(--ac-border) 40%, transparent)',
+                  color: periodo === p.value ? '#111827' : 'var(--ac-muted)',
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+            {periodo === 'personalizado' && (
+              <>
+                <input
+                  type="date"
+                  value={periodoIni}
+                  onChange={(e) => setPeriodoIni(e.target.value)}
+                  className="px-2 py-1 rounded text-sm"
+                  style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+                />
+                <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>até</span>
+                <input
+                  type="date"
+                  value={periodoFim}
+                  onChange={(e) => setPeriodoFim(e.target.value)}
+                  className="px-2 py-1 rounded text-sm"
+                  style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+                />
+              </>
+            )}
+            {selecionadasIds.size > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  {selecionadasIds.size} {selecionadasIds.size === 1 ? 'selecionada' : 'selecionadas'}
+                </span>
+                <Button variant="secondary" onClick={() => setSelecionadasIds(new Set())}>
+                  Limpar
+                </Button>
+                <Button variant="primary" onClick={imprimirSelecionadas}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
+                  </svg>
+                  Imprimir {selecionadasIds.size} {selecionadasIds.size === 1 ? 'OC' : 'OCs'}
+                </Button>
+              </div>
+            )}
+          </div>
+
           {loadingHistorico && (
             <div className="py-8 text-sm" style={{ color: 'var(--ac-muted)' }}>
               Carregando histórico de ordens...
@@ -1355,6 +1598,26 @@ export function OcClient({ fila, ordens, perm }: Props) {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)' }}>
+                    <th className="px-3 py-3 w-10 text-left">
+                      <input
+                        type="checkbox"
+                        title="Selecionar todas (filtradas)"
+                        checked={
+                          ordensFiltradas.length > 0 &&
+                          ordensFiltradas.every((o) => selecionadasIds.has(o.id))
+                        }
+                        ref={(el) => {
+                          if (el) {
+                            const algumas = ordensFiltradas.some((o) => selecionadasIds.has(o.id))
+                            const todas = ordensFiltradas.length > 0 && ordensFiltradas.every((o) => selecionadasIds.has(o.id))
+                            el.indeterminate = algumas && !todas
+                          }
+                        }}
+                        onChange={toggleSelecionarTudo}
+                        className="w-4 h-4 cursor-pointer rounded"
+                        style={{ accentColor: 'var(--ac-accent)' }}
+                      />
+                    </th>
                     {['Código', 'Pedido', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
                       <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left ${h === '' ? 'w-20' : ''}`} style={{ color: 'var(--ac-muted)' }}>
                         {h}
@@ -1377,6 +1640,15 @@ export function OcClient({ fila, ordens, perm }: Props) {
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                         onClick={() => setOcAberta(oc)}
                       >
+                        <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selecionadasIds.has(oc.id)}
+                            onChange={() => toggleSelecionada(oc.id)}
+                            className="w-4 h-4 cursor-pointer rounded"
+                            style={{ accentColor: 'var(--ac-accent)' }}
+                          />
+                        </td>
                         <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
                           {oc.codigo}
                         </td>
@@ -1447,6 +1719,9 @@ export function OcClient({ fila, ordens, perm }: Props) {
                       let globalIdx = 0
                       return gruposPorPedido.flatMap((grupo, grupoIdx) => {
                         const totalGrupo = grupo.ocs.reduce((s, oc) => s + totalOC(oc.itens ?? []), 0)
+                        const idsGrupo = grupo.ocs.map((oc) => oc.id)
+                        const todasGrupoMarcadas = idsGrupo.every((id) => selecionadasIds.has(id))
+                        const algumasGrupoMarcadas = idsGrupo.some((id) => selecionadasIds.has(id))
                         const header = (
                           <tr
                             key={`header-${grupo.key}`}
@@ -1455,6 +1730,26 @@ export function OcClient({ fila, ordens, perm }: Props) {
                               borderTop: grupoIdx > 0 ? '2px solid var(--ac-border)' : undefined,
                             }}
                           >
+                            <td className="px-3 py-2 w-10">
+                              <input
+                                type="checkbox"
+                                title="Selecionar todas deste pedido"
+                                checked={todasGrupoMarcadas}
+                                ref={(el) => {
+                                  if (el) el.indeterminate = algumasGrupoMarcadas && !todasGrupoMarcadas
+                                }}
+                                onChange={() => {
+                                  setSelecionadasIds((prev) => {
+                                    const next = new Set(prev)
+                                    if (todasGrupoMarcadas) idsGrupo.forEach((id) => next.delete(id))
+                                    else idsGrupo.forEach((id) => next.add(id))
+                                    return next
+                                  })
+                                }}
+                                className="w-4 h-4 cursor-pointer rounded"
+                                style={{ accentColor: 'var(--ac-accent)' }}
+                              />
+                            </td>
                             <td colSpan={8} className="px-4 py-2">
                               <div className="flex items-center gap-2 flex-wrap text-sm">
                                 {grupo.pedido_codigo ? (
