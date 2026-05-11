@@ -61,7 +61,9 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
   return withSupabaseCookieContext(async () => {
     const supabase = await createClient()
 
-    // Busca o registro da fila com o pedido
+    // Uma única query: fila + pedido/cliente + itens + MP + fornecedor + facas que usam a MP.
+    // Antes eram 3 queries sequenciais (~3 round-trips). Os FKs já têm índices em
+    // perf_indexes.sql, então o embed sai barato.
     const { data: filaRow, error: filaErr } = await supabase
       .from('fila_reposicao')
       .select(`
@@ -73,6 +75,23 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
           id,
           codigo,
           cliente:clientes(id, nome)
+        ),
+        itens:fila_reposicao_itens(
+          id,
+          fila_id,
+          materia_prima_id,
+          quantidade_sugerida,
+          quantidade_adicional,
+          selecionado,
+          mp:materias_primas(
+            id, codigo, nome, preco_custo, estoque_atual, estoque_minimo,
+            fornecedor_id,
+            fornecedor:fornecedores(id, nome),
+            faca_mp:faca_materias_primas(
+              quantidade,
+              faca:facas(id, nome, estoque_atual, estoque_minimo)
+            )
+          )
         )
       `)
       .eq('id', fila_id)
@@ -80,58 +99,6 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
 
     if (filaErr || !filaRow) throw new Error(filaErr?.message ?? 'Fila não encontrada.')
 
-    // Busca os itens com dados completos da MP e fornecedor
-    const { data: itensRows, error: itensErr } = await supabase
-      .from('fila_reposicao_itens')
-      .select(`
-        id,
-        fila_id,
-        materia_prima_id,
-        quantidade_sugerida,
-        quantidade_adicional,
-        selecionado,
-        mp:materias_primas(
-          id, codigo, nome, preco_custo, estoque_atual, estoque_minimo,
-          fornecedor_id,
-          fornecedor:fornecedores(id, nome)
-        )
-      `)
-      .eq('fila_id', fila_id)
-
-    if (itensErr) throw new Error(itensErr.message)
-
-    // Para cada MP, busca as facas que a utilizam
-    const mpIds = (itensRows ?? []).map((i) => i.materia_prima_id)
-    const { data: facasMpRows, error: facasMpErr } = await supabase
-      .from('faca_materias_primas')
-      .select(`
-        materia_prima_id,
-        quantidade,
-        faca:facas(id, nome, estoque_atual, estoque_minimo)
-      `)
-      .in('materia_prima_id', mpIds)
-
-    if (facasMpErr) throw new Error(facasMpErr.message)
-
-    // Agrupa facas por MP
-    const facasPorMp = new Map<string, FilaReposicaoItem['facas_relacionadas']>()
-    for (const row of facasMpRows ?? []) {
-      const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as {
-        id: string; nome: string; estoque_atual: number; estoque_minimo: number
-      } | null
-      if (!faca) continue
-      const list = facasPorMp.get(row.materia_prima_id) ?? []
-      list.push({
-        faca_id: faca.id,
-        faca_nome: faca.nome,
-        estoque_atual: Number(faca.estoque_atual ?? 0),
-        estoque_minimo: Number(faca.estoque_minimo ?? 0),
-        quantidade_bom: Number(row.quantidade),
-      })
-      facasPorMp.set(row.materia_prima_id, list)
-    }
-
-    // Monta a resposta
     const pedido = (Array.isArray(filaRow.pedido) ? filaRow.pedido[0] : filaRow.pedido) as {
       id: string; codigo: string
       cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
@@ -140,6 +107,12 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
       ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
       : null
 
+    const itensRows = (filaRow.itens ?? []) as Array<{
+      id: string; fila_id: string; materia_prima_id: string
+      quantidade_sugerida: number; quantidade_adicional: number; selecionado: boolean
+      mp: unknown
+    }>
+
     const fila: FilaReposicao = {
       id: filaRow.id,
       pedido_id: filaRow.pedido_id,
@@ -147,19 +120,38 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
       cliente_nome: cliente?.nome ?? '—',
       status: filaRow.status as FilaReposicao['status'],
       created_at: filaRow.created_at ?? '',
-      itens_count: (itensRows ?? []).length,
+      itens_count: itensRows.length,
     }
 
-    const itens: FilaReposicaoItem[] = (itensRows ?? []).map((row) => {
+    const itens: FilaReposicaoItem[] = itensRows.map((row) => {
       const mp = (Array.isArray(row.mp) ? row.mp[0] : row.mp) as {
         id: string; codigo: string; nome: string; preco_custo: number
         estoque_atual: number; estoque_minimo: number; fornecedor_id: string | null
         fornecedor: { id: string; nome: string } | { id: string; nome: string }[] | null
+        faca_mp: Array<{
+          quantidade: number
+          faca: { id: string; nome: string; estoque_atual: number; estoque_minimo: number }
+            | { id: string; nome: string; estoque_atual: number; estoque_minimo: number }[]
+            | null
+        }> | null
       } | null
 
       const fornecedor = mp?.fornecedor
         ? (Array.isArray(mp.fornecedor) ? mp.fornecedor[0] : mp.fornecedor)
         : null
+
+      const facas_relacionadas: FilaReposicaoItem['facas_relacionadas'] = []
+      for (const fm of mp?.faca_mp ?? []) {
+        const faca = Array.isArray(fm.faca) ? fm.faca[0] : fm.faca
+        if (!faca) continue
+        facas_relacionadas.push({
+          faca_id: faca.id,
+          faca_nome: faca.nome,
+          estoque_atual: Number(faca.estoque_atual ?? 0),
+          estoque_minimo: Number(faca.estoque_minimo ?? 0),
+          quantidade_bom: Number(fm.quantidade),
+        })
+      }
 
       return {
         id: row.id,
@@ -175,7 +167,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
         quantidade_sugerida: Number(row.quantidade_sugerida),
         quantidade_adicional: Number(row.quantidade_adicional),
         selecionado: row.selecionado,
-        facas_relacionadas: facasPorMp.get(row.materia_prima_id) ?? [],
+        facas_relacionadas,
       }
     })
 
