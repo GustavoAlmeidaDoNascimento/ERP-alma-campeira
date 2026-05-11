@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import {
   getFilaReposicaoList,
+  getFilaReposicaoDetalhe,
   getOrdensCompra,
   criarOrdemCompraManual,
   atualizarUnidadesAdicionaisItem,
@@ -17,7 +18,7 @@ import {
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
-import type { FilaReposicao, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
+import type { FilaReposicao, FilaReposicaoDetalhe, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useOrdensCompra, useFilaReposicao } from '@/lib/query/hooks'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
@@ -1010,6 +1011,24 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [sucesso, setSucesso] = useState('')
   const gerarTodasInFlightRef = useRef(false)
 
+  // Cache + in-flight de detalhes de fila para abrir o modal sem espera.
+  // Disparamos a busca no mouseEnter (e no focus, p/ teclado). Quando o clique
+  // chega, na maioria das vezes a resposta já chegou ou está perto de chegar.
+  const filaDetalheCacheRef = useRef<Map<string, FilaReposicaoDetalhe>>(new Map())
+  const filaDetalheInFlightRef = useRef<Map<string, Promise<FilaReposicaoDetalhe>>>(new Map())
+  function prefetchFilaDetalhe(fila_id: string) {
+    if (filaDetalheCacheRef.current.has(fila_id)) return
+    if (filaDetalheInFlightRef.current.has(fila_id)) return
+    const p = getFilaReposicaoDetalhe(fila_id)
+      .then((d) => {
+        filaDetalheCacheRef.current.set(fila_id, d)
+        return d
+      })
+      .catch((e) => { throw e })
+      .finally(() => { filaDetalheInFlightRef.current.delete(fila_id) })
+    filaDetalheInFlightRef.current.set(fila_id, p)
+  }
+
   useEffect(() => {
     if (aba !== 'historico' || ordensState.length > 0 || loadingHistorico) return
 
@@ -1224,7 +1243,11 @@ export function OcClient({ fila, ordens, perm }: Props) {
                       key={item.id}
                       className="cursor-pointer transition-colors"
                       style={{ borderTop: idx > 0 ? '1px solid var(--ac-border)' : undefined }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-border) 20%, transparent)')}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-border) 20%, transparent)'
+                        prefetchFilaDetalhe(item.id)
+                      }}
+                      onFocus={() => prefetchFilaDetalhe(item.id)}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       onClick={() => setFilaAberta(item)}
                     >
@@ -1252,6 +1275,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
                         <button
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                           style={{ background: 'var(--ac-accent)', color: '#111827' }}
+                          onMouseEnter={() => prefetchFilaDetalhe(item.id)}
+                          onFocus={() => prefetchFilaDetalhe(item.id)}
                           onClick={(e) => { e.stopPropagation(); setFilaAberta(item) }}
                         >
                           Revisar
@@ -1469,6 +1494,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
         <FilaReposicaoDetalheModal
           fila={filaAberta}
           perm={perm}
+          initialDetalhe={filaDetalheCacheRef.current.get(filaAberta.id)}
+          initialDetalhePromise={filaDetalheInFlightRef.current.get(filaAberta.id)}
           onClose={() => setFilaAberta(null)}
           onRefresh={() => {
             setFilaAberta(null)
