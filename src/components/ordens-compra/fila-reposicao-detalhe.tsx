@@ -50,7 +50,8 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [salvandoItem, setSalvandoItem] = useState<string | null>(null)
-  const [adicionaisLocais, setAdicionaisLocais] = useState<Record<string, string>>({})
+  /** Valor editável = quantidade total a comprar (sugerida + adicional persistidos). */
+  const [quantidadesLocais, setQuantidadesLocais] = useState<Record<string, string>>({})
   const [gerandoOC, setGerandoOC] = useState(false)
   const [dispensando, setDispensando] = useState(false)
   const [confirmandoDispensar, setConfirmandoDispensar] = useState(false)
@@ -66,9 +67,10 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
           setItens(detalhe.itens)
           const iniciais: Record<string, string> = {}
           for (const item of detalhe.itens) {
-            iniciais[item.id] = String(item.quantidade_adicional)
+            const total = item.quantidade_sugerida + item.quantidade_adicional
+            iniciais[item.id] = String(total)
           }
-          setAdicionaisLocais(iniciais)
+          setQuantidadesLocais(iniciais)
         }
       } catch (e: unknown) {
         if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar detalhes.')
@@ -101,19 +103,24 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
     }
   }
 
-  async function salvarAdicional(item: FilaReposicaoItem) {
+  async function salvarQuantidade(item: FilaReposicaoItem) {
     if (!perm.editar) return
-    const raw = adicionaisLocais[item.id] ?? '0'
-    const valor = parseNumero(raw)
-    if (!Number.isFinite(valor) || valor < 0) {
-      setErro('Quantidade adicional inválida.')
+    const raw = quantidadesLocais[item.id] ?? String(item.quantidade_sugerida + item.quantidade_adicional)
+    const total = parseNumero(raw)
+    if (!Number.isFinite(total) || total < 0) {
+      setErro('Quantidade inválida.')
       return
     }
+    if (total < item.quantidade_sugerida) {
+      setErro(`A quantidade não pode ser menor que a sugerida (${fmtQtd(item.quantidade_sugerida)}).`)
+      return
+    }
+    const adicional = total - item.quantidade_sugerida
     setSalvandoItem(item.id)
     setErro('')
     try {
-      await atualizarItemFila(item.id, { quantidade_adicional: valor })
-      setItens((prev) => prev.map((i) => i.id === item.id ? { ...i, quantidade_adicional: valor } : i))
+      await atualizarItemFila(item.id, { quantidade_adicional: adicional })
+      setItens((prev) => prev.map((i) => i.id === item.id ? { ...i, quantidade_adicional: adicional } : i))
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {
@@ -152,10 +159,15 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
   }
 
   const itensSelecionados = itens.filter((i) => i.selecionado)
+  function totalCompradoLocal(item: FilaReposicaoItem): number {
+    const salvo = item.quantidade_sugerida + item.quantidade_adicional
+    const raw = quantidadesLocais[item.id] ?? String(salvo)
+    const parsed = parseNumero(raw)
+    return Number.isFinite(parsed) ? parsed : salvo
+  }
+
   const estimativaTotal = itensSelecionados.reduce((s, i) => {
-    const adicional = parseNumero(adicionaisLocais[i.id] ?? String(i.quantidade_adicional))
-    const adicionalSafe = Number.isFinite(adicional) ? adicional : i.quantidade_adicional
-    return s + i.mp_preco_custo * (i.quantidade_sugerida + adicionalSafe)
+    return s + i.mp_preco_custo * totalCompradoLocal(i)
   }, 0)
 
   // Agrupa por fornecedor na mesma ordem do backend (gerarOCsDaFila cria uma OC
@@ -217,10 +229,7 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                     Facas que usam
                   </th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                    Qtd sugerida
-                  </th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                    Qtd adicional
+                    Quantidade
                   </th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                     Estimativa
@@ -231,9 +240,7 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                 {grupos.flatMap((grupo, grupoIdx) => {
                   const itensSelGrupo = grupo.itens.filter((i) => i.selecionado)
                   const subtotalGrupo = itensSelGrupo.reduce((s, i) => {
-                    const adicional = parseNumero(adicionaisLocais[i.id] ?? String(i.quantidade_adicional))
-                    const adicionalSafe = Number.isFinite(adicional) ? adicional : i.quantidade_adicional
-                    return s + i.mp_preco_custo * (i.quantidade_sugerida + adicionalSafe)
+                    return s + i.mp_preco_custo * totalCompradoLocal(i)
                   }, 0)
                   const geraOC = itensSelGrupo.length > 0
 
@@ -245,7 +252,7 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                         borderTop: grupoIdx > 0 ? '2px solid var(--ac-border)' : undefined,
                       }}
                     >
-                      <td colSpan={7} className="px-3 py-2">
+                      <td colSpan={6} className="px-3 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
@@ -271,12 +278,13 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                   )
 
                   const linhas = grupo.itens.map((item, idx) => {
-                  const adicionalRaw = adicionaisLocais[item.id] ?? String(item.quantidade_adicional)
-                  const adicionalValor = parseNumero(adicionalRaw)
-                  const adicionalSafe = Number.isFinite(adicionalValor) ? adicionalValor : item.quantidade_adicional
-                  const qtdTotal = item.quantidade_sugerida + adicionalSafe
+                  const qtdRaw = quantidadesLocais[item.id] ?? String(item.quantidade_sugerida + item.quantidade_adicional)
+                  const qtdParsed = parseNumero(qtdRaw)
+                  const salvoTotal = item.quantidade_sugerida + item.quantidade_adicional
+                  const qtdTotal = Number.isFinite(qtdParsed) ? qtdParsed : salvoTotal
                   const estimativa = item.mp_preco_custo * qtdTotal
-                  const foiAlterado = adicionalRaw !== String(item.quantidade_adicional)
+                  const foiAlterado =
+                    Number.isFinite(qtdParsed) && Math.abs(qtdParsed - salvoTotal) > 1e-9
 
                   return (
                     <tr
@@ -338,34 +346,30 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                         </div>
                       </td>
 
-                      {/* Qtd sugerida */}
-                      <td className="px-3 py-3 text-right font-semibold" style={{ color: 'var(--ac-accent)' }}>
-                        {fmtQtd(item.quantidade_sugerida)}
-                      </td>
-
-                      {/* Qtd adicional */}
+                      {/* Quantidade (total a comprar; mínimo = sugerida pelo sistema) */}
                       <td className="px-3 py-3 text-right">
                         {perm.editar && item.selecionado ? (
                           <div className="flex items-center justify-end gap-1">
                             <input
                               type="number"
-                              min="0"
+                              min={item.quantidade_sugerida}
                               step="any"
-                              value={adicionalRaw}
+                              value={qtdRaw}
                               onChange={(e) =>
-                                setAdicionaisLocais((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                setQuantidadesLocais((prev) => ({ ...prev, [item.id]: e.target.value }))
                               }
                               disabled={salvandoItem === item.id}
-                              className="w-20 px-2 py-1 rounded text-sm text-right"
+                              className="w-24 px-2 py-1 rounded text-sm text-right font-semibold"
                               style={{
                                 border: '1px solid var(--ac-border)',
                                 background: 'var(--ac-bg)',
-                                color: 'var(--ac-text)',
+                                color: 'var(--ac-accent)',
                               }}
                             />
                             {foiAlterado && (
                               <button
-                                onClick={() => salvarAdicional(item)}
+                                type="button"
+                                onClick={() => salvarQuantidade(item)}
                                 disabled={salvandoItem === item.id}
                                 className="px-2 py-1 rounded text-xs font-semibold"
                                 style={{ background: 'var(--ac-accent)', color: '#111827' }}
@@ -375,7 +379,9 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
                             )}
                           </div>
                         ) : (
-                          <span style={{ color: 'var(--ac-text)' }}>{fmtQtd(item.quantidade_adicional)}</span>
+                          <span className="font-semibold" style={{ color: 'var(--ac-accent)' }}>
+                            {fmtQtd(salvoTotal)}
+                          </span>
                         )}
                       </td>
 
