@@ -1188,7 +1188,19 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [agruparPorPedido, setAgruparPorPedido] = useState(true)
   const [periodoIni, setPeriodoIni] = useState('')
   const [periodoFim, setPeriodoFim] = useState('')
+  const [filaPeriodoIni, setFilaPeriodoIni] = useState('')
+  const [filaPeriodoFim, setFilaPeriodoFim] = useState('')
   const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set())
+
+  const filaFiltrada = useMemo(() => {
+    if (!filaPeriodoIni && !filaPeriodoFim) return filaState
+    return filaState.filter((item) => {
+      const d = (item.created_at || '').slice(0, 10)
+      if (filaPeriodoIni && d < filaPeriodoIni) return false
+      if (filaPeriodoFim && d > filaPeriodoFim) return false
+      return true
+    })
+  }, [filaState, filaPeriodoIni, filaPeriodoFim])
 
   const ordensFiltradas = useMemo(() => {
     let lista = filtroStatus === 'todas' ? ordensState : ordensState.filter((o) => o.status === filtroStatus)
@@ -1356,6 +1368,44 @@ export function OcClient({ fila, ordens, perm }: Props) {
       {/* ── Aba: Fila de Reposição ── */}
       {aba === 'fila' && (
         <div className="px-4 sm:px-8 py-6">
+          {filaState.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                Período:
+              </span>
+              <input
+                type="date"
+                value={filaPeriodoIni}
+                onChange={(e) => setFilaPeriodoIni(e.target.value)}
+                max={filaPeriodoFim || undefined}
+                className="px-2 py-1 rounded text-sm"
+                style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+              />
+              <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>até</span>
+              <input
+                type="date"
+                value={filaPeriodoFim}
+                onChange={(e) => setFilaPeriodoFim(e.target.value)}
+                min={filaPeriodoIni || undefined}
+                className="px-2 py-1 rounded text-sm"
+                style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+              />
+              {(filaPeriodoIni || filaPeriodoFim) && (
+                <button
+                  onClick={() => { setFilaPeriodoIni(''); setFilaPeriodoFim('') }}
+                  className="px-2 py-1 rounded text-xs font-medium"
+                  style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)', color: 'var(--ac-muted)' }}
+                  title="Limpar período"
+                >
+                  Limpar
+                </button>
+              )}
+              <span className="ml-auto text-xs" style={{ color: 'var(--ac-muted)' }}>
+                {filaFiltrada.length} de {filaState.length}
+              </span>
+            </div>
+          )}
+
           {filaState.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-20 rounded-xl text-center"
@@ -1370,6 +1420,14 @@ export function OcClient({ fila, ordens, perm }: Props) {
                 Quando vendas forem entregues e houver estoques abaixo do mínimo, os pedidos aparecerão aqui.
               </p>
             </div>
+          ) : filaFiltrada.length === 0 ? (
+            <div
+              className="flex flex-col items-center justify-center py-16 rounded-xl text-center"
+              style={{ border: '2px dashed var(--ac-border)' }}
+            >
+              <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Nenhum pedido neste período</p>
+              <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Ajuste as datas ou clique em Limpar.</p>
+            </div>
           ) : (
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
               <table className="w-full text-sm">
@@ -1383,7 +1441,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filaState.map((item, idx) => (
+                  {filaFiltrada.map((item, idx) => (
                     <tr
                       key={item.id}
                       className="cursor-pointer transition-colors"
