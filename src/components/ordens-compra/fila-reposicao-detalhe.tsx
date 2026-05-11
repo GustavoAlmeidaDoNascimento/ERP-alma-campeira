@@ -9,13 +9,17 @@ import {
   gerarOCsDaFila,
   dispensarFila,
 } from '@/lib/actions/ordens-compra'
-import type { FilaReposicao, FilaReposicaoItem } from '@/types'
+import type { FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 type Props = {
   fila: FilaReposicao
   perm: Perm
+  /** Dado já pré-buscado (prefetch on hover). Se presente, evita o estado de loading. */
+  initialDetalhe?: FilaReposicaoDetalhe
+  /** Request em vôo iniciada pelo prefetch. Se presente, esperamos ela em vez de disparar nova. */
+  initialDetalhePromise?: Promise<FilaReposicaoDetalhe>
   onClose: () => void
   onRefresh: () => void
 }
@@ -45,32 +49,41 @@ function BadgeEstoque({ atual, minimo }: { atual: number; minimo: number }) {
   )
 }
 
-export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Props) {
-  const [itens, setItens] = useState<FilaReposicaoItem[]>([])
-  const [carregando, setCarregando] = useState(true)
+export function FilaReposicaoDetalheModal({
+  fila, perm, initialDetalhe, initialDetalhePromise, onClose, onRefresh,
+}: Props) {
+  function quantidadesIniciais(itens: FilaReposicaoItem[]): Record<string, string> {
+    const m: Record<string, string> = {}
+    for (const item of itens) {
+      m[item.id] = String(item.quantidade_sugerida + item.quantidade_adicional)
+    }
+    return m
+  }
+
+  const [itens, setItens] = useState<FilaReposicaoItem[]>(() => initialDetalhe?.itens ?? [])
+  const [carregando, setCarregando] = useState(() => !initialDetalhe)
   const [erro, setErro] = useState('')
   const [salvandoItem, setSalvandoItem] = useState<string | null>(null)
   /** Valor editável = quantidade total a comprar (sugerida + adicional persistidos). */
-  const [quantidadesLocais, setQuantidadesLocais] = useState<Record<string, string>>({})
+  const [quantidadesLocais, setQuantidadesLocais] = useState<Record<string, string>>(() =>
+    initialDetalhe ? quantidadesIniciais(initialDetalhe.itens) : {},
+  )
   const [gerandoOC, setGerandoOC] = useState(false)
   const [dispensando, setDispensando] = useState(false)
   const [confirmandoDispensar, setConfirmandoDispensar] = useState(false)
 
   useEffect(() => {
+    if (initialDetalhe) return // já temos os dados via prefetch
     let cancelled = false
     async function carregar() {
       setCarregando(true)
       setErro('')
       try {
-        const detalhe = await getFilaReposicaoDetalhe(fila.id)
+        // Reaproveita a request já disparada pelo prefetch on hover, se houver.
+        const detalhe = await (initialDetalhePromise ?? getFilaReposicaoDetalhe(fila.id))
         if (!cancelled) {
           setItens(detalhe.itens)
-          const iniciais: Record<string, string> = {}
-          for (const item of detalhe.itens) {
-            const total = item.quantidade_sugerida + item.quantidade_adicional
-            iniciais[item.id] = String(total)
-          }
-          setQuantidadesLocais(iniciais)
+          setQuantidadesLocais(quantidadesIniciais(detalhe.itens))
         }
       } catch (e: unknown) {
         if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar detalhes.')
@@ -80,7 +93,7 @@ export function FilaReposicaoDetalheModal({ fila, perm, onClose, onRefresh }: Pr
     }
     carregar()
     return () => { cancelled = true }
-  }, [fila.id])
+  }, [fila.id, initialDetalhe, initialDetalhePromise])
 
   function parseNumero(raw: string): number {
     const v = raw.trim().replace(',', '.')
