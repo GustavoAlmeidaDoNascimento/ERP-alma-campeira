@@ -9,7 +9,7 @@ import {
   gerarOCsDaFila,
   dispensarFila,
 } from '@/lib/actions/ordens-compra'
-import type { FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem } from '@/types'
+import type { FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem, FilaReposicaoPedidoItem } from '@/types'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -61,6 +61,7 @@ export function FilaReposicaoDetalheModal({
   }
 
   const [itens, setItens] = useState<FilaReposicaoItem[]>(() => initialDetalhe?.itens ?? [])
+  const [pedidoItens, setPedidoItens] = useState<FilaReposicaoPedidoItem[]>(() => initialDetalhe?.pedido_itens ?? [])
   const [carregando, setCarregando] = useState(() => !initialDetalhe)
   const [erro, setErro] = useState('')
   const [salvandoItem, setSalvandoItem] = useState<string | null>(null)
@@ -83,6 +84,7 @@ export function FilaReposicaoDetalheModal({
         const detalhe = await (initialDetalhePromise ?? getFilaReposicaoDetalhe(fila.id))
         if (!cancelled) {
           setItens(detalhe.itens)
+          setPedidoItens(detalhe.pedido_itens)
           setQuantidadesLocais(quantidadesIniciais(detalhe.itens))
         }
       } catch (e: unknown) {
@@ -216,6 +218,45 @@ export function FilaReposicaoDetalheModal({
             Estimativa: {fmt(estimativaTotal)}
           </span>
         </div>
+
+        {/* Itens do pedido */}
+        {!carregando && pedidoItens.length > 0 && (
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+            <div
+              className="px-3 py-2 text-xs font-semibold uppercase tracking-wide"
+              style={{
+                color: 'var(--ac-muted)',
+                background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)',
+                borderBottom: '1px solid var(--ac-border)',
+              }}
+            >
+              Itens do pedido ({pedidoItens.length})
+            </div>
+            <ul className="divide-y" style={{ borderColor: 'var(--ac-border)' }}>
+              {pedidoItens.map((pi, idx) => (
+                <li
+                  key={`${pi.faca_id}-${idx}`}
+                  className="px-3 py-2 flex items-center gap-3 text-sm"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate" style={{ color: 'var(--ac-text)' }}>
+                      {pi.faca_nome}
+                    </div>
+                    <div className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
+                      {pi.faca_codigo}
+                    </div>
+                  </div>
+                  <div className="text-xs whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
+                    {fmtQtd(pi.quantidade)} × {fmt(pi.preco_unitario)}
+                  </div>
+                  <div className="font-semibold whitespace-nowrap" style={{ color: 'var(--ac-text)' }}>
+                    {fmt(pi.quantidade * pi.preco_unitario)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Corpo */}
         {carregando ? (
