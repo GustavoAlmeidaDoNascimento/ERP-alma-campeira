@@ -79,7 +79,13 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
             faca_id,
             quantidade,
             preco_unitario,
-            faca:facas(id, codigo, nome)
+            faca:facas(
+              id, codigo, nome,
+              faca_mp:faca_materias_primas(
+                quantidade,
+                mp:materias_primas(id, codigo, nome, estoque_atual, estoque_minimo)
+              )
+            )
           )
         ),
         itens:fila_reposicao_itens(
@@ -112,23 +118,47 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
         faca_id: string
         quantidade: number
         preco_unitario: number
-        faca: { id: string; codigo: string; nome: string }
-          | { id: string; codigo: string; nome: string }[]
-          | null
+        faca: FacaWithMp | FacaWithMp[] | null
       }> | null
     } | null
+
+    type MpRel = {
+      id: string; codigo: string; nome: string
+      estoque_atual: number; estoque_minimo: number
+    }
+    type FacaWithMp = {
+      id: string; codigo: string; nome: string
+      faca_mp: Array<{
+        quantidade: number
+        mp: MpRel | MpRel[] | null
+      }> | null
+    }
     const cliente = pedido?.cliente
       ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
       : null
 
     const pedido_itens: FilaReposicaoPedidoItem[] = (pedido?.pedido_itens ?? []).map((pi) => {
       const faca = Array.isArray(pi.faca) ? pi.faca[0] : pi.faca
+      const materias_primas: FilaReposicaoPedidoItem['materias_primas'] = []
+      for (const fm of faca?.faca_mp ?? []) {
+        const mp = Array.isArray(fm.mp) ? fm.mp[0] : fm.mp
+        if (!mp) continue
+        materias_primas.push({
+          mp_id: mp.id,
+          mp_codigo: mp.codigo,
+          mp_nome: mp.nome,
+          quantidade_por_faca: Number(fm.quantidade),
+          estoque_atual: Number(mp.estoque_atual ?? 0),
+          estoque_minimo: Number(mp.estoque_minimo ?? 0),
+        })
+      }
       return {
         faca_id: pi.faca_id,
         faca_codigo: faca?.codigo ?? '—',
         faca_nome: faca?.nome ?? '—',
         quantidade: Number(pi.quantidade),
         preco_unitario: Number(pi.preco_unitario),
+        materias_primas,
       }
     })
 
