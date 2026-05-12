@@ -442,12 +442,23 @@ export type FilaReposicaoItem = {
   facas_relacionadas: FilaReposicaoItemFacaRelacionada[]
 }
 
+export type FilaReposicaoPedidoItemMp = {
+  mp_id: string
+  mp_codigo: string
+  mp_nome: string
+  /** Quantidade de MP consumida por 1 unidade da faca (BOM). */
+  quantidade_por_faca: number
+  estoque_atual: number
+  estoque_minimo: number
+}
+
 export type FilaReposicaoPedidoItem = {
   faca_id: string
   faca_codigo: string
   faca_nome: string
   quantidade: number
   preco_unitario: number
+  materias_primas: FilaReposicaoPedidoItemMp[]
 }
 
 export type FilaReposicaoDetalhe = {
