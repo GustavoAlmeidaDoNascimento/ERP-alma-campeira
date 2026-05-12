@@ -442,9 +442,18 @@ export type FilaReposicaoItem = {
   facas_relacionadas: FilaReposicaoItemFacaRelacionada[]
 }
 
+export type FilaReposicaoPedidoItem = {
+  faca_id: string
+  faca_codigo: string
+  faca_nome: string
+  quantidade: number
+  preco_unitario: number
+}
+
 export type FilaReposicaoDetalhe = {
   fila: FilaReposicao
   itens: FilaReposicaoItem[]
+  pedido_itens: FilaReposicaoPedidoItem[]
 }
 
 export type CategoriaFacaDB = {
