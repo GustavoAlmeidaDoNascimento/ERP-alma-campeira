@@ -6,7 +6,7 @@ import {
   gerarCodigoOC,
   gerarOCsDeFilaItens,
 } from '@/lib/ordens-compra/gerar-oc-fila'
-import type { OrdemCompra, FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem } from '@/types'
+import type { OrdemCompra, FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem, FilaReposicaoPedidoItem } from '@/types'
 
 // ─── Fila de Reposição ────────────────────────────────────────────────────────
 
@@ -74,7 +74,13 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
         pedido:pedidos(
           id,
           codigo,
-          cliente:clientes(id, nome)
+          cliente:clientes(id, nome),
+          pedido_itens(
+            faca_id,
+            quantidade,
+            preco_unitario,
+            faca:facas(id, codigo, nome)
+          )
         ),
         itens:fila_reposicao_itens(
           id,
@@ -102,10 +108,29 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
     const pedido = (Array.isArray(filaRow.pedido) ? filaRow.pedido[0] : filaRow.pedido) as {
       id: string; codigo: string
       cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
+      pedido_itens: Array<{
+        faca_id: string
+        quantidade: number
+        preco_unitario: number
+        faca: { id: string; codigo: string; nome: string }
+          | { id: string; codigo: string; nome: string }[]
+          | null
+      }> | null
     } | null
     const cliente = pedido?.cliente
       ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
       : null
+
+    const pedido_itens: FilaReposicaoPedidoItem[] = (pedido?.pedido_itens ?? []).map((pi) => {
+      const faca = Array.isArray(pi.faca) ? pi.faca[0] : pi.faca
+      return {
+        faca_id: pi.faca_id,
+        faca_codigo: faca?.codigo ?? '—',
+        faca_nome: faca?.nome ?? '—',
+        quantidade: Number(pi.quantidade),
+        preco_unitario: Number(pi.preco_unitario),
+      }
+    })
 
     const itensRows = (filaRow.itens ?? []) as Array<{
       id: string; fila_id: string; materia_prima_id: string
@@ -171,7 +196,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
       }
     })
 
-    return { fila, itens }
+    return { fila, itens, pedido_itens }
   })
 }
 
