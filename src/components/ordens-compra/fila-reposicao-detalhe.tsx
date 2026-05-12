@@ -62,6 +62,7 @@ export function FilaReposicaoDetalheModal({
 
   const [itens, setItens] = useState<FilaReposicaoItem[]>(() => initialDetalhe?.itens ?? [])
   const [pedidoItens, setPedidoItens] = useState<FilaReposicaoPedidoItem[]>(() => initialDetalhe?.pedido_itens ?? [])
+  const [pedidoItensExpandidos, setPedidoItensExpandidos] = useState<Set<string>>(() => new Set())
   const [carregando, setCarregando] = useState(() => !initialDetalhe)
   const [erro, setErro] = useState('')
   const [salvandoItem, setSalvandoItem] = useState<string | null>(null)
@@ -233,27 +234,96 @@ export function FilaReposicaoDetalheModal({
               Itens do pedido ({pedidoItens.length})
             </div>
             <ul className="divide-y" style={{ borderColor: 'var(--ac-border)' }}>
-              {pedidoItens.map((pi, idx) => (
-                <li
-                  key={`${pi.faca_id}-${idx}`}
-                  className="px-3 py-2 flex items-center gap-3 text-sm"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate" style={{ color: 'var(--ac-text)' }}>
-                      {pi.faca_nome}
-                    </div>
-                    <div className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
-                      {pi.faca_codigo}
-                    </div>
-                  </div>
-                  <div className="text-xs whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
-                    {fmtQtd(pi.quantidade)} × {fmt(pi.preco_unitario)}
-                  </div>
-                  <div className="font-semibold whitespace-nowrap" style={{ color: 'var(--ac-text)' }}>
-                    {fmt(pi.quantidade * pi.preco_unitario)}
-                  </div>
-                </li>
-              ))}
+              {pedidoItens.map((pi, idx) => {
+                const key = `${pi.faca_id}-${idx}`
+                const expandido = pedidoItensExpandidos.has(key)
+                const temMps = pi.materias_primas.length > 0
+                return (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!temMps) return
+                        setPedidoItensExpandidos((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(key)) next.delete(key)
+                          else next.add(key)
+                          return next
+                        })
+                      }}
+                      disabled={!temMps}
+                      className="w-full px-3 py-2 flex items-center gap-3 text-sm text-left transition-colors"
+                      style={{
+                        background: expandido ? 'color-mix(in srgb, var(--ac-accent) 6%, transparent)' : undefined,
+                        cursor: temMps ? 'pointer' : 'default',
+                      }}
+                    >
+                      <span
+                        className="text-xs inline-flex w-4 justify-center"
+                        style={{
+                          color: 'var(--ac-muted)',
+                          transform: expandido ? 'rotate(90deg)' : undefined,
+                          transition: 'transform 120ms',
+                          visibility: temMps ? 'visible' : 'hidden',
+                        }}
+                        aria-hidden
+                      >
+                        ▶
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate" style={{ color: 'var(--ac-text)' }}>
+                          {pi.faca_nome}
+                        </div>
+                        <div className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
+                          {pi.faca_codigo}
+                        </div>
+                      </div>
+                      <div className="text-xs whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
+                        {fmtQtd(pi.quantidade)} × {fmt(pi.preco_unitario)}
+                      </div>
+                      <div className="font-semibold whitespace-nowrap" style={{ color: 'var(--ac-text)' }}>
+                        {fmt(pi.quantidade * pi.preco_unitario)}
+                      </div>
+                    </button>
+
+                    {expandido && temMps && (
+                      <div
+                        className="px-3 pb-3 pt-1"
+                        style={{ background: 'color-mix(in srgb, var(--ac-border) 18%, transparent)' }}
+                      >
+                        <div className="text-xs mb-2" style={{ color: 'var(--ac-muted)' }}>
+                          Matérias-primas usadas por <strong style={{ color: 'var(--ac-text)' }}>{pi.faca_nome}</strong>
+                          {' '}(consumo por unidade · necessidade para {fmtQtd(pi.quantidade)} {pi.quantidade === 1 ? 'unidade' : 'unidades'}):
+                        </div>
+                        <ul className="flex flex-col gap-1">
+                          {pi.materias_primas.map((mp) => {
+                            const necessidade = mp.quantidade_por_faca * pi.quantidade
+                            return (
+                              <li
+                                key={mp.mp_id}
+                                className="flex items-center gap-2 text-xs px-2 py-1.5 rounded"
+                                style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+                              >
+                                <BadgeEstoque atual={mp.estoque_atual} minimo={mp.estoque_minimo} />
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium" style={{ color: 'var(--ac-text)' }}>{mp.mp_nome}</span>
+                                  <span className="ml-1.5 font-mono" style={{ color: 'var(--ac-muted)' }}>{mp.mp_codigo}</span>
+                                </div>
+                                <span className="whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
+                                  {fmtQtd(mp.quantidade_por_faca)} / un · precisa {fmtQtd(necessidade)}
+                                </span>
+                                <span className="whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>
+                                  estoque {fmtQtd(mp.estoque_atual)} / {fmtQtd(mp.estoque_minimo)}
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}
