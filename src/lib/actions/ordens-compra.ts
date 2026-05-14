@@ -326,7 +326,8 @@ export async function atualizarItemFila(
 export async function gerarOCsDaFila(fila_id: string): Promise<string[]> {
   await assertPermissao('ordens_compra', 'criar')
   const supabase = await createClient()
-  const codigos = await gerarOCsDeFilaItens(supabase, fila_id)
+  const uid = await resolverUsuarioRegistroOC(undefined)
+  const codigos = await gerarOCsDeFilaItens(supabase, fila_id, uid)
   return codigos
 }
 
@@ -411,6 +412,9 @@ export async function criarOrdemCompraManual(input: {
 
   const codigo = await gerarCodigoOC(supabase)
 
+  const uidCriacao = await resolverUsuarioRegistroOC(undefined)
+  const agora = new Date().toISOString()
+
   const { data: oc, error: ocErr } = await supabase
     .from('ordens_compra')
     .insert({
@@ -419,6 +423,8 @@ export async function criarOrdemCompraManual(input: {
       status: 'pendente',
       data_geracao: new Date().toISOString().split('T')[0],
       observacao: input.observacao?.trim() || null,
+      ultima_alteracao_usuario_id: uidCriacao,
+      ultima_alteracao_em: agora,
     })
     .select('id')
     .single()
@@ -552,14 +558,15 @@ export async function getOrdensCompra(): Promise<OrdemCompra[]> {
 
 // ─── Editar OC ────────────────────────────────────────────────────────────────
 
-export async function atualizarQuantidadeItem(item_id: string, quantidade: number) {
+export async function atualizarQuantidadeItem(item_id: string, quantidade: number, usuarioRegistroId?: string | null) {
   await assertPermissao('ordens_compra', 'editar')
   if (quantidade <= 0) throw new Error('Quantidade deve ser maior que zero.')
 
   const supabase = await createClient()
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
   const { data: item, error: itemErr } = await supabase
     .from('ordem_compra_itens')
-    .select('quantidade_vendida, quantidade')
+    .select('quantidade_vendida, quantidade, ordem_compra_id')
     .eq('id', item_id)
     .single()
 
@@ -575,18 +582,25 @@ export async function atualizarQuantidadeItem(item_id: string, quantidade: numbe
     .eq('id', item_id)
 
   if (error) throw new Error(error.message)
+
+  await marcarUltimaAlteracaoOC(item.ordem_compra_id, uid)
 }
 
-export async function atualizarUnidadesAdicionaisItem(item_id: string, quantidade_adicional: number) {
+export async function atualizarUnidadesAdicionaisItem(
+  item_id: string,
+  quantidade_adicional: number,
+  usuarioRegistroId?: string | null,
+) {
   await assertPermissao('ordens_compra', 'editar')
   if (!Number.isFinite(quantidade_adicional) || quantidade_adicional < 0) {
     throw new Error('Unidades adicionais inválidas.')
   }
 
   const supabase = await createClient()
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
   const { data: item, error: itemErr } = await supabase
     .from('ordem_compra_itens')
-    .select('quantidade_vendida')
+    .select('quantidade_vendida, ordem_compra_id')
     .eq('id', item_id)
     .single()
 
@@ -604,12 +618,15 @@ export async function atualizarUnidadesAdicionaisItem(item_id: string, quantidad
     .eq('id', item_id)
 
   if (error) throw new Error(error.message)
+
+  await marcarUltimaAlteracaoOC(item.ordem_compra_id, uid)
 }
 
 export async function criarItemOrdemCompra(
   ordem_compra_id: string,
   materia_prima_id: string,
   quantidade_adicional: number,
+  usuarioRegistroId?: string | null,
 ) {
   await assertPermissao('ordens_compra', 'editar')
   if (!Number.isFinite(quantidade_adicional) || quantidade_adicional <= 0) {
@@ -617,6 +634,7 @@ export async function criarItemOrdemCompra(
   }
 
   const supabase = await createClient()
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
   const { data: mp, error: mpErr } = await supabase
     .from('materias_primas')
     .select('preco_custo')
@@ -636,14 +654,24 @@ export async function criarItemOrdemCompra(
   })
 
   if (error) throw new Error(error.message)
+
+  await marcarUltimaAlteracaoOC(ordem_compra_id, uid)
 }
 
-export async function atualizarObservacaoOC(id: string, observacao: string) {
+export async function atualizarObservacaoOC(
+  id: string,
+  observacao: string,
+  usuarioRegistroId?: string | null,
+) {
   await assertPermissao('ordens_compra', 'editar')
   const supabase = await createClient()
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
   const { error } = await supabase
     .from('ordens_compra')
-    .update({ observacao: observacao.trim() || null })
+    .update({
+      observacao: observacao.trim() || null,
+      ...camposRegistroAlteracao(uid),
+    })
     .eq('id', id)
     .select('id, observacao')
     .single()
@@ -651,10 +679,14 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
   if (error) throw new Error(error.message)
 }
 
-export async function mudarStatusOC(id: string, status: StatusOC) {
+export async function mudarStatusOC(
+  id: string,
+  status: StatusOC,
+  usuarioRegistroId?: string | null,
+) {
   await assertPermissao('ordens_compra', 'editar')
   const supabase = await createClient()
-  const user = await getAuthenticatedUser()
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
 
   if (status === 'recebida') {
     const { data: ocCabecalho, error: ocErr } = await supabase
@@ -695,14 +727,14 @@ export async function mudarStatusOC(id: string, status: StatusOC) {
         materia_prima_id: item.materia_prima_id,
         quantidade: item.quantidade,
         observacao: observacaoRecebimento,
-        usuario_id: user?.id ?? null,
+        usuario_id: uid,
       })
     }
   }
 
   const { error } = await supabase
     .from('ordens_compra')
-    .update({ status })
+    .update({ status, ...camposRegistroAlteracao(uid) })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
