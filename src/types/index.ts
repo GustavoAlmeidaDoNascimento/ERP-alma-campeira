@@ -295,7 +295,7 @@ export type PedidoItem = {
   // Snapshot fiscal copiado da faca no momento da venda (NF-e — opcionais)
   ncm?: string | null
   cfop?: string | null
-  faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda' | 'foto_url'>
+  faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda' | 'foto_url' | 'unidade' | 'ean_gtin'>
 }
 
 /** Dados do cliente retornados em joins de pedidos (listagem e detalhe). */
