@@ -6,18 +6,15 @@ import { getFacas } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { OrcamentosClient } from '@/components/orcamentos/orcamentos-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Orçamentos — Alma Campeira' }
 
 export default async function OrcamentosPage() {
   return (
-    <>
-      <PageShellTitle title="Orçamentos" subtitle="Carregando dados de orçamentos..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <OrcamentosPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <OrcamentosPageData />
+    </Suspense>
   )
 }
 
