@@ -394,6 +394,15 @@ function OcDetalheModal({
     [materiasPrimas, idsMateriaJaNoPedido]
   )
 
+  const opcoesUsuarioRegistro = useMemo(
+    () => usuariosRegistro.map((u) => ({ value: u.id, label: u.nome })),
+    [usuariosRegistro],
+  )
+
+  useEffect(() => {
+    setConfirmandoRecebimento(false)
+  }, [oc.id, oc.status])
+
   useEffect(() => {
     setObs(oc.observacao ?? '')
   }, [oc.id, oc.observacao])
@@ -481,7 +490,7 @@ function OcDetalheModal({
     }
     setSalvando(item.id); setErro('')
     try {
-      await atualizarUnidadesAdicionaisItem(item.id, adicional)
+      await atualizarUnidadesAdicionaisItem(item.id, adicional, usuarioRegistroId || null)
       setEditandoQtdTotal((prev) => { const n = { ...prev }; delete n[item.id]; return n })
       onRefresh()
     } catch (e: unknown) {
@@ -494,7 +503,7 @@ function OcDetalheModal({
   async function salvarObs() {
     setSalvandoObs(true); setErro('')
     try {
-      await atualizarObservacaoOC(oc.id, obs)
+      await atualizarObservacaoOC(oc.id, obs, usuarioRegistroId || null)
       await Promise.resolve(onRefresh())
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar observação.')
@@ -506,7 +515,7 @@ function OcDetalheModal({
   async function mudarStatus(status: StatusOC) {
     setMudandoStatus(true); setErro('')
     try {
-      await mudarStatusOC(oc.id, status)
+      await mudarStatusOC(oc.id, status, usuarioRegistroId || null)
       await Promise.resolve(onRefresh())
       onClose()
     } catch (e: unknown) {
@@ -519,7 +528,7 @@ function OcDetalheModal({
   async function alternarPago(checked: boolean) {
     setAlterandoPago(true); setErro('')
     try {
-      await definirPagoOrdemCompra(oc.id, checked)
+      await definirPagoOrdemCompra(oc.id, checked, usuarioRegistroId || null)
       await Promise.resolve(onRefresh())
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao atualizar pagamento.')
@@ -568,6 +577,41 @@ function OcDetalheModal({
             </span>
             <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{oc.pedido_codigo}</span>
             <span style={{ color: 'var(--ac-text)' }}>· {oc.cliente_nome ?? '—'}</span>
+          </div>
+        )}
+
+        {oc.ultima_alteracao_em && (
+          <div
+            className="text-xs px-3 py-2 rounded-lg"
+            style={{ background: 'color-mix(in srgb, var(--ac-border) 35%, transparent)', color: 'var(--ac-muted)' }}
+          >
+            Última alteração:{' '}
+            <strong style={{ color: 'var(--ac-text)' }}>{oc.ultima_alteracao_usuario?.nome ?? '—'}</strong>
+            <span> · {fmtDataHora(oc.ultima_alteracao_em)}</span>
+          </div>
+        )}
+
+        {perm.editar && (
+          <div className="space-y-1.5">
+            <label
+              htmlFor="oc-registro-usuario"
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--ac-muted)' }}
+            >
+              Registrar alterações como
+            </label>
+            <SearchableSelect
+              id="oc-registro-usuario"
+              value={usuarioRegistroId}
+              onChange={setUsuarioRegistroId}
+              options={opcoesUsuarioRegistro}
+              placeholder="Selecione o usuário…"
+              loading={carregandoUsuariosRegistro}
+              emptyMessage="Nenhum usuário ativo encontrado"
+            />
+            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+              Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança.
+            </p>
           </div>
         )}
 
@@ -749,7 +793,12 @@ function OcDetalheModal({
                       setErro('Unidades adicionais devem ser maiores que zero.')
                       return
                     }
-                    await criarItemOrdemCompra(oc.id, materiaPrimaParaAdicionar, adicional)
+                    await criarItemOrdemCompra(
+                      oc.id,
+                      materiaPrimaParaAdicionar,
+                      adicional,
+                      usuarioRegistroId || null,
+                    )
                     setMateriaPrimaParaAdicionar('')
                     setAdicionalParaAdicionar('')
                     onRefresh()
@@ -1189,8 +1238,7 @@ function OcCriarModal({
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
-export function OcClient({ fila, ordens, perm }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  const { refreshActiveTab } = useErpTabs()
   const queryClient = useQueryClient()
   const [aba, setAba] = useState<'fila' | 'historico'>('fila')
   const { data: ordensLista = ordens } = useOrdensCompra({ initialData: ordens })
@@ -1946,6 +1994,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
         <OcDetalheModal
           oc={ocAberta}
           perm={perm}
+          usuarioLogadoId={usuarioLogadoId}
           onClose={() => setOcAberta(null)}
           onRefresh={refresh}
           onRequestExcluir={() => {
