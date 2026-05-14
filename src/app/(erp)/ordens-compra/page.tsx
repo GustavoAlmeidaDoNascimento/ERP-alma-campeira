@@ -3,18 +3,15 @@ import { Suspense } from 'react'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { getFilaReposicaoList, getOrdensCompra } from '@/lib/actions/ordens-compra'
 import { OcClient } from '@/components/ordens-compra/oc-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Ordens de Compra — Alma Campeira' }
 
 export default async function OrdensCompraPage() {
   return (
-    <>
-      <PageShellTitle title="Ordens de Compra" subtitle="Carregando fila de reposição e histórico..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <OrdensCompraPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <OrdensCompraPageData />
+    </Suspense>
   )
 }
 
