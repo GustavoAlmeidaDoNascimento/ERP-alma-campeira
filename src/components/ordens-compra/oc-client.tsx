@@ -312,7 +312,8 @@ function OcDetalheModal({
   onRefresh: () => void
   onRequestExcluir?: () => void
 }) {
-  const [editandoAdicional, setEditandoAdicional] = useState<Record<string, string>>({})
+  /** String editável da quantidade total do item (vendido + adicional); igual conceito à fila de reposição. */
+  const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState<string | null>(null)
   const [obs, setObs] = useState(oc.observacao ?? '')
   const [salvandoObs, setSalvandoObs] = useState(false)
@@ -384,25 +385,38 @@ function OcDetalheModal({
     itens.map((i) => {
       const vendido = Number(i.quantidade_vendida ?? i.quantidade)
       const adicionalBase = Number(i.quantidade_adicional ?? 0)
-      const rawAdicional = editandoAdicional[i.id]
-      const adicionalEditado = rawAdicional !== undefined ? parseNumero(rawAdicional) : adicionalBase
-      const adicional = Number.isFinite(adicionalEditado) ? adicionalEditado : adicionalBase
-      return { ...i, quantidade: vendido + adicional }
+      const salvoTotal = vendido + adicionalBase
+      const rawTotal = editandoQtdTotal[i.id]
+      const parsedTotal = rawTotal !== undefined ? parseNumero(rawTotal) : NaN
+      const qtd =
+        rawTotal !== undefined && Number.isFinite(parsedTotal) ? parsedTotal : salvoTotal
+      return { ...i, quantidade: qtd }
     })
   )
 
-  async function salvarAdicional(item: OrdemCompraItem) {
-    const raw = editandoAdicional[item.id]
+  async function salvarQtdTotal(item: OrdemCompraItem) {
+    const raw = editandoQtdTotal[item.id]
     if (raw === undefined) return
-    const adicional = parseNumero(raw)
+    const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
+    const totalQty = parseNumero(raw)
+    if (!Number.isFinite(totalQty)) {
+      setErro('Quantidade total inválida.')
+      return
+    }
+    const minTotal = vendido > 0 ? vendido : 1
+    if (totalQty < minTotal) {
+      setErro(`A quantidade total não pode ser menor que ${fmtQtd(minTotal)}.`)
+      return
+    }
+    const adicional = totalQty - vendido
     if (!Number.isFinite(adicional) || adicional < 0) {
-      setErro('Unidades adicionais inválidas.')
+      setErro('Quantidade total inválida.')
       return
     }
     setSalvando(item.id); setErro('')
     try {
       await atualizarUnidadesAdicionaisItem(item.id, adicional)
-      setEditandoAdicional((prev) => { const n = { ...prev }; delete n[item.id]; return n })
+      setEditandoQtdTotal((prev) => { const n = { ...prev }; delete n[item.id]; return n })
       onRefresh()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
@@ -469,7 +483,6 @@ function OcDetalheModal({
                   'Código',
                   'Matéria-Prima',
                   'Vendido',
-                  'Unidades adicionais',
                   'Qtd Total',
                   'Preço Unit.',
                   'Subtotal',
@@ -482,13 +495,14 @@ function OcDetalheModal({
             </thead>
             <tbody>
               {itens.map((item, idx) => {
-                const isEditing = editandoAdicional[item.id] !== undefined
+                const isEditing = editandoQtdTotal[item.id] !== undefined
                 const vendido = Number(item.quantidade_vendida ?? item.quantidade)
                 const adicionalBase = Number(item.quantidade_adicional ?? 0)
-                const rawAdicional = editandoAdicional[item.id]
-                const adicionalEditado = rawAdicional !== undefined ? parseNumero(rawAdicional) : adicionalBase
-                const adicional = Number.isFinite(adicionalEditado) ? adicionalEditado : adicionalBase
-                const totalQty = vendido + adicional
+                const salvoTotal = vendido + adicionalBase
+                const rawTotal = editandoQtdTotal[item.id]
+                const parsedTotal = rawTotal !== undefined ? parseNumero(rawTotal) : NaN
+                const totalQty =
+                  rawTotal !== undefined && Number.isFinite(parsedTotal) ? parsedTotal : salvoTotal
                 const sub = (item.preco_unitario ?? 0) * totalQty
                 return (
                   <tr
@@ -507,29 +521,32 @@ function OcDetalheModal({
                     <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
                       {fmtQtd(vendido)}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2.5 text-right">
                       {perm.editar && oc.status === 'pendente' ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
                           <input
                             type="number"
-                            min="0"
+                            min={vendido > 0 ? vendido : 1}
                             step="any"
-                            value={isEditing ? editandoAdicional[item.id] : String(adicionalBase)}
-                            onChange={(e) => setEditandoAdicional((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                            value={isEditing ? editandoQtdTotal[item.id] : String(salvoTotal)}
+                            onChange={(e) => setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: e.target.value }))}
                             onFocus={() => {
-                              if (!isEditing) setEditandoAdicional((prev) => ({ ...prev, [item.id]: String(adicionalBase) }))
+                              if (!isEditing) {
+                                setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: String(salvoTotal) }))
+                              }
                             }}
-                            className="w-24 px-2 py-1 rounded text-sm text-right"
+                            className="w-24 px-2 py-1 rounded text-sm text-right font-semibold"
                             style={{
                               border: '1px solid var(--ac-border)',
                               background: 'var(--ac-bg)',
-                              color: 'var(--ac-text)',
+                              color: 'var(--ac-accent)',
                             }}
                           />
                           {isEditing && (
                             <button
-                              onClick={() => salvarAdicional(item)}
-                              disabled={salvando === item.id}
+                              type="button"
+                              onClick={() => salvarQtdTotal(item)}
+                              disabled={salvando === item.id || Math.abs(totalQty - salvoTotal) < 1e-9}
                               className="px-2 py-1 rounded text-xs font-semibold"
                               style={{ background: 'var(--ac-accent)', color: '#111827' }}
                             >
@@ -538,7 +555,8 @@ function OcDetalheModal({
                           )}
                           {isEditing && (
                             <button
-                              onClick={() => setEditandoAdicional((prev) => { const n = { ...prev }; delete n[item.id]; return n })}
+                              type="button"
+                              onClick={() => setEditandoQtdTotal((prev) => { const n = { ...prev }; delete n[item.id]; return n })}
                               className="px-1.5 py-1 rounded text-xs"
                               style={{ color: 'var(--ac-muted)' }}
                             >
@@ -547,11 +565,10 @@ function OcDetalheModal({
                           )}
                         </div>
                       ) : (
-                        <span style={{ color: 'var(--ac-text)' }}>{fmtQtd(adicionalBase)}</span>
+                        <span className="font-semibold" style={{ color: 'var(--ac-accent)' }}>
+                          {fmtQtd(salvoTotal)}
+                        </span>
                       )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
-                      <span style={{ color: 'var(--ac-text)' }}>{fmtQtd(totalQty)}</span>
                     </td>
                     <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
                       {item.preco_unitario != null ? fmt(item.preco_unitario) : '—'}
@@ -564,7 +581,7 @@ function OcDetalheModal({
               })}
               {/* Total */}
               <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 20%, transparent)' }}>
-                <td colSpan={6} className="px-3 py-2.5 text-right font-semibold text-sm" style={{ color: 'var(--ac-muted)' }}>
+                <td colSpan={5} className="px-3 py-2.5 text-right font-semibold text-sm" style={{ color: 'var(--ac-muted)' }}>
                   TOTAL
                 </td>
                 <td className="px-3 py-2.5 text-right font-bold text-base" style={{ color: 'var(--ac-text)' }}>
