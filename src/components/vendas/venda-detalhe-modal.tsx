@@ -1,13 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
-import type { Pedido, StatusPedido } from '@/types'
+import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
+
+function fmtDataHora(iso: string) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function fmtCep(v: string | null | undefined) {
+  if (!v?.trim()) return ''
+  const d = v.replace(/\D/g, '')
+  if (d.length === 8) return `${d.slice(0, 5)}-${d.slice(5)}`
+  return v.trim()
+}
+
+function clienteTemContatoOuEndereco(c: PedidoClienteJoin) {
+  return !!(
+    c.telefone?.trim()
+    || c.email?.trim()
+    || c.cep?.trim()
+    || c.logradouro?.trim()
+    || c.numero?.trim()
+    || c.bairro?.trim()
+    || c.complemento?.trim()
+    || (c.cidade?.trim() && c.estado?.trim())
+    || (c.cidade?.trim() && !c.estado?.trim())
+    || (c.estado?.trim() && !c.cidade?.trim())
+  )
+}
+
+/** Endereço formatado ou null quando não há nada a exibir */
+function textoEnderecoCliente(c: PedidoClienteJoin): string | null {
+  const cep = fmtCep(c.cep)
+  const rua = [c.logradouro?.trim(), c.numero?.trim()].filter(Boolean).join(', ')
+  const comp = c.complemento?.trim()
+  const bai = c.bairro?.trim()
+  const cidadeUf =
+    c.cidade && c.estado
+      ? `${c.cidade}/${c.estado}`
+      : c.cidade || c.estado || ''
+
+  const line1 = [cep, rua].filter(Boolean).join(' · ')
+  const line2 = [comp, bai].filter(Boolean).join(' · ')
+  const blocos = [line1, line2, cidadeUf.trim()].filter((s) => s.length > 0)
+  if (blocos.length === 0) return null
+  return blocos.join('\n')
+}
+
+function DetailMeta({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+      <span className="text-xs font-semibold shrink-0 sm:w-36 tabular-nums" style={{ color: 'var(--ac-muted)' }}>{label}</span>
+      <span className="text-sm break-words" style={{ color: 'var(--ac-text)' }}>{value}</span>
+    </div>
+  )
+}
 
 type Props = {
   pedido: Pedido | null
@@ -95,8 +150,17 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                 {pedido.cliente.cidade}/{pedido.cliente.estado}
               </p>
             ) : null}
+            {pedido.cliente?.razao_social?.trim() ? (
+              <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>
+                Razão social:{' '}
+                <span style={{ color: 'var(--ac-text)' }}>{pedido.cliente.razao_social}</span>
+              </p>
+            ) : null}
+            {pedido.cliente?.ie?.trim() ? (
+              <p className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>IE: {pedido.cliente.ie}</p>
+            ) : null}
             <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-              Data: {new Date(pedido.data_pedido + 'T12:00:00').toLocaleDateString('pt-BR')}
+              Data da venda: {new Date(pedido.data_pedido + 'T12:00:00').toLocaleDateString('pt-BR')}
             </p>
             {pedido.observacao && (
               <p className="text-xs mt-0.5 italic" style={{ color: 'var(--ac-muted)' }}>{pedido.observacao}</p>
@@ -109,6 +173,69 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             </p>
           </div>
         </div>
+
+        {/* Registro da venda (cadastro no sistema) */}
+        <div
+          className="rounded-xl px-4 py-3 flex flex-col gap-2 text-sm"
+          style={{
+            border: '1px solid var(--ac-border)',
+            background: 'color-mix(in srgb, var(--ac-bg) 88%, transparent)',
+          }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+            Cadastro no sistema
+          </p>
+          <DetailMeta
+            label="Vendedor responsável"
+            value={pedido.vendedor?.nome?.trim() || '—'}
+          />
+          <DetailMeta label="Registrado em" value={fmtDataHora(pedido.created_at)} />
+          {pedido.natureza_operacao?.trim() ? (
+            <DetailMeta label="Natureza da operação" value={pedido.natureza_operacao.trim()} />
+          ) : null}
+        </div>
+
+        {/* Contato e endereço do cliente */}
+        {pedido.cliente && clienteTemContatoOuEndereco(pedido.cliente) && (
+          <div
+            className="rounded-xl px-4 py-3 flex flex-col gap-2 text-sm"
+            style={{
+              border: '1px solid var(--ac-border)',
+              background: 'color-mix(in srgb, var(--ac-bg) 88%, transparent)',
+            }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+              Contato e endereço
+            </p>
+            {pedido.cliente.telefone?.trim() ? (
+              <DetailMeta label="Telefone" value={pedido.cliente.telefone.trim()} />
+            ) : null}
+            {pedido.cliente.email?.trim() ? (
+              <DetailMeta
+                label="E-mail"
+                value={
+                  <a
+                    href={`mailto:${pedido.cliente.email.trim()}`}
+                    className="underline decoration-dotted"
+                    style={{ color: 'var(--ac-accent-strong, var(--ac-accent))' }}
+                  >
+                    {pedido.cliente.email.trim()}
+                  </a>
+                }
+              />
+            ) : null}
+            {(() => {
+              const t = textoEnderecoCliente(pedido.cliente)
+              if (!t) return null
+              return (
+                <DetailMeta
+                  label="Endereço"
+                  value={<span className="whitespace-pre-wrap">{t}</span>}
+                />
+              )
+            })()}
+          </div>
+        )}
 
         {/* Tabela de itens */}
         <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
@@ -143,7 +270,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                       })
 
                       return (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
                           {thumbUrl ? (
                             <img
                               src={thumbUrl}
@@ -151,11 +278,13 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                               width={36}
                               height={36}
                               loading="lazy"
+                              className="shrink-0"
                               style={{ borderRadius: 8, objectFit: 'cover', border: '1px solid var(--ac-border)' }}
                             />
                           ) : (
                             <div
                               aria-label={`Sem foto para ${item.faca?.nome ?? 'faca'}`}
+                              className="shrink-0"
                               style={{
                                 width: 36,
                                 height: 36,
@@ -177,11 +306,19 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                             </div>
                           )}
 
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
-                              {item.faca?.codigo}
-                            </span>
-                            <span className="text-sm">{item.faca?.nome ?? '—'}</span>
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs shrink-0" style={{ color: 'var(--ac-muted)' }}>
+                                {item.faca?.codigo}
+                              </span>
+                              <span className="text-sm">{item.faca?.nome ?? '—'}</span>
+                            </div>
+                            {(item.ncm?.trim() || item.cfop?.trim()) ? (
+                              <div className="text-[11px] font-mono" style={{ color: 'var(--ac-muted)' }}>
+                                {[item.ncm?.trim() ? `NCM ${item.ncm.trim()}` : null,
+                                  item.cfop?.trim() ? `CFOP ${item.cfop.trim()}` : null].filter(Boolean).join(' · ')}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       )
