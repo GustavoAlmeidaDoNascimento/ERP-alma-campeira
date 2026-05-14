@@ -29,6 +29,54 @@ function normalizarStatusEPago(row: { status?: unknown; pago?: unknown }): { sta
   return { status: status as StatusOC, pago }
 }
 
+async function resolverUsuarioRegistroOC(usuarioRegistroId: string | null | undefined): Promise<string> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id) throw new Error('Não autenticado.')
+  const escolha = typeof usuarioRegistroId === 'string' ? usuarioRegistroId.trim() : ''
+  const alvo = escolha || user.id
+  if (alvo === user.id) return user.id
+  const { data: perfil, error } = await supabase
+    .from('usuarios_perfis')
+    .select('id')
+    .eq('id', alvo)
+    .eq('ativo', true)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!perfil) throw new Error('Usuário selecionado inválido ou inativo.')
+  return alvo
+}
+
+function camposRegistroAlteracao(usuarioId: string) {
+  return {
+    ultima_alteracao_usuario_id: usuarioId,
+    ultima_alteracao_em: new Date().toISOString(),
+  }
+}
+
+async function marcarUltimaAlteracaoOC(ordemCompraId: string, usuarioId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('ordens_compra')
+    .update(camposRegistroAlteracao(usuarioId))
+    .eq('id', ordemCompraId)
+  if (error) throw new Error(error.message)
+}
+
+export async function getUsuariosParaRegistroOC(): Promise<{ id: string; nome: string }[]> {
+  await assertPermissao('ordens_compra', 'editar')
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('usuarios_perfis')
+    .select('id, nome')
+    .eq('ativo', true)
+    .order('nome')
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
 // ─── Fila de Reposição ────────────────────────────────────────────────────────
 
 export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
@@ -423,7 +471,8 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
         quantidade, quantidade_vendida, quantidade_adicional,
         preco_unitario,
         materia_prima:materias_primas(id, codigo, nome)
-      )
+      ),
+      ultima_alteracao_usuario:usuarios_perfis!ultima_alteracao_usuario_id(id, nome)
     `)
     .order('created_at', { ascending: false })
 
@@ -449,9 +498,16 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     const fornecedor =
       embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null) ??
       embedUm(row.fornecedores as { id: string; nome: string } | { id: string; nome: string }[] | null)
+    const ultima_alteracao_usuario = embedUm(
+      row.ultima_alteracao_usuario as
+        | { id: string; nome: string }
+        | { id: string; nome: string }[]
+        | null,
+    )
     const mappedRow = {
       ...row,
       fornecedor,
+      ultima_alteracao_usuario,
       pedido_id: pedido?.id ?? null,
       pedido_codigo: pedido?.codigo ?? null,
       cliente_nome: cliente?.nome ?? null,
