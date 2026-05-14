@@ -6,18 +6,15 @@ import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getTaxasLucroConfig } from '@/lib/actions/app-config'
 import { getEmpresa } from '@/lib/actions/empresa'
 import { getPermissoesEfetivas } from '@/lib/auth'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Configurações — Alma Campeira' }
 
 export default async function ConfiguracoesPage() {
   return (
-    <>
-      <PageShellTitle title="Configurações" subtitle="Carregando preferências do sistema..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <ConfiguracoesPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <ConfiguracoesPageData />
+    </Suspense>
   )
 }
 
