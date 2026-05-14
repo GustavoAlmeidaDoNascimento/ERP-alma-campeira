@@ -589,6 +589,8 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
     .from('ordens_compra')
     .update({ observacao: observacao.trim() || null })
     .eq('id', id)
+    .select('id, observacao')
+    .single()
 
   if (error) throw new Error(error.message)
 }
