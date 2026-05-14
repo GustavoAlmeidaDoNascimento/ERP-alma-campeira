@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { getMPDetalhe } from '@/lib/actions/materias-primas'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { MPDetalheClient } from '@/components/materias-primas/mp-detalhe-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -12,12 +12,9 @@ export const metadata = { title: 'Matéria-Prima — Alma Campeira' }
 export default async function MateriaPrimaDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (
-    <>
-      <PageShellTitle title="Matéria-Prima" subtitle="Carregando detalhe..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <MateriaPrimaDetalhePageData id={id} />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <MateriaPrimaDetalhePageData id={id} />
+    </Suspense>
   )
 }
 
