@@ -91,6 +91,8 @@ create table if not exists public.ordens_compra (
   pago boolean not null default false,
   data_geracao date not null default current_date,
   observacao text,
+  ultima_alteracao_usuario_id uuid references public.usuarios_perfis(id) on delete set null,
+  ultima_alteracao_em timestamptz,
   created_at timestamptz not null default now(),
   constraint ordens_compra_status_check
     check (status in ('pendente','enviada','recebida'))
