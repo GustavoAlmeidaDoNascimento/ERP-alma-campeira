@@ -14,6 +14,7 @@ import {
   criarItemOrdemCompra,
   atualizarObservacaoOC,
   mudarStatusOC,
+  definirPagoOrdemCompra,
   deletarOC,
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
@@ -26,6 +27,8 @@ import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { FilaReposicaoDetalheModal } from '@/components/ordens-compra/fila-reposicao-detalhe'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
+
+type FiltroListaOC = 'todas' | StatusOC | 'pagas'
 
 type Props = {
   fila: FilaReposicao[]
@@ -121,7 +124,7 @@ function exportarPDF(oc: OrdemCompra) {
     </div>
     <div>
       <strong>Status</strong>
-      <span>${STATUS_OC[oc.status].label}</span>
+      <span>${STATUS_OC[oc.status].label}${oc.pago ? ' · Pago' : ''}</span>
     </div>
     ${oc.pedido_codigo ? `
     <div>
@@ -192,7 +195,7 @@ function ocBodyHtml(oc: OrdemCompra) {
     <div class="meta">
       <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span></div>
       <div><strong>Data de Geração</strong><span>${fmtData(oc.data_geracao)}</span></div>
-      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}</span></div>
+      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}${oc.pago ? ' · Pago' : ''}</span></div>
       ${oc.pedido_codigo ? `
       <div><strong>Pedido de Origem</strong><span>${oc.pedido_codigo}</span></div>
       <div><strong>Cliente</strong><span>${oc.cliente_nome ?? '—'}</span></div>` : ''}
@@ -267,14 +270,30 @@ function exportarPDFMultiplas(ocs: OrdemCompra[]) {
 
 // ─── Badge de Status OC ──────────────────────────────────────────────────────
 
-function BadgeStatus({ status }: { status: StatusOC }) {
+const PAGO_BADGE = { label: 'Pago', color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' } as const
+
+function BadgeStatus({ status, pago }: { status: StatusOC; pago?: boolean }) {
   const cfg = STATUS_OC[status]
   return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
-    >
-      {cfg.label}
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <span
+        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+        style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+      >
+        {cfg.label}
+      </span>
+      {pago ? (
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+          style={{
+            color: PAGO_BADGE.color,
+            background: PAGO_BADGE.bg,
+            border: `1px solid ${PAGO_BADGE.border}`,
+          }}
+        >
+          {PAGO_BADGE.label}
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -309,7 +328,7 @@ function OcDetalheModal({
   oc: OrdemCompra
   perm: Perm
   onClose: () => void
-  onRefresh: () => void
+  onRefresh: () => void | Promise<void>
   onRequestExcluir?: () => void
 }) {
   /** String editável da quantidade total do item (vendido + adicional); igual conceito à fila de reposição. */
@@ -318,6 +337,7 @@ function OcDetalheModal({
   const [obs, setObs] = useState(oc.observacao ?? '')
   const [salvandoObs, setSalvandoObs] = useState(false)
   const [mudandoStatus, setMudandoStatus] = useState(false)
+  const [alterandoPago, setAlterandoPago] = useState(false)
   const [erro, setErro] = useState('')
   const [confirmandoRecebimento, setConfirmandoRecebimento] = useState(false)
   const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([])
@@ -356,6 +376,14 @@ function OcDetalheModal({
         }),
     [materiasPrimas, idsMateriaJaNoPedido]
   )
+
+  useEffect(() => {
+    setObs(oc.observacao ?? '')
+  }, [oc.id, oc.observacao])
+
+  useEffect(() => {
+    setConfirmandoRecebimento(false)
+  }, [oc.id, oc.status])
 
   useEffect(() => {
     if (!perm.editar || oc.status !== 'pendente') return
@@ -441,12 +469,24 @@ function OcDetalheModal({
     setMudandoStatus(true); setErro('')
     try {
       await mudarStatusOC(oc.id, status)
-      onRefresh()
+      await Promise.resolve(onRefresh())
       onClose()
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao mudar status.')
     } finally {
       setMudandoStatus(false)
+    }
+  }
+
+  async function alternarPago(checked: boolean) {
+    setAlterandoPago(true); setErro('')
+    try {
+      await definirPagoOrdemCompra(oc.id, checked)
+      await Promise.resolve(onRefresh())
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Erro ao atualizar pagamento.')
+    } finally {
+      setAlterandoPago(false)
     }
   }
 
@@ -456,7 +496,26 @@ function OcDetalheModal({
         {/* Resumo */}
         <div className="flex items-center gap-6 text-sm flex-wrap" style={{ color: 'var(--ac-muted)' }}>
           <span>Data: <strong style={{ color: 'var(--ac-text)' }}>{fmtData(oc.data_geracao)}</strong></span>
-          <span>Status: <BadgeStatus status={oc.status} /></span>
+          <span className="inline-flex items-center gap-2 flex-wrap">
+            Status: <BadgeStatus status={oc.status} />
+          </span>
+          {perm.editar ? (
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={oc.pago}
+                disabled={alterandoPago}
+                onChange={(e) => { void alternarPago(e.target.checked) }}
+                className="w-4 h-4 rounded"
+                style={{ accentColor: 'var(--ac-accent)' }}
+              />
+              <span style={{ color: 'var(--ac-text)' }}>Pago</span>
+            </label>
+          ) : (
+            <span style={{ color: 'var(--ac-text)' }}>
+              Pagamento: {oc.pago ? 'sim' : 'não'}
+            </span>
+          )}
           <span className="ml-auto font-semibold text-base" style={{ color: 'var(--ac-text)' }}>{fmt(total)}</span>
         </div>
 
@@ -742,16 +801,7 @@ function OcDetalheModal({
               Marcar como Enviada
             </Button>
           )}
-          {perm.editar && oc.status === 'enviada' && (
-            <Button
-              variant="primary"
-              loading={mudandoStatus}
-              onClick={() => mudarStatus('pago')}
-            >
-              Marcar como Pago
-            </Button>
-          )}
-          {perm.editar && oc.status === 'pago' && !confirmandoRecebimento && (
+          {perm.editar && oc.status === 'enviada' && !confirmandoRecebimento && (
             <Button
               variant="primary"
               loading={mudandoStatus}
@@ -760,7 +810,7 @@ function OcDetalheModal({
               Confirmar Recebimento
             </Button>
           )}
-          {perm.editar && oc.status === 'pago' && confirmandoRecebimento && (
+          {perm.editar && oc.status === 'enviada' && confirmandoRecebimento && (
             <>
               <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>
                 Isso vai dar entrada no estoque. Confirmar?
@@ -1116,11 +1166,20 @@ export function OcClient({ fila, ordens, perm }: Props) {
   useEffect(() => { if (ordensHook) setOrdensState(ordensHook) }, [ordensHook])
   useEffect(() => { if (filaHook) setFilaState(filaHook) }, [filaHook])
   const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null)
+
+  useEffect(() => {
+    setOcAberta((prev) => {
+      if (!prev) return prev
+      const atual = ordensState.find((o) => o.id === prev.id)
+      return atual ?? prev
+    })
+  }, [ordensState])
+
   const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null)
   const [deletando, setDeletando] = useState<OrdemCompra | null>(null)
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [erroDelete, setErroDelete] = useState('')
-  const [filtroStatus, setFiltroStatus] = useState<StatusOC | 'todas'>('todas')
+  const [filtroStatus, setFiltroStatus] = useState<FiltroListaOC>('todas')
   const [ocCriarOpen, setOcCriarOpen] = useState(false)
   const [erro, setErro] = useState('')
   const [sucesso, setSucesso] = useState('')
@@ -1220,7 +1279,12 @@ export function OcClient({ fila, ordens, perm }: Props) {
   }, [filaState, filaPeriodoIni, filaPeriodoFim])
 
   const ordensFiltradas = useMemo(() => {
-    let lista = filtroStatus === 'todas' ? ordensState : ordensState.filter((o) => o.status === filtroStatus)
+    let lista =
+      filtroStatus === 'todas'
+        ? ordensState
+        : filtroStatus === 'pagas'
+          ? ordensState.filter((o) => o.pago)
+          : ordensState.filter((o) => o.status === filtroStatus)
     if (periodoIni || periodoFim) {
       lista = lista.filter((o) => {
         const d = (o.data_geracao || '').slice(0, 10)
@@ -1300,11 +1364,11 @@ export function OcClient({ fila, ordens, perm }: Props) {
     return Array.from(map.values()).sort((a, b) => b.maisRecente.localeCompare(a.maisRecente))
   }, [ordensFiltradas, agruparPorPedido])
 
-  const statusTabs: { value: StatusOC | 'todas'; label: string }[] = [
+  const statusTabs: { value: FiltroListaOC; label: string }[] = [
     { value: 'todas', label: 'Todas' },
     { value: 'pendente', label: 'Pendentes' },
     { value: 'enviada', label: 'Enviadas' },
-    { value: 'pago', label: 'Pagas' },
+    { value: 'pagas', label: 'Pagas' },
     { value: 'recebida', label: 'Recebidas' },
   ]
 
@@ -1518,9 +1582,12 @@ export function OcClient({ fila, ordens, perm }: Props) {
           <div className="flex gap-2 mb-5 flex-wrap items-center">
             <div className="flex gap-2 flex-wrap">
             {statusTabs.map((tab) => {
-              const count = tab.value === 'todas'
-                ? ordensState.length
-                : ordensState.filter((o) => o.status === tab.value).length
+              const count =
+                tab.value === 'todas'
+                  ? ordensState.length
+                  : tab.value === 'pagas'
+                    ? ordensState.filter((o) => o.pago).length
+                    : ordensState.filter((o) => o.status === tab.value).length
               return (
                 <button
                   key={tab.value}
@@ -1614,7 +1681,11 @@ export function OcClient({ fila, ordens, perm }: Props) {
               style={{ border: '2px dashed var(--ac-border)' }}
             >
               <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>
-                {filtroStatus === 'todas' ? 'Nenhuma OC gerada ainda' : `Nenhuma OC ${STATUS_OC[filtroStatus as StatusOC]?.label.toLowerCase()}`}
+                {filtroStatus === 'todas'
+                  ? 'Nenhuma OC gerada ainda'
+                  : filtroStatus === 'pagas'
+                    ? 'Nenhuma OC marcada como paga'
+                    : `Nenhuma OC ${STATUS_OC[filtroStatus].label.toLowerCase()}`}
               </p>
               <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
                 {filtroStatus === 'todas'
@@ -1704,7 +1775,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
                           {fmt(total)}
                         </td>
                         <td className="px-4 py-3">
-                          <BadgeStatus status={oc.status} />
+                          <BadgeStatus status={oc.status} pago={oc.pago} />
                         </td>
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1">
@@ -1836,7 +1907,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
           oc={ocAberta}
           perm={perm}
           onClose={() => setOcAberta(null)}
-          onRefresh={() => { refresh(); setOcAberta(null) }}
+          onRefresh={refresh}
           onRequestExcluir={() => {
             setDeletando(ocAberta)
             setOcAberta(null)
