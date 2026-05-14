@@ -1,9 +1,11 @@
 -- ============================================================
--- Adicionar status "pago" no fluxo de Ordens de Compra
+-- Legado: adicionar status "pago" no fluxo de Ordens de Compra
 -- ------------------------------------------------------------
--- Novo fluxo: pendente → enviada → pago → recebida.
--- "pago" é a etapa de pagamento financeiro (registra um gasto).
--- "recebida" é a etapa de chegada física (incrementa estoque).
+-- Supersedido pelo modelo com coluna booleana `pago`
+-- (ver migration_oc_pago_boolean.sql). Se a coluna `pago` já existir,
+-- este script não altera nada.
+--
+-- Fluxo antigo: pendente → enviada → pago → recebida.
 --
 -- Idempotente: detecta e troca a CHECK constraint atual de status.
 --
@@ -19,6 +21,17 @@ declare
 begin
   if to_regclass('public.ordens_compra') is null then
     raise notice 'migration_oc_status_pago: omitido — public.ordens_compra não existe. Rode migration_ordens_compra_baseline.sql antes.';
+    return;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'ordens_compra'
+      and column_name = 'pago'
+  ) then
+    raise notice 'migration_oc_status_pago: omitido — coluna public.ordens_compra.pago existe (pagamento é flag, não status).';
     return;
   end if;
 
