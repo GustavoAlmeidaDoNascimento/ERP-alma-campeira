@@ -6,7 +6,28 @@ import {
   gerarCodigoOC,
   gerarOCsDeFilaItens,
 } from '@/lib/ordens-compra/gerar-oc-fila'
-import type { OrdemCompra, FilaReposicao, FilaReposicaoDetalhe, FilaReposicaoItem, FilaReposicaoPedidoItem } from '@/types'
+import type {
+  OrdemCompra,
+  FilaReposicao,
+  FilaReposicaoDetalhe,
+  FilaReposicaoItem,
+  FilaReposicaoPedidoItem,
+  StatusOC,
+} from '@/types'
+
+const STATUS_OC_VALIDOS: readonly StatusOC[] = ['pendente', 'enviada', 'recebida']
+
+/** Compat: bases legadas com status `pago` ou sem coluna `pago`. */
+function normalizarStatusEPago(row: { status?: unknown; pago?: unknown }): { status: StatusOC; pago: boolean } {
+  let status = String(row.status ?? 'pendente')
+  let pago = Boolean(row.pago)
+  if (status === 'pago') {
+    status = 'enviada'
+    pago = true
+  }
+  if (!STATUS_OC_VALIDOS.includes(status as StatusOC)) status = 'pendente'
+  return { status: status as StatusOC, pago }
+}
 
 // ─── Fila de Reposição ────────────────────────────────────────────────────────
 
@@ -428,13 +449,15 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     const fornecedor =
       embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null) ??
       embedUm(row.fornecedores as { id: string; nome: string } | { id: string; nome: string }[] | null)
-    return {
+    const mappedRow = {
       ...row,
       fornecedor,
       pedido_id: pedido?.id ?? null,
       pedido_codigo: pedido?.codigo ?? null,
       cliente_nome: cliente?.nome ?? null,
     }
+    const { status, pago } = normalizarStatusEPago(row as { status?: unknown; pago?: unknown })
+    return { ...mappedRow, status, pago }
   }) as OrdemCompra[]
 
   const idsFaltando = [
@@ -570,64 +593,10 @@ export async function atualizarObservacaoOC(id: string, observacao: string) {
   if (error) throw new Error(error.message)
 }
 
-export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' | 'pago' | 'recebida') {
+export async function mudarStatusOC(id: string, status: StatusOC) {
   await assertPermissao('ordens_compra', 'editar')
   const supabase = await createClient()
   const user = await getAuthenticatedUser()
-
-  if (status === 'pago') {
-    const { data: ocCabecalho, error: ocErr } = await supabase
-      .from('ordens_compra')
-      .select('codigo, fornecedor:fornecedores(nome)')
-      .eq('id', id)
-      .single()
-
-    if (ocErr) throw new Error(ocErr.message)
-
-    const { data: itens, error: itensErr } = await supabase
-      .from('ordem_compra_itens')
-      .select('quantidade, preco_unitario')
-      .eq('ordem_compra_id', id)
-
-    if (itensErr) throw new Error(itensErr.message)
-
-    const valorTotal = (itens ?? []).reduce(
-      (s, it) => s + Number(it.quantidade ?? 0) * Number(it.preco_unitario ?? 0),
-      0,
-    )
-
-    const fornecedor = Array.isArray(ocCabecalho?.fornecedor)
-      ? ocCabecalho?.fornecedor[0]
-      : ocCabecalho?.fornecedor
-    const fornecedorNome = fornecedor?.nome ?? null
-    const codigoOC = ocCabecalho?.codigo ?? ''
-    const descricao = fornecedorNome
-      ? `Pagamento OC ${codigoOC} — ${fornecedorNome}`
-      : `Pagamento OC ${codigoOC}`
-
-    // Evita duplicar se a OC já tinha um gasto vinculado (ex.: voltar de
-    // "recebida" para "pago" e marcar de novo).
-    const { data: gastoExistente } = await supabase
-      .from('gastos')
-      .select('id')
-      .eq('ordem_compra_id', id)
-      .limit(1)
-      .maybeSingle()
-
-    if (!gastoExistente) {
-      const hoje = new Date().toISOString().slice(0, 10)
-      const { error: gastoErr } = await supabase.from('gastos').insert({
-        tipo: 'pagamento_oc',
-        descricao,
-        valor: valorTotal,
-        forma_pagamento: 'transferencia',
-        data_gasto: hoje,
-        ordem_compra_id: id,
-        usuario_id: user?.id ?? null,
-      })
-      if (gastoErr) throw new Error(gastoErr.message)
-    }
-  }
 
   if (status === 'recebida') {
     const { data: ocCabecalho, error: ocErr } = await supabase
@@ -678,6 +647,80 @@ export async function mudarStatusOC(id: string, status: 'pendente' | 'enviada' |
     .update({ status })
     .eq('id', id)
 
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Marca se a OC foi paga (estado independente do fluxo pendente → enviada → recebida).
+ * Ao marcar pago: cria gasto automático `pagamento_oc` se ainda não existir um vinculado à OC.
+ * Ao desmarcar: remove gastos automáticos desse tipo vinculados à OC.
+ */
+export async function definirPagoOrdemCompra(id: string, pago: boolean) {
+  await assertPermissao('ordens_compra', 'editar')
+  const supabase = await createClient()
+  const user = await getAuthenticatedUser()
+
+  if (pago) {
+    const { data: ocCabecalho, error: ocErr } = await supabase
+      .from('ordens_compra')
+      .select('codigo, fornecedor:fornecedores(nome)')
+      .eq('id', id)
+      .single()
+
+    if (ocErr) throw new Error(ocErr.message)
+
+    const { data: itens, error: itensErr } = await supabase
+      .from('ordem_compra_itens')
+      .select('quantidade, preco_unitario')
+      .eq('ordem_compra_id', id)
+
+    if (itensErr) throw new Error(itensErr.message)
+
+    const valorTotal = (itens ?? []).reduce(
+      (s, it) => s + Number(it.quantidade ?? 0) * Number(it.preco_unitario ?? 0),
+      0,
+    )
+
+    const fornecedor = Array.isArray(ocCabecalho?.fornecedor)
+      ? ocCabecalho?.fornecedor[0]
+      : ocCabecalho?.fornecedor
+    const fornecedorNome = fornecedor?.nome ?? null
+    const codigoOC = ocCabecalho?.codigo ?? ''
+    const descricao = fornecedorNome
+      ? `Pagamento OC ${codigoOC} — ${fornecedorNome}`
+      : `Pagamento OC ${codigoOC}`
+
+    const { data: gastoExistente } = await supabase
+      .from('gastos')
+      .select('id')
+      .eq('ordem_compra_id', id)
+      .eq('tipo', 'pagamento_oc')
+      .limit(1)
+      .maybeSingle()
+
+    if (!gastoExistente) {
+      const hoje = new Date().toISOString().slice(0, 10)
+      const { error: gastoErr } = await supabase.from('gastos').insert({
+        tipo: 'pagamento_oc',
+        descricao,
+        valor: valorTotal,
+        forma_pagamento: 'transferencia',
+        data_gasto: hoje,
+        ordem_compra_id: id,
+        usuario_id: user?.id ?? null,
+      })
+      if (gastoErr) throw new Error(gastoErr.message)
+    }
+  } else {
+    const { error: delErr } = await supabase
+      .from('gastos')
+      .delete()
+      .eq('ordem_compra_id', id)
+      .eq('tipo', 'pagamento_oc')
+    if (delErr) throw new Error(delErr.message)
+  }
+
+  const { error } = await supabase.from('ordens_compra').update({ pago }).eq('id', id)
   if (error) throw new Error(error.message)
 }
 
