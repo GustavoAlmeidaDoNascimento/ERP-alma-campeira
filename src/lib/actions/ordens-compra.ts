@@ -477,8 +477,7 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
         quantidade, quantidade_vendida, quantidade_adicional,
         preco_unitario,
         materia_prima:materias_primas(id, codigo, nome)
-      ),
-      ultima_alteracao_usuario:usuarios_perfis!ultima_alteracao_usuario_id(id, nome)
+      )
     `)
     .order('created_at', { ascending: false })
 
@@ -504,16 +503,9 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     const fornecedor =
       embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null) ??
       embedUm(row.fornecedores as { id: string; nome: string } | { id: string; nome: string }[] | null)
-    const ultima_alteracao_usuario = embedUm(
-      row.ultima_alteracao_usuario as
-        | { id: string; nome: string }
-        | { id: string; nome: string }[]
-        | null,
-    )
     const mappedRow = {
       ...row,
       fornecedor,
-      ultima_alteracao_usuario,
       pedido_id: pedido?.id ?? null,
       pedido_codigo: pedido?.codigo ?? null,
       cliente_nome: cliente?.nome ?? null,
@@ -522,15 +514,43 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     return { ...mappedRow, status, pago }
   }) as OrdemCompra[]
 
-  const idsFaltando = [
+  const idsUltimaAlteracao = [
     ...new Set(
       mapped
+        .map((oc) => oc.ultima_alteracao_usuario_id as string | null | undefined)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  ]
+
+  let nomesPorUsuarioAlteracao = new Map<string, { id: string; nome: string }>()
+  if (idsUltimaAlteracao.length > 0) {
+    const { data: perfisUa, error: uaErr } = await supabase
+      .from('usuarios_perfis')
+      .select('id, nome')
+      .in('id', idsUltimaAlteracao)
+    if (uaErr) throw new Error(uaErr.message)
+    nomesPorUsuarioAlteracao = new Map((perfisUa ?? []).map((p) => [p.id, p]))
+  }
+
+  const comUltimaUsuario = mapped.map((oc) => {
+    const uid = oc.ultima_alteracao_usuario_id as string | null | undefined
+    if (!uid) return { ...oc, ultima_alteracao_usuario: null }
+    const perf = nomesPorUsuarioAlteracao.get(uid)
+    return {
+      ...oc,
+      ultima_alteracao_usuario: perf ?? { id: uid, nome: '—' },
+    }
+  })
+
+  const idsFaltando = [
+    ...new Set(
+      comUltimaUsuario
         .filter((oc) => oc.fornecedor_id && !oc.fornecedor?.nome)
         .map((oc) => oc.fornecedor_id as string),
     ),
   ]
 
-  if (idsFaltando.length === 0) return mapped
+  if (idsFaltando.length === 0) return comUltimaUsuario
 
   const { data: fornecedoresExtras, error: fnErr } = await supabase
     .from('fornecedores')
@@ -541,7 +561,7 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
 
   const porId = new Map((fornecedoresExtras ?? []).map((f) => [f.id, f]))
 
-  return mapped.map((oc) => ({
+  return comUltimaUsuario.map((oc) => ({
     ...oc,
     fornecedor: oc.fornecedor?.nome
       ? oc.fornecedor
