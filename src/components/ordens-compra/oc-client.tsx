@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Select } from '@/components/ui/select'
@@ -22,6 +23,7 @@ import { STATUS_OC } from '@/types'
 import type { FilaReposicao, FilaReposicaoDetalhe, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useOrdensCompra, useFilaReposicao } from '@/lib/query/hooks'
+import { qk } from '@/lib/query/keys'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { FilaReposicaoDetalheModal } from '@/components/ordens-compra/fila-reposicao-detalhe'
@@ -457,7 +459,7 @@ function OcDetalheModal({
     setSalvandoObs(true); setErro('')
     try {
       await atualizarObservacaoOC(oc.id, obs)
-      onRefresh()
+      await Promise.resolve(onRefresh())
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar observação.')
     } finally {
@@ -1153,27 +1155,29 @@ function OcCriarModal({
 
 export function OcClient({ fila, ordens, perm }: Props) {
   const { refreshActiveTab } = useErpTabs()
+  const queryClient = useQueryClient()
   const [aba, setAba] = useState<'fila' | 'historico'>('fila')
-  const [filaState, setFilaState] = useState<FilaReposicao[]>(fila)
-  const [ordensState, setOrdensState] = useState<OrdemCompra[]>(ordens)
+  const { data: ordensLista = ordens } = useOrdensCompra({ initialData: ordens })
+  const { data: filaLista = fila } = useFilaReposicao({ initialData: fila })
   const [loadingHistorico, setLoadingHistorico] = useState(false)
 
-  // Sincroniza com props (SSR) e com cache TanStack Query (Realtime).
-  useEffect(() => { setFilaState(fila) }, [fila])
-  useEffect(() => { setOrdensState(ordens) }, [ordens])
-  const { data: ordensHook } = useOrdensCompra({ initialData: ordens })
-  const { data: filaHook } = useFilaReposicao({ initialData: fila })
-  useEffect(() => { if (ordensHook) setOrdensState(ordensHook) }, [ordensHook])
-  useEffect(() => { if (filaHook) setFilaState(filaHook) }, [filaHook])
+  useEffect(() => {
+    queryClient.setQueryData(qk.ordensCompra.list(), ordens)
+  }, [ordens, queryClient])
+
+  useEffect(() => {
+    queryClient.setQueryData(qk.ordensCompra.fila(), fila)
+  }, [fila, queryClient])
+
   const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null)
 
   useEffect(() => {
     setOcAberta((prev) => {
       if (!prev) return prev
-      const atual = ordensState.find((o) => o.id === prev.id)
+      const atual = ordensLista.find((o) => o.id === prev.id)
       return atual ?? prev
     })
-  }, [ordensState])
+  }, [ordensLista])
 
   const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null)
   const [deletando, setDeletando] = useState<OrdemCompra | null>(null)
@@ -1204,14 +1208,14 @@ export function OcClient({ fila, ordens, perm }: Props) {
   }
 
   useEffect(() => {
-    if (aba !== 'historico' || ordensState.length > 0 || loadingHistorico) return
+    if (aba !== 'historico' || ordensLista.length > 0 || loadingHistorico) return
 
     let cancelled = false
     async function carregarHistorico() {
       setLoadingHistorico(true)
       try {
         const data = await getOrdensCompra()
-        if (!cancelled) setOrdensState(data)
+        if (!cancelled) queryClient.setQueryData(qk.ordensCompra.list(), data)
       } catch (e: unknown) {
         if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar histórico.')
       } finally {
@@ -1223,23 +1227,23 @@ export function OcClient({ fila, ordens, perm }: Props) {
     return () => {
       cancelled = true
     }
-  }, [aba, ordensState.length, loadingHistorico])
+  }, [aba, ordensLista.length, loadingHistorico, queryClient])
 
   async function refresh() {
-    refreshActiveTab()
     setLoadingHistorico(true)
     try {
       const [filaAtualizada, ordensAtualizadas] = await Promise.all([
         getFilaReposicaoList(),
         getOrdensCompra(),
       ])
-      setFilaState(filaAtualizada)
-      setOrdensState(ordensAtualizadas)
+      queryClient.setQueryData(qk.ordensCompra.fila(), filaAtualizada)
+      queryClient.setQueryData(qk.ordensCompra.list(), ordensAtualizadas)
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao atualizar.')
     } finally {
       setLoadingHistorico(false)
     }
+    refreshActiveTab()
   }
 
   function flash(msg: string) {
@@ -1269,22 +1273,22 @@ export function OcClient({ fila, ordens, perm }: Props) {
   const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set())
 
   const filaFiltrada = useMemo(() => {
-    if (!filaPeriodoIni && !filaPeriodoFim) return filaState
-    return filaState.filter((item) => {
+    if (!filaPeriodoIni && !filaPeriodoFim) return filaLista
+    return filaLista.filter((item) => {
       const d = (item.created_at || '').slice(0, 10)
       if (filaPeriodoIni && d < filaPeriodoIni) return false
       if (filaPeriodoFim && d > filaPeriodoFim) return false
       return true
     })
-  }, [filaState, filaPeriodoIni, filaPeriodoFim])
+  }, [filaLista, filaPeriodoIni, filaPeriodoFim])
 
   const ordensFiltradas = useMemo(() => {
     let lista =
       filtroStatus === 'todas'
-        ? ordensState
+        ? ordensLista
         : filtroStatus === 'pagas'
-          ? ordensState.filter((o) => o.pago)
-          : ordensState.filter((o) => o.status === filtroStatus)
+          ? ordensLista.filter((o) => o.pago)
+          : ordensLista.filter((o) => o.status === filtroStatus)
     if (periodoIni || periodoFim) {
       lista = lista.filter((o) => {
         const d = (o.data_geracao || '').slice(0, 10)
@@ -1294,7 +1298,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       })
     }
     return lista
-  }, [ordensState, filtroStatus, periodoIni, periodoFim])
+  }, [ordensLista, filtroStatus, periodoIni, periodoFim])
 
   // Limpa seleções que saíram do filtro para evitar imprimir OCs invisíveis.
   useEffect(() => {
@@ -1384,8 +1388,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
         <div>
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Ordens de Compra</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-            {filaState.length > 0
-              ? `${filaState.length} ${filaState.length === 1 ? 'pedido' : 'pedidos'} aguardando reposição`
+            {filaLista.length > 0
+              ? `${filaLista.length} ${filaLista.length === 1 ? 'pedido' : 'pedidos'} aguardando reposição`
               : 'Fila de reposição vazia'}
           </p>
         </div>
@@ -1416,8 +1420,8 @@ export function OcClient({ fila, ordens, perm }: Props) {
       <div className="px-4 sm:px-8 pt-5">
         <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
           {[
-            { key: 'fila' as const, label: 'Fila de Reposição', count: filaState.length },
-            { key: 'historico' as const, label: 'Ordens de Compra', count: ordensState.length },
+            { key: 'fila' as const, label: 'Fila de Reposição', count: filaLista.length },
+            { key: 'historico' as const, label: 'Ordens de Compra', count: ordensLista.length },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -1449,7 +1453,7 @@ export function OcClient({ fila, ordens, perm }: Props) {
       {/* ── Aba: Fila de Reposição ── */}
       {aba === 'fila' && (
         <div className="px-4 sm:px-8 py-6">
-          {filaState.length > 0 && (
+          {filaLista.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                 Período:
@@ -1482,12 +1486,12 @@ export function OcClient({ fila, ordens, perm }: Props) {
                 </button>
               )}
               <span className="ml-auto text-xs" style={{ color: 'var(--ac-muted)' }}>
-                {filaFiltrada.length} de {filaState.length}
+                {filaFiltrada.length} de {filaLista.length}
               </span>
             </div>
           )}
 
-          {filaState.length === 0 ? (
+          {filaLista.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-20 rounded-xl text-center"
               style={{ border: '2px dashed var(--ac-border)' }}
@@ -1584,10 +1588,10 @@ export function OcClient({ fila, ordens, perm }: Props) {
             {statusTabs.map((tab) => {
               const count =
                 tab.value === 'todas'
-                  ? ordensState.length
+                  ? ordensLista.length
                   : tab.value === 'pagas'
-                    ? ordensState.filter((o) => o.pago).length
-                    : ordensState.filter((o) => o.status === tab.value).length
+                    ? ordensLista.filter((o) => o.pago).length
+                    : ordensLista.filter((o) => o.status === tab.value).length
               return (
                 <button
                   key={tab.value}
