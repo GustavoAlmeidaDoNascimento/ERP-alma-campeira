@@ -21,11 +21,12 @@ create table if not exists public.ordens_compra (
   codigo text unique not null,
   fornecedor_id uuid references public.fornecedores(id) on delete set null,
   status text not null default 'pendente',
+  pago boolean not null default false,
   data_geracao date not null default current_date,
   observacao text,
   created_at timestamptz not null default now(),
   constraint ordens_compra_status_check
-    check (status in ('pendente','enviada','pago','recebida'))
+    check (status in ('pendente','enviada','recebida'))
 );
 
 alter table public.ordens_compra enable row level security;
