@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
+import { gerarPdfVendaSemValor } from '@/components/vendas/venda-sem-valor-pdf'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
 
@@ -73,12 +74,27 @@ type Props = {
 
 export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
+  const [loadingPdf, setLoadingPdf] = useState(false)
   const [erro, setErro] = useState('')
 
   if (!pedido) return null
 
   const status = STATUS_PEDIDO[pedido.status]
   const pedidoId = pedido.id
+
+  async function exportarVendaSemValor() {
+    const p = pedido
+    if (!p) return
+    setErro('')
+    setLoadingPdf(true)
+    try {
+      await gerarPdfVendaSemValor(p)
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o PDF.')
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
 
   async function acao(
     fn: () => Promise<void>,
@@ -370,8 +386,16 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
 
         {/* Ações de status */}
         {perm.editar && (
-          <div className="flex items-center justify-between gap-2 pt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
-            <div />
+          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                loading={loadingPdf}
+                onClick={() => void exportarVendaSemValor()}
+              >
+                Venda sem valor
+              </Button>
+            </div>
 
             {/* Avançar status (direita) */}
             <div className="flex gap-2">
@@ -408,7 +432,14 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
         )}
 
         {!perm.editar && (
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
+            <Button
+              variant="secondary"
+              loading={loadingPdf}
+              onClick={() => void exportarVendaSemValor()}
+            >
+              Venda sem valor
+            </Button>
             <Button variant="secondary" onClick={onClose}>Fechar</Button>
           </div>
         )}
