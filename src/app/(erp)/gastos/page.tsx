@@ -4,18 +4,15 @@ import { listarGastos } from '@/lib/actions/gastos'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getPermissoesEfetivas, getAuthenticatedUser } from '@/lib/auth'
 import { GastosClient } from '@/components/gastos/gastos-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Gastos — Alma Campeira' }
 
 export default async function GastosPage() {
   return (
-    <>
-      <PageShellTitle title="Gastos" subtitle="Carregando lançamentos..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <GastosPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <GastosPageData />
+    </Suspense>
   )
 }
 
