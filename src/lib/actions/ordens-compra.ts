@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, getAuthenticatedUser } from '@/lib/auth'
+import { assertPermissao } from '@/lib/auth'
 import {
   gerarCodigoOC,
   gerarOCsDeFilaItens,
@@ -745,10 +745,14 @@ export async function mudarStatusOC(
  * Ao marcar pago: cria gasto automático `pagamento_oc` se ainda não existir um vinculado à OC.
  * Ao desmarcar: remove gastos automáticos desse tipo vinculados à OC.
  */
-export async function definirPagoOrdemCompra(id: string, pago: boolean) {
+export async function definirPagoOrdemCompra(
+  id: string,
+  pago: boolean,
+  usuarioRegistroId?: string | null,
+) {
   await assertPermissao('ordens_compra', 'editar')
   const supabase = await createClient()
-  const user = await getAuthenticatedUser()
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
 
   if (pago) {
     const { data: ocCabecalho, error: ocErr } = await supabase
@@ -797,7 +801,7 @@ export async function definirPagoOrdemCompra(id: string, pago: boolean) {
         forma_pagamento: 'transferencia',
         data_gasto: hoje,
         ordem_compra_id: id,
-        usuario_id: user?.id ?? null,
+        usuario_id: uid,
       })
       if (gastoErr) throw new Error(gastoErr.message)
     }
@@ -810,7 +814,10 @@ export async function definirPagoOrdemCompra(id: string, pago: boolean) {
     if (delErr) throw new Error(delErr.message)
   }
 
-  const { error } = await supabase.from('ordens_compra').update({ pago }).eq('id', id)
+  const { error } = await supabase
+    .from('ordens_compra')
+    .update({ pago, ...camposRegistroAlteracao(uid) })
+    .eq('id', id)
   if (error) throw new Error(error.message)
 }
 
