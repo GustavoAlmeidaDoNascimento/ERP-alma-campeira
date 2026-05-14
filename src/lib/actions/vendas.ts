@@ -24,7 +24,24 @@ export async function getVendas(limit = 80): Promise<Pedido[]> {
     .from('pedidos')
     .select(`
       *,
-      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
+      cliente:clientes(
+        id,
+        nome,
+        tipo,
+        tipo_documento,
+        documento,
+        cidade,
+        estado,
+        telefone,
+        email,
+        cep,
+        logradouro,
+        numero,
+        complemento,
+        bairro,
+        razao_social,
+        ie
+      ),
       vendedor:usuarios_perfis(id, nome),
       itens:pedido_itens(*)
     `)
@@ -41,7 +58,24 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
     .from('pedidos')
     .select(`
       *,
-      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
+      cliente:clientes(
+        id,
+        nome,
+        tipo,
+        tipo_documento,
+        documento,
+        cidade,
+        estado,
+        telefone,
+        email,
+        cep,
+        logradouro,
+        numero,
+        complemento,
+        bairro,
+        razao_social,
+        ie
+      ),
       vendedor:usuarios_perfis(id, nome),
       itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url))
     `)
