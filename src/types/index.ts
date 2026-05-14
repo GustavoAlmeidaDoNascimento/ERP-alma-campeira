@@ -298,6 +298,27 @@ export type PedidoItem = {
   faca?: Pick<Faca, 'id' | 'codigo' | 'nome' | 'preco_venda' | 'foto_url'>
 }
 
+/** Dados do cliente retornados em joins de pedidos (listagem e detalhe). */
+export type PedidoClienteJoin = Pick<
+  Cliente,
+  | 'id'
+  | 'nome'
+  | 'tipo'
+  | 'tipo_documento'
+  | 'documento'
+  | 'cidade'
+  | 'estado'
+  | 'telefone'
+  | 'email'
+  | 'cep'
+  | 'logradouro'
+  | 'numero'
+  | 'complemento'
+  | 'bairro'
+  | 'razao_social'
+  | 'ie'
+>
+
 export type Pedido = {
   id: string
   codigo: string
@@ -314,7 +335,7 @@ export type Pedido = {
   natureza_operacao?: string | null
   entregue_at: string | null
   created_at: string
-  cliente?: Pick<Cliente, 'id' | 'nome' | 'tipo' | 'tipo_documento' | 'documento' | 'cidade' | 'estado'> | null
+  cliente?: PedidoClienteJoin | null
   vendedor?: { id: string; nome: string } | null
   itens?: PedidoItem[]
 }
