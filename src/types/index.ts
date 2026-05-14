@@ -390,12 +390,11 @@ export type CategoriaFaca = (typeof CATEGORIAS_FACA)[number]
 // Ordens de Compra
 // ============================================================
 
-export type StatusOC = 'pendente' | 'enviada' | 'pago' | 'recebida'
+export type StatusOC = 'pendente' | 'enviada' | 'recebida'
 
 export const STATUS_OC: Record<StatusOC, { label: string; color: string; bg: string; border: string }> = {
   pendente: { label: 'Pendente', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
   enviada:  { label: 'Enviada',  color: '#1d4ed8', bg: '#dbeafe', border: '#bfdbfe' },
-  pago:     { label: 'Pago',     color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' },
   recebida: { label: 'Recebida', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
 }
 
@@ -416,6 +415,8 @@ export type OrdemCompra = {
   fornecedor_id: string | null
   fila_reposicao_id: string | null
   status: StatusOC
+  /** Pagamento registrado (independente do status operacional pendente → enviada → recebida). */
+  pago: boolean
   data_geracao: string
   observacao: string | null
   created_at: string
