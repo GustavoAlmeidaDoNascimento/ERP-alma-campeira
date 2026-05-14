@@ -15,6 +15,7 @@ export async function gerarCodigoOC(_supabase: Supabase): Promise<string> {
 export async function gerarOCsDeFilaItens(
   supabase: Supabase,
   fila_id: string,
+  registroUsuarioId: string,
 ): Promise<string[]> {
   // Busca itens selecionados da fila com dados da MP e fornecedor
   const { data: itens, error: itensErr } = await supabase
@@ -72,6 +73,7 @@ export async function gerarOCsDeFilaItens(
 
     const codigo = await gerarCodigoOC(supabase)
 
+    const agora = new Date().toISOString()
     const { data: oc, error: ocErr } = await supabase
       .from('ordens_compra')
       .insert({
@@ -80,6 +82,8 @@ export async function gerarOCsDeFilaItens(
         fila_reposicao_id: fila_id,
         status: 'pendente',
         data_geracao: new Date().toISOString().split('T')[0],
+        ultima_alteracao_usuario_id: registroUsuarioId,
+        ultima_alteracao_em: agora,
       })
       .select('id')
       .single()
