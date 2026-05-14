@@ -3,18 +3,15 @@ import { Suspense } from 'react'
 import { getClientes } from '@/lib/actions/clientes'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { ClientesClient } from '@/components/clientes/clientes-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Clientes — Alma Campeira' }
 
 export default async function ClientesPage() {
   return (
-    <>
-      <PageShellTitle title="Clientes" subtitle="Carregando lista de clientes..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <ClientesPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <ClientesPageData />
+    </Suspense>
   )
 }
 
