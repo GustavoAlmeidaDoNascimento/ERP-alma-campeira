@@ -6,7 +6,7 @@ import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getUsuarios } from '@/lib/actions/usuarios'
 import { getPermissoesEfetivas, requireAuthenticatedUserId } from '@/lib/auth'
 import { FacaDetalheClient } from '@/components/facas/faca-detalhe-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -15,12 +15,9 @@ export const metadata = { title: 'Faca — Alma Campeira' }
 export default async function FacaDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (
-    <>
-      <PageShellTitle title="Faca" subtitle="Carregando detalhe..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <FacaDetalhePageData id={id} />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <FacaDetalhePageData id={id} />
+    </Suspense>
   )
 }
 
