@@ -5,18 +5,15 @@ import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { MPClient } from '@/components/materias-primas/mp-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Matérias-Primas — Alma Campeira' }
 
 export default async function MatériasPrimasPage() {
   return (
-    <>
-      <PageShellTitle title="Matérias-Primas" subtitle="Carregando matérias-primas e fornecedores..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <MateriasPrimasPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <MateriasPrimasPageData />
+    </Suspense>
   )
 }
 
