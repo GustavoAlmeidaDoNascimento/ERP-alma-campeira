@@ -77,7 +77,7 @@ export async function getVendaDetalhe(id: string): Promise<Pedido> {
         ie
       ),
       vendedor:usuarios_perfis(id, nome),
-      itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url))
+      itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url, unidade, ean_gtin))
     `)
     .eq('id', id)
     .single()
