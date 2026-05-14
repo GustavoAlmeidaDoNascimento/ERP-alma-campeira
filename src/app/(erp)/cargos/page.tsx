@@ -3,18 +3,15 @@ import { Suspense } from 'react'
 import { getCargos } from '@/lib/actions/cargos'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { CargosClient } from '@/components/cargos/cargos-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Cargos — Alma Campeira' }
 
 export default async function CargosPage() {
   return (
-    <>
-      <PageShellTitle title="Cargos" subtitle="Carregando cargos e permissões..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <CargosPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <CargosPageData />
+    </Suspense>
   )
 }
 
