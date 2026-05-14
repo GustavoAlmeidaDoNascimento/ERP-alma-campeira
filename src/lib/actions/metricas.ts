@@ -596,15 +596,18 @@ export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange
     // ── Resumo OC ──
     const ocMap = new Map<StatusOC, { quantidade: number; valorTotal: number }>()
     for (const oc of ocs) {
-      const st = oc.status as StatusOC
-      const entry = ocMap.get(st) ?? { quantidade: 0, valorTotal: 0 }
+      let st = String(oc.status)
+      if (st === 'pago') st = 'enviada'
+      if (st !== 'pendente' && st !== 'enviada' && st !== 'recebida') st = 'pendente'
+      const stFinal = st as StatusOC
+      const entry = ocMap.get(stFinal) ?? { quantidade: 0, valorTotal: 0 }
       entry.quantidade += 1
       const ocItens = Array.isArray(oc.itens) ? oc.itens : []
       entry.valorTotal += ocItens.reduce(
         (s: number, i: any) => s + Number(i.quantidade ?? 0) * Number(i.preco_unitario ?? 0),
         0,
       )
-      ocMap.set(st, entry)
+      ocMap.set(stFinal, entry)
     }
 
     const resumoOC: ResumoOC[] = (['pendente', 'enviada', 'recebida'] as StatusOC[]).map((status) => ({
