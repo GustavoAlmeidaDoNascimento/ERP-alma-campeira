@@ -17,6 +17,7 @@ import {
   mudarStatusOC,
   definirPagoOrdemCompra,
   deletarOC,
+  getUsuariosParaRegistroOC,
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
@@ -36,6 +37,8 @@ type Props = {
   fila: FilaReposicao[]
   ordens: OrdemCompra[]
   perm: Perm
+  /** perfil usuarios_perfis.id do login — pré-selecionado no registro de alterações */
+  usuarioLogadoId: string | null
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -48,6 +51,13 @@ function fmtData(s: string) {
   if (!s) return ''
   const [y, m, d] = s.split('T')[0].split('-')
   return `${d}/${m}/${y}`
+}
+
+function fmtDataHora(iso: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 function fmtQtd(n: number) {
@@ -323,12 +333,14 @@ function BadgeStatusFila({ status }: { status: FilaReposicao['status'] }) {
 function OcDetalheModal({
   oc,
   perm,
+  usuarioLogadoId,
   onClose,
   onRefresh,
   onRequestExcluir,
 }: {
   oc: OrdemCompra
   perm: Perm
+  usuarioLogadoId: string | null
   onClose: () => void
   onRefresh: () => void | Promise<void>
   onRequestExcluir?: () => void
@@ -347,6 +359,9 @@ function OcDetalheModal({
   const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
   const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
   const [adicionandoItem, setAdicionandoItem] = useState(false)
+  const [usuariosRegistro, setUsuariosRegistro] = useState<{ id: string; nome: string }[]>([])
+  const [carregandoUsuariosRegistro, setCarregandoUsuariosRegistro] = useState(false)
+  const [usuarioRegistroId, setUsuarioRegistroId] = useState(() => usuarioLogadoId ?? '')
 
   function parseNumero(raw: string): number {
     const v = raw.trim().replace(',', '.')
@@ -384,8 +399,29 @@ function OcDetalheModal({
   }, [oc.id, oc.observacao])
 
   useEffect(() => {
-    setConfirmandoRecebimento(false)
-  }, [oc.id, oc.status])
+    setUsuarioRegistroId(usuarioLogadoId ?? '')
+  }, [oc.id, usuarioLogadoId])
+
+  useEffect(() => {
+    if (!perm.editar) return
+    let cancelled = false
+    async function carregarUsuarios() {
+      setCarregandoUsuariosRegistro(true)
+      setErro('')
+      try {
+        const list = await getUsuariosParaRegistroOC()
+        if (!cancelled) setUsuariosRegistro(list)
+      } catch (e: unknown) {
+        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar usuários.')
+      } finally {
+        if (!cancelled) setCarregandoUsuariosRegistro(false)
+      }
+    }
+    carregarUsuarios()
+    return () => {
+      cancelled = true
+    }
+  }, [perm.editar])
 
   useEffect(() => {
     if (!perm.editar || oc.status !== 'pendente') return
