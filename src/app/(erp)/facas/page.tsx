@@ -6,18 +6,15 @@ import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { getTaxasLucroConfig } from '@/lib/actions/app-config'
 import { FacasClient } from '@/components/facas/facas-client'
-import { PageShellFallback, PageShellTitle } from '@/components/layout/page-shell'
+import { PageShellFallback } from '@/components/layout/page-shell'
 
 export const metadata = { title: 'Facas — Alma Campeira' }
 
 export default async function FacasPage() {
   return (
-    <>
-      <PageShellTitle title="Facas" subtitle="Carregando facas e categorias..." />
-      <Suspense fallback={<PageShellFallback />}>
-        <FacasPageData />
-      </Suspense>
-    </>
+    <Suspense fallback={<PageShellFallback />}>
+      <FacasPageData />
+    </Suspense>
   )
 }
 
