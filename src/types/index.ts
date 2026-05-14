@@ -419,6 +419,9 @@ export type OrdemCompra = {
   pago: boolean
   data_geracao: string
   observacao: string | null
+  ultima_alteracao_usuario_id?: string | null
+  ultima_alteracao_em?: string | null
+  ultima_alteracao_usuario?: { id: string; nome: string } | null
   created_at: string
   fornecedor?: Pick<Fornecedor, 'id' | 'nome'> | null
   // Derivados do join fila_reposicao → pedidos → clientes. Null para OCs
