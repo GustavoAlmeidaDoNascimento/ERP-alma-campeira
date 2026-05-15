@@ -8,6 +8,8 @@ export const qk = {
   materiasPrimas: {
     all: ['materias-primas'] as const,
     list: () => [...qk.materiasPrimas.all, 'list'] as const,
+    /** Lista com limite maior (ex.: modal OC). Chave distinta do `list` 120. */
+    listLimit: (limit: number) => [...qk.materiasPrimas.all, 'list', limit] as const,
     detalhe: (id: string) => [...qk.materiasPrimas.all, 'detalhe', id] as const,
   },
   facas: {
@@ -47,6 +49,8 @@ export const qk = {
   usuarios: {
     all: ['usuarios'] as const,
     list: () => [...qk.usuarios.all, 'list'] as const,
+    /** Lista para "Quem registrou" em OCs (usuarios_perfis ativos). */
+    registroOC: () => [...qk.usuarios.all, 'registro-oc'] as const,
   },
   cargos: {
     all: ['cargos'] as const,
