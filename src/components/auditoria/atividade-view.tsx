@@ -28,6 +28,7 @@ const TABELAS_LABEL: Record<string, string> = {
   categorias_consumivel: 'Categoria de consumível',
   movimentacoes_estoque: 'Movimentação de estoque',
   fila_reposicao: 'Fila de reposição',
+  fila_reposicao_itens: 'Item da fila de reposição',
   pedidos: 'Venda / Pedido',
   pedido_itens: 'Item de pedido',
   ordens_compra: 'Ordem de compra',
@@ -83,6 +84,9 @@ const FIELD_LABEL: Record<string, string> = {
   status: 'Status',
   observacao: 'Observação',
   ativo: 'Ativo',
+  pago: 'Pago',
+  ultima_alteracao_em: 'Última alteração em',
+  ultima_alteracao_usuario_id: 'Quem registrou (perfil)',
   perfil: 'Perfil',
   ordem: 'Ordem',
   cor: 'Cor',
@@ -107,6 +111,8 @@ const FIELD_LABEL: Record<string, string> = {
   quantidade: 'Quantidade',
   quantidade_vendida: 'Quantidade vendida',
   quantidade_adicional: 'Quantidade adicional',
+  quantidade_sugerida: 'Qtd. sugerida',
+  selecionado: 'Incluir na OC',
   estoque_atual: 'Estoque atual',
   estoque_minimo: 'Estoque mínimo',
 
@@ -138,6 +144,8 @@ const FIELD_LABEL: Record<string, string> = {
   consumivel_id: 'Consumível',
   cargo_id: 'Cargo',
   ordem_compra_id: 'Ordem de compra',
+  fila_id: 'Fila de reposição',
+  fila_reposicao_id: 'Fila de reposição (origem)',
 
   // datas
   created_at: 'Criado em',
@@ -166,6 +174,7 @@ const CAMPOS_PRIORITARIOS = [
   'estoque_atual', 'estoque_minimo',
   'margem_lucro', 'taxa_producao', 'taxa_venda', 'taxa_comissao',
   'cliente_id', 'fornecedor_id', 'faca_id', 'materia_prima_id', 'consumivel_id',
+  'fila_id', 'fila_reposicao_id', 'ordem_compra_id',
   'pedido_id', 'vendedor_id', 'usuario_id', 'cargo_id',
   'data_pedido', 'data_geracao', 'entregue_at',
   'telefone', 'email', 'tipo_documento', 'documento',
