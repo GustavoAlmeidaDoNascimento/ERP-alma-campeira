@@ -591,30 +591,6 @@ function OcDetalheModal({
           </div>
         )}
 
-        {perm.editar && (
-          <div className="space-y-1.5">
-            <label
-              htmlFor="oc-registro-usuario"
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: 'var(--ac-muted)' }}
-            >
-              Registrar alterações como
-            </label>
-            <SearchableSelect
-              id="oc-registro-usuario"
-              value={usuarioRegistroId}
-              onChange={setUsuarioRegistroId}
-              options={opcoesUsuarioRegistro}
-              placeholder="Selecione o usuário…"
-              loading={carregandoUsuariosRegistro}
-              emptyMessage="Nenhum usuário ativo encontrado"
-            />
-            <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-              Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança.
-            </p>
-          </div>
-        )}
-
         {/* Tabela de itens */}
         <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
           <table className="w-full text-sm">
@@ -855,7 +831,7 @@ function OcDetalheModal({
 
         {/* Ações de status + PDF */}
         <div
-          className="flex flex-wrap items-center gap-2 pt-1"
+          className="flex flex-wrap items-end gap-2 pt-1"
           style={{ borderTop: '1px solid var(--ac-border)' }}
         >
           <Button
@@ -878,6 +854,31 @@ function OcDetalheModal({
           )}
 
           <div className="flex-1 min-w-[0.5rem]" />
+
+          {perm.editar && (
+            <div
+              className="flex w-full min-[480px]:w-auto min-[480px]:max-w-[min(100%,280px)] flex-col gap-1"
+              title="Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança."
+            >
+              <label
+                htmlFor="oc-registro-usuario"
+                className="text-[11px] font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--ac-muted)' }}
+              >
+                Quem registra a alteração
+              </label>
+              <SearchableSelect
+                id="oc-registro-usuario"
+                value={usuarioRegistroId}
+                onChange={setUsuarioRegistroId}
+                options={opcoesUsuarioRegistro}
+                placeholder="Selecione o usuário…"
+                loading={carregandoUsuariosRegistro}
+                emptyMessage="Nenhum usuário ativo encontrado"
+                className="w-full"
+              />
+            </div>
+          )}
 
           {perm.editar && oc.status === 'pendente' && (
             <Button
