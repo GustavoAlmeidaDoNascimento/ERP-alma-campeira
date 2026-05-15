@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -365,7 +365,7 @@ function OcDetalheModal({
   const mpSectionRef = useRef<HTMLDivElement>(null)
   const [mpSectionVisible, setMpSectionVisible] = useState(false)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!perm.editar || oc.status !== 'pendente') {
       setMpSectionVisible(false)
       return
@@ -692,7 +692,7 @@ function OcDetalheModal({
 
         {/* Adicionar matéria-prima */}
         {perm.editar && oc.status === 'pendente' && (
-          <div className="space-y-3">
+          <div ref={mpSectionRef} className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
                 Adicionar matéria-prima
