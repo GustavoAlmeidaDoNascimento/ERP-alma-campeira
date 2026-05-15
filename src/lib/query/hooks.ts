@@ -17,7 +17,7 @@ import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getClientes } from '@/lib/actions/clientes'
 import { getVendas } from '@/lib/actions/vendas'
 import { getOrcamentos } from '@/lib/actions/orcamentos'
-import { getOrdensCompra, getFilaReposicaoList } from '@/lib/actions/ordens-compra'
+import { getOrdensCompra, getFilaReposicaoList, getUsuariosParaRegistroOC } from '@/lib/actions/ordens-compra'
 import { getConsumiveis } from '@/lib/actions/consumiveis'
 import { listarGastos } from '@/lib/actions/gastos'
 import { getUsuarios } from '@/lib/actions/usuarios'
@@ -126,6 +126,20 @@ export function useOrdensCompra(opts: Opts<Awaited<ReturnType<typeof getOrdensCo
     queryKey: qk.ordensCompra.list(),
     queryFn: () => getOrdensCompra(),
     initialData: opts.initialData,
+  })
+}
+
+/** Usuários ativos para registrar quem alterou OC — cache longo; compartilhado entre aberturas do modal. */
+export function useUsuariosParaRegistroOC(
+  opts: { enabled?: boolean } = {},
+) {
+  const enabled = opts.enabled !== false
+  return useQuery({
+    queryKey: qk.usuarios.registroOC(),
+    queryFn: () => getUsuariosParaRegistroOC(),
+    enabled,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
   })
 }
 
