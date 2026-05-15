@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Select } from '@/components/ui/select'
@@ -17,13 +17,12 @@ import {
   mudarStatusOC,
   definirPagoOrdemCompra,
   deletarOC,
-  getUsuariosParaRegistroOC,
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
 import { STATUS_OC } from '@/types'
 import type { FilaReposicao, FilaReposicaoDetalhe, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
-import { useOrdensCompra, useFilaReposicao } from '@/lib/query/hooks'
+import { useOrdensCompra, useFilaReposicao, useUsuariosParaRegistroOC } from '@/lib/query/hooks'
 import { qk } from '@/lib/query/keys'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
@@ -359,9 +358,38 @@ function OcDetalheModal({
   const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
   const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
   const [adicionandoItem, setAdicionandoItem] = useState(false)
-  const [usuariosRegistro, setUsuariosRegistro] = useState<{ id: string; nome: string }[]>([])
-  const [carregandoUsuariosRegistro, setCarregandoUsuariosRegistro] = useState(false)
   const [usuarioRegistroId, setUsuarioRegistroId] = useState(() => usuarioLogadoId ?? '')
+
+  const { data: usuariosRegistro = [], isPending: carregandoUsuariosRegistro } = useUsuariosParaRegistroOC({
+    enabled: perm.editar,
+  })
+
+  const mpSectionRef = useRef<HTMLDivElement>(null)
+  const [mpSectionVisible, setMpSectionVisible] = useState(false)
+
+  useEffect(() => {
+    if (!perm.editar || oc.status !== 'pendente') {
+      setMpSectionVisible(false)
+      return
+    }
+    const el = mpSectionRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setMpSectionVisible(true)
+      },
+      { rootMargin: '120px', threshold: 0.01 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [perm.editar, oc.status, oc.id])
+
+  const { data: materiasPrimas = [], isPending: carregandoMateriasPrimas } = useQuery({
+    queryKey: qk.materiasPrimas.listLimit(200),
+    queryFn: () => getMatériasPrimas(200),
+    enabled: perm.editar && oc.status === 'pendente' && mpSectionVisible,
+    staleTime: 120_000,
+  })
 
   function parseNumero(raw: string): number {
     const v = raw.trim().replace(',', '.')
