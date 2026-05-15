@@ -210,6 +210,7 @@ declare
     'categorias_consumivel',
     'movimentacoes_estoque',
     'fila_reposicao',
+    'fila_reposicao_itens',
     'pedidos',
     'pedido_itens',
     'ordens_compra',
