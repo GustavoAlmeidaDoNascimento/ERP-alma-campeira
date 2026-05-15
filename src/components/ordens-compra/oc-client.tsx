@@ -876,6 +876,7 @@ function OcDetalheModal({
                 loading={carregandoUsuariosRegistro}
                 emptyMessage="Nenhum usuário ativo encontrado"
                 className="w-full"
+                showThumbnails={false}
               />
             </div>
           )}
