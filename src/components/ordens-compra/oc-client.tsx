@@ -353,8 +353,6 @@ function OcDetalheModal({
   const [alterandoPago, setAlterandoPago] = useState(false)
   const [erro, setErro] = useState('')
   const [confirmandoRecebimento, setConfirmandoRecebimento] = useState(false)
-  const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([])
-  const [carregandoMateriasPrimas, setCarregandoMateriasPrimas] = useState(false)
   const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
   const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
   const [adicionandoItem, setAdicionandoItem] = useState(false)
@@ -438,51 +436,6 @@ function OcDetalheModal({
   useEffect(() => {
     setUsuarioRegistroId(usuarioLogadoId ?? '')
   }, [oc.id, usuarioLogadoId])
-
-  useEffect(() => {
-    if (!perm.editar) return
-    let cancelled = false
-    async function carregarUsuarios() {
-      setCarregandoUsuariosRegistro(true)
-      setErro('')
-      try {
-        const list = await getUsuariosParaRegistroOC()
-        if (!cancelled) setUsuariosRegistro(list)
-      } catch (e: unknown) {
-        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar usuários.')
-      } finally {
-        if (!cancelled) setCarregandoUsuariosRegistro(false)
-      }
-    }
-    carregarUsuarios()
-    return () => {
-      cancelled = true
-    }
-  }, [perm.editar])
-
-  useEffect(() => {
-    if (!perm.editar || oc.status !== 'pendente') return
-    if (materiasPrimas.length > 0) return
-
-    let cancelled = false
-    async function carregar() {
-      setCarregandoMateriasPrimas(true)
-      setErro('')
-      try {
-        const mps = await getMatériasPrimas(200)
-        if (!cancelled) setMateriasPrimas(mps)
-      } catch (e: unknown) {
-        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar matérias-primas.')
-      } finally {
-        if (!cancelled) setCarregandoMateriasPrimas(false)
-      }
-    }
-
-    carregar()
-    return () => {
-      cancelled = true
-    }
-  }, [perm.editar, oc.status, materiasPrimas.length])
 
   const total = totalOC(
     itens.map((i) => {
