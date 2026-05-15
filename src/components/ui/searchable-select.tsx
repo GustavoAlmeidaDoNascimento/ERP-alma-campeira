@@ -56,6 +56,8 @@ type Props = {
   emptyMessage?: string
   className?: string
   inputClassName?: string
+  /** Se false, não exibe miniaturas (útil para listas só texto, ex.: usuários). Default: true. */
+  showThumbnails?: boolean
 }
 
 export function SearchableSelect({
@@ -69,6 +71,7 @@ export function SearchableSelect({
   emptyMessage = 'Nenhum resultado',
   className = '',
   inputClassName = '',
+  showThumbnails = true,
 }: Props) {
   const genId = useId()
   const id = idProp ?? genId
@@ -169,8 +172,10 @@ export function SearchableSelect({
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
-      <div className={`mt-1 flex gap-2 ${value ? 'items-center' : 'items-stretch'}`}>
-        {value ? (
+      <div
+        className={`mt-1 flex gap-2 ${value && showThumbnails ? 'items-center' : 'items-stretch'}`}
+      >
+        {value && showThumbnails ? (
           <OptionThumb src={selectedImageUrl} title={selectedLabel} />
         ) : null}
         <input
@@ -250,7 +255,7 @@ export function SearchableSelect({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => pick(o.value, o.label)}
                 >
-                  <OptionThumb src={o.imageUrl} title={o.label} />
+                  {showThumbnails ? <OptionThumb src={o.imageUrl} title={o.label} /> : null}
                   <span className="min-w-0 flex-1 leading-snug">{o.label}</span>
                 </button>
               </li>
