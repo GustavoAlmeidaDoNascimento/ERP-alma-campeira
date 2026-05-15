@@ -133,11 +133,10 @@ export function useOrdensCompra(opts: Opts<Awaited<ReturnType<typeof getOrdensCo
 export function useUsuariosParaRegistroOC(
   opts: { enabled?: boolean } = {},
 ) {
-  const enabled = opts.enabled !== false
   return useQuery({
     queryKey: qk.usuarios.registroOC(),
     queryFn: () => getUsuariosParaRegistroOC(),
-    enabled,
+    enabled: opts.enabled ?? true,
     staleTime: 5 * 60_000,
     gcTime: 15 * 60_000,
   })
