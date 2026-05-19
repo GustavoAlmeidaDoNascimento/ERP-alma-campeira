@@ -46,11 +46,20 @@ import type { FacaDetalheData } from '@/lib/actions/facas'
 
 type Opts<T> = { initialData?: T }
 
+function queryOptsWithInitialData<T>(opts: Opts<T>) {
+  if (opts.initialData === undefined) return {}
+  return {
+    initialData: opts.initialData,
+    staleTime: 60_000,
+    refetchOnMount: false as const,
+  }
+}
+
 export function useMateriasPrimas(opts: Opts<MateriaPrima[]> = {}) {
   return useQuery({
     queryKey: qk.materiasPrimas.list(),
     queryFn: () => getMatériasPrimas(120),
-    initialData: opts.initialData,
+    ...queryOptsWithInitialData(opts),
   })
 }
 
