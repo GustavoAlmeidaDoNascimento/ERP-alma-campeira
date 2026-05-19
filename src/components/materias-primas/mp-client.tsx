@@ -1,38 +1,29 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { MPModal } from './mp-modal'
-import { deletarMateriaPrima } from '@/lib/actions/materias-primas'
+import { deletarMateriaPrima, getMPEditModalData, type MPEditModalData } from '@/lib/actions/materias-primas'
 import { statusEstoque } from '@/types'
-import type { MateriaPrima, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
+import type { MateriaPrima } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
-import { useMateriasPrimas, useFornecedores, useCategoriasMateriaPrima } from '@/lib/query/hooks'
+import { useMateriasPrimas } from '@/lib/query/hooks'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
 type Props = {
   materiasPrimas: MateriaPrima[]
-  fornecedores: Fornecedor[]
-  categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
   perm: Perm
 }
 
-export function MPClient({
-  materiasPrimas: initialMP,
-  fornecedores: initialFornecedores,
-  categoriasMateriaPrima: initialCategorias,
-  perm,
-}: Props) {
+export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
   const { refreshActiveTab, openTab } = useErpTabs()
   const { data: materiasPrimas = initialMP } = useMateriasPrimas({ initialData: initialMP })
-  const { data: fornecedores = initialFornecedores } = useFornecedores({ initialData: initialFornecedores })
-  const { data: categoriasMateriaPrima = initialCategorias } = useCategoriasMateriaPrima({
-    initialData: initialCategorias,
-  })
+  const [modalData, setModalData] = useState<MPEditModalData | null>(null)
+  const [loadingModalData, setLoadingModalData] = useState(false)
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<MateriaPrima | null>(null)
   const [deletando, setDeletando] = useState<MateriaPrima | null>(null)
@@ -70,14 +61,28 @@ export function MPClient({
     return map
   }, [materiasPrimas])
 
-  function abrirNovo() {
+  const carregarDadosModal = useCallback(async () => {
+    if (modalData) return modalData
+    setLoadingModalData(true)
+    try {
+      const data = await getMPEditModalData()
+      setModalData(data)
+      return data
+    } finally {
+      setLoadingModalData(false)
+    }
+  }, [modalData])
+
+  async function abrirNovo() {
     setEditando(null)
     setModalAberto(true)
+    void carregarDadosModal()
   }
 
-  function abrirEditar(mp: MateriaPrima) {
+  async function abrirEditar(mp: MateriaPrima) {
     setEditando(mp)
     setModalAberto(true)
+    void carregarDadosModal()
   }
 
   function abrirFotoLightbox(mp: MateriaPrima, thumbFallback: string) {
@@ -340,12 +345,13 @@ export function MPClient({
         </div>
       </div>
 
-      {/* Modal CRUD */}
+      {/* Modal CRUD — fornecedores/categorias carregam sob demanda */}
       <MPModal
         open={modalAberto}
         onClose={() => setModalAberto(false)}
-        fornecedores={fornecedores}
-        categoriasMateriaPrima={categoriasMateriaPrima}
+        fornecedores={modalData?.fornecedores ?? []}
+        categoriasMateriaPrima={modalData?.categoriasMateriaPrima ?? []}
+        loadingReferencias={loadingModalData && !modalData}
         editando={editando}
         onSaved={refreshActiveTab}
       />

@@ -15,6 +15,7 @@ type Props = {
   onClose: () => void
   fornecedores: Fornecedor[]
   categoriasMateriaPrima: CategoriaMateriaPrimaDB[]
+  loadingReferencias?: boolean
   editando?: MateriaPrima | null
   onSaved?: () => void
 }
@@ -37,7 +38,15 @@ const formVazio: Form = {
   estoque_minimo: '0',
 }
 
-export function MPModal({ open, onClose, fornecedores, categoriasMateriaPrima, editando, onSaved }: Props) {
+export function MPModal({
+  open,
+  onClose,
+  fornecedores,
+  categoriasMateriaPrima,
+  loadingReferencias = false,
+  editando,
+  onSaved,
+}: Props) {
   const [form, setForm] = useState<Form>(formVazio)
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
@@ -137,9 +146,15 @@ export function MPModal({ open, onClose, fornecedores, categoriasMateriaPrima, e
       title={editando ? `Editar — ${editando.codigo}` : 'Nova Matéria-Prima'}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {loadingReferencias && (
+          <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
+            Carregando fornecedores e categorias…
+          </p>
+        )}
         <Input
           id="nome"
           label="Nome *"
+          disabled={loadingReferencias}
           placeholder="Ex: Lâmina Aço Inox 420"
           value={form.nome}
           onChange={(e) => set('nome', e.target.value)}
