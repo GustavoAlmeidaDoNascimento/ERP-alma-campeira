@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { sections } from '@/components/layout/erp-navigation'
-import { getMinhasPermissoesVer } from '@/lib/actions/permissoes-client'
+import { usePermissoesVer } from '@/components/layout/permissoes-provider'
 
 const iconGear = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-[16px] flex-shrink-0">
@@ -24,7 +24,7 @@ function getInitials(email: string) {
 export function Sidebar() {
   const pathname = usePathname() || '/'
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [permVer, setPermVer] = useState<Record<string, boolean> | null>(null)
+  const permVerFromLayout = usePermissoesVer()
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() =>
     sections.reduce<Record<string, boolean>>((acc, section) => {
       acc[section.label] = true
@@ -37,13 +37,12 @@ export function Sidebar() {
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? null)
     })
-    getMinhasPermissoesVer().then(setPermVer)
   }, [])
 
   function isItemVisible(moduloKey?: string): boolean {
     if (!moduloKey) return true
-    if (permVer === null) return true
-    return permVer[moduloKey] === true
+    if (permVerFromLayout === null) return true
+    return permVerFromLayout[moduloKey] === true
   }
 
   const isActiveHref = (href: string) =>
