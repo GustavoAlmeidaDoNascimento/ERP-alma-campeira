@@ -76,7 +76,7 @@ export function useFacas(opts: Opts<Faca[]> = {}) {
   return useQuery({
     queryKey: qk.facas.list(),
     queryFn: () => getFacas(120),
-    initialData: opts.initialData,
+    ...queryOptsWithInitialData(opts),
   })
 }
 
@@ -102,7 +102,7 @@ export function useFornecedores(opts: Opts<Fornecedor[]> = {}) {
   return useQuery({
     queryKey: qk.fornecedores.list(),
     queryFn: () => getFornecedores(80),
-    initialData: opts.initialData,
+    ...queryOptsWithInitialData(opts),
   })
 }
 
@@ -203,7 +203,7 @@ export function useCategoriasMateriaPrima(opts: Opts<CategoriaMateriaPrimaDB[]> 
   return useQuery({
     queryKey: qk.categorias.materiaPrima(),
     queryFn: () => getCategoriasMateriaPrima(),
-    initialData: opts.initialData,
+    ...queryOptsWithInitialData(opts),
   })
 }
 
