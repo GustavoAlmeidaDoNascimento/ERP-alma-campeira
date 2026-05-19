@@ -8,7 +8,7 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
  * direto. Mutações de auth (login/logout) limpam esse marcador.
  */
 const MW_FRESH_COOKIE = "ac-mw-fresh";
-const MW_FRESH_TTL_SECONDS = 30;
+const MW_FRESH_TTL_SECONDS = 300;
 
 export async function updateSession(request: NextRequest) {
   const response = NextResponse.next({ request });
