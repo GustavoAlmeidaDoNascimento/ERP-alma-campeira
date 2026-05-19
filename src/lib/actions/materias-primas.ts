@@ -1,24 +1,32 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { assertPermissao } from '@/lib/auth'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  fetchCategoriasMateriaPrimaList,
+  fetchFornecedoresSelect,
+  fetchMatériasPrimasList,
+} from '@/lib/cache/list-data'
 import type { MateriaPrima, MovimentacaoEstoque, Faca, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
-import { getFornecedores } from '@/lib/actions/fornecedores'
-import { getCategoriasMateriaPrima } from '@/lib/actions/categorias-materia-prima'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
+import { withTiming } from '@/lib/perf/timing'
+
+async function revalidateMPLists() {
+  const userId = await requireAuthenticatedUserId()
+  revalidateTag(`list-materias-primas-${userId}`, 'max')
+  revalidateTag(`list-fornecedores-select-${userId}`, 'max')
+  revalidateTag(`list-categorias-mp-${userId}`, 'max')
+}
 
 export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
-  await assertPermissao('materias_primas', 'ver')
-  const supabase = await createClient()
-  // Listagem só usa nome do fornecedor (mp-client.tsx). Detalhe completo vem de getMPDetalhe.
-  const { data, error } = await supabase
-    .from('materias_primas')
-    .select('*, fornecedor:fornecedores(id, nome)')
-    .order('codigo')
-    .limit(limit)
-  if (error) throw new Error(error.message)
-  return data as MateriaPrima[]
+  return withTiming('getMatériasPrimas', async () => {
+    const userId = await requireAuthenticatedUserId()
+    await assertPermissao('materias_primas', 'ver')
+    const rows = await fetchMatériasPrimasList(userId)
+    return rows.slice(0, limit)
+  })
 }
 
 export async function gerarCodigoMP(): Promise<string> {
@@ -50,6 +58,7 @@ export async function criarMateriaPrima(input: MPInput) {
   })
 
   if (error) throw new Error(error.message)
+  await revalidateMPLists()
 }
 
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
@@ -69,6 +78,7 @@ export async function atualizarMateriaPrima(id: string, input: MPInput) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  await revalidateMPLists()
 }
 
 const FOTO_BUCKET_MP = 'materias-primas-fotos'
@@ -177,6 +187,7 @@ export async function salvarMPComFoto(formData: FormData) {
     }
   }
 
+  await revalidateMPLists()
 }
 
 export async function deletarMateriaPrima(id: string) {
@@ -195,6 +206,7 @@ export async function deletarMateriaPrima(id: string) {
 
   const { error } = await supabase.from('materias_primas').delete().eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateMPLists()
 }
 
 // ============================================================
@@ -278,12 +290,18 @@ export type MPEditModalData = {
 }
 
 export async function getMPEditModalData(): Promise<MPEditModalData> {
-  await assertPermissao('materias_primas', 'editar')
-  const [fornecedores, categoriasMateriaPrima] = await Promise.all([
-    getFornecedores(80),
-    getCategoriasMateriaPrima(),
-  ])
-  return { fornecedores, categoriasMateriaPrima }
+  return withTiming('getMPEditModalData', async () => {
+    const userId = await requireAuthenticatedUserId()
+    await assertPermissao('materias_primas', 'ver')
+    const [fornecedores, categoriasMateriaPrima] = await Promise.all([
+      fetchFornecedoresSelect(userId),
+      fetchCategoriasMateriaPrimaList(userId),
+    ])
+    return {
+      fornecedores: fornecedores as Fornecedor[],
+      categoriasMateriaPrima,
+    }
+  })
 }
 
 // ============================================================

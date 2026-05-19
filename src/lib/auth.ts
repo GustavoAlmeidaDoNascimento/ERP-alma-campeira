@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
 import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
@@ -20,6 +21,19 @@ export async function requireAuthenticatedUserId(): Promise<string> {
   if (!user) throw new Error('Não autenticado')
   return user.id
 }
+
+/** Evita COUNT(*) em `usuarios_perfis` a cada resolução de permissão sem perfil. */
+const systemHasAnyProfile = unstable_cache(
+  async (): Promise<boolean> => {
+    const supabase = createAdminClient()
+    const { count } = await supabase
+      .from('usuarios_perfis')
+      .select('id', { count: 'exact', head: true })
+    return (count ?? 0) > 0
+  },
+  ['system-has-any-profile'],
+  { revalidate: 3600, tags: ['system-has-any-profile'] },
+)
 
 const getPermissoesEfetivasCached = unstable_cache(
   async (userId: string): Promise<PermMap> => {
@@ -50,14 +64,8 @@ const getPermissoesEfetivasCached = unstable_cache(
     }
 
     if (!perfil) {
-      // Verifica se realmente não existe nenhum perfil no sistema (bootstrap do primeiro admin).
-      // Qualquer outro caso (usuário sem perfil mas sistema já populado) = sem acesso.
-      const { count } = await supabase
-        .from('usuarios_perfis')
-        .select('id', { count: 'exact', head: true })
-      if ((count ?? 1) === 0) {
-        return acesso_total()
-      }
+      const hasAnyProfile = await systemHasAnyProfile()
+      if (!hasAnyProfile) return acesso_total()
       return permissoesVazias()
     }
 
