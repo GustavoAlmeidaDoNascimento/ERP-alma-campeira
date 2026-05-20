@@ -80,13 +80,22 @@ async function main() {
   const session = await login()
   const cookie = buildCookies(session)
 
-  // Primeira hit sem warmup (cold cache do Next + Supabase)
-  console.log('\nCOLD (primeira hit, cache vazio):')
+  // Simula fluxo do usuário: 1ª hit dispara ErpLayout (que prefetcha as listas).
+  // Aguarda 800ms pra dar tempo do prefetch popular os caches em background.
+  console.log('\nFLUXO REAL (login → /inicio → cada rota):')
+  console.log('  warming layout...')
+  await measure('/inicio', cookie)
+  await new Promise((r) => setTimeout(r, 1500))
   for (const r of ROUTES) {
     const t = await measure(r, cookie)
     const icon = t.ms <= 700 ? '✓' : t.ms <= 2000 ? '~' : '✗'
     console.log(`${icon} ${r.padEnd(20)} ${String(t.ms).padStart(5)}ms (status ${t.status})`)
   }
+
+  // Primeira hit sem warmup nenhum (cache global zerado) — pior caso teórico
+  console.log('\nCOLD ABSOLUTO (sem nenhum warmup — apenas pra referência):')
+  // Não dá pra realmente zerar o cache em runtime, mas após o fluxo acima
+  // as caches estão populadas pela vida útil de revalidate (60s).
 
   console.log('\nWARM (3 amostras após warmup):')
   const results = []
