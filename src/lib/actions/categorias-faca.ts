@@ -1,18 +1,22 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { assertPermissao } from '@/lib/auth'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { fetchCategoriasFacaList } from '@/lib/cache/list-data'
 import type { CategoriaFacaDB } from '@/types'
 
+async function revalidateCategoriasFaca() {
+  try {
+    const userId = await requireAuthenticatedUserId()
+    revalidateTag(`list-categorias-faca-${userId}`, 'max')
+  } catch {}
+}
+
 export async function getCategoriasFaca(): Promise<CategoriaFacaDB[]> {
+  const userId = await requireAuthenticatedUserId()
   await assertPermissao('facas', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('categorias_faca')
-    .select('*')
-    .order('ordem')
-  if (error) throw new Error(error.message)
-  return data as CategoriaFacaDB[]
+  return fetchCategoriasFacaList(userId)
 }
 
 type CategoriaInput = {
@@ -43,6 +47,7 @@ export async function criarCategoriaFaca(input: CategoriaInput) {
     ordem,
   })
   if (error) throw new Error(error.message)
+  await revalidateCategoriasFaca()
 }
 
 export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) {
@@ -59,6 +64,7 @@ export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) 
     })
     .eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateCategoriasFaca()
 }
 
 export async function deletarCategoriaFaca(id: string) {
@@ -66,4 +72,5 @@ export async function deletarCategoriaFaca(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('categorias_faca').delete().eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateCategoriasFaca()
 }
