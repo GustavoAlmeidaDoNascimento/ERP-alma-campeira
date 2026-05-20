@@ -21,9 +21,13 @@ export default async function FacasPage() {
 async function FacasPageData() {
   const perms = await getPermissoesEfetivas()
   if (!perms.facas.ver) redirect('/')
-  const [facas, categorias, materiasPrimas] = await Promise.all([getFacas(120), getCategoriasFaca(), getMatériasPrimas(200)])
   const verLucro = perms.lucro.ver
-  const taxasLucro = verLucro ? await getTaxasLucroConfig() : { taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }
+  const [facas, categorias, materiasPrimas, taxasLucro] = await Promise.all([
+    getFacas(120),
+    getCategoriasFaca(),
+    getMatériasPrimas(200),
+    verLucro ? getTaxasLucroConfig() : Promise.resolve({ taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }),
+  ])
   return (
     <div data-nav-content-ready="Facas">
       <FacasClient
