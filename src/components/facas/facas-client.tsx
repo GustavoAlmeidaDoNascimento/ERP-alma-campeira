@@ -31,7 +31,8 @@ type OrdemColunaFacas =
 type Props = {
   facas: Faca[]
   categorias: CategoriaFacaDB[]
-  materiasPrimas: MateriaPrima[]
+  // Carregada lazy via React Query — só usada no modal de edição.
+  materiasPrimas: MateriaPrima[] | undefined
   perm: Perm
   verPrecoVenda: boolean
   verLucro: boolean
@@ -50,7 +51,9 @@ export function FacasClient({
   const { refreshActiveTab, openTab } = useErpTabs()
   const { data: facas = initialFacas } = useFacas({ initialData: initialFacas })
   const { data: categorias = initialCategorias } = useCategoriasFaca({ initialData: initialCategorias })
-  const { data: materiasPrimas = initialMP } = useMateriasPrimas({ initialData: initialMP })
+  const { data: materiasPrimas = initialMP ?? [] } = useMateriasPrimas(
+    initialMP ? { initialData: initialMP } : {},
+  )
   const badgeCategoria = useMemo(() => {
     const map: Record<string, React.CSSProperties> = {}
     for (const cat of categorias) {
