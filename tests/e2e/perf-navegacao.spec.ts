@@ -12,7 +12,7 @@ test.describe('Performance de navegação', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('E-mail').fill(EMAIL!)
-    await page.getByLabel('Senha').fill(PASSWORD!)
+    await page.getByRole('textbox', { name: 'Senha' }).fill(PASSWORD!)
     await page.getByRole('button', { name: 'Entrar' }).click()
     await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 })
   })
