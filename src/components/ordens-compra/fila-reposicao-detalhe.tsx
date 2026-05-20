@@ -207,13 +207,19 @@ export function FilaReposicaoDetalheModal({
     <Modal
       open
       onClose={onClose}
-      title={`Reposição — ${fila.pedido_codigo}`}
+      title={`Reposição — ${fila.pedido_sequencial != null ? `#${fila.pedido_sequencial} · ` : ''}${fila.pedido_codigo}`}
       width="900px"
     >
       <div className="flex flex-col gap-5">
         {/* Resumo do pedido */}
         <div className="flex flex-wrap gap-4 text-sm" style={{ color: 'var(--ac-muted)' }}>
-          <span>Pedido: <strong style={{ color: 'var(--ac-text)' }}>{fila.pedido_codigo}</strong></span>
+          <span>
+            Pedido:{' '}
+            {fila.pedido_sequencial != null && (
+              <strong style={{ color: 'var(--ac-accent)' }}>#{fila.pedido_sequencial} · </strong>
+            )}
+            <strong style={{ color: 'var(--ac-text)' }}>{fila.pedido_codigo}</strong>
+          </span>
           <span>Cliente: <strong style={{ color: 'var(--ac-text)' }}>{fila.cliente_nome}</strong></span>
           <span className="ml-auto text-base font-semibold" style={{ color: 'var(--ac-text)' }}>
             Estimativa: {fmt(estimativaTotal)}
