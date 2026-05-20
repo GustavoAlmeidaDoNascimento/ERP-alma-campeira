@@ -322,6 +322,8 @@ export type PedidoClienteJoin = Pick<
 export type Pedido = {
   id: string
   codigo: string
+  /** Número sequencial humano (#1, #2, ...) atribuído por sequence no banco. */
+  sequencial?: number | null
   cliente_id: string | null
   vendedor_id: string | null
   data_pedido: string
@@ -412,6 +414,8 @@ export type OrdemCompraItem = {
 export type OrdemCompra = {
   id: string
   codigo: string
+  /** Número sequencial dentro do fornecedor (#1, #2, #3 do mesmo fornecedor). */
+  sequencial_fornecedor?: number | null
   fornecedor_id: string | null
   fila_reposicao_id: string | null
   status: StatusOC
@@ -428,6 +432,7 @@ export type OrdemCompra = {
   // manuais (criadas via "Nova ordem de compra") que não têm pedido de origem.
   pedido_id?: string | null
   pedido_codigo?: string | null
+  pedido_sequencial?: number | null
   cliente_nome?: string | null
   itens?: OrdemCompraItem[]
 }
@@ -436,6 +441,7 @@ export type FilaReposicao = {
   id: string
   pedido_id: string
   pedido_codigo: string
+  pedido_sequencial?: number | null
   cliente_nome: string
   status: 'pendente' | 'convertida' | 'dispensada'
   created_at: string
