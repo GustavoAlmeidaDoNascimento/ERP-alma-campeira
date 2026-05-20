@@ -1,7 +1,9 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao } from '@/lib/auth'
+import { fetchTaxasLucroConfig } from '@/lib/cache/list-data'
 
 export type TaxasLucroConfig = {
   /** Valor fixo em R$ adicionado ao custo de materiais (ex.: 27.00). */
@@ -28,25 +30,7 @@ function isAppConfigUnavailable(error: { message?: string }): boolean {
 
 export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
   await assertPermissao('taxas_lucro', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('app_config')
-    .select('taxa_producao_lucro, margem_lucro, taxa_comissao_lucro')
-    .eq('id', 1)
-    .maybeSingle()
-
-  if (error) {
-    if (isAppConfigUnavailable(error)) {
-      return { taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }
-    }
-    throw new Error(error.message)
-  }
-  if (!data) return { taxa_producao: 0, margem_lucro: 0, taxa_comissao: 0 }
-  return {
-    taxa_producao: Number(data.taxa_producao_lucro ?? 0),
-    margem_lucro: Number(data.margem_lucro ?? 0),
-    taxa_comissao: Number(data.taxa_comissao_lucro ?? 0),
-  }
+  return fetchTaxasLucroConfig()
 }
 
 export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
@@ -80,4 +64,5 @@ export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
     if (isAppConfigUnavailable(error)) throw new Error(APP_CONFIG_MISSING_MSG)
     throw new Error(error.message)
   }
+  revalidateTag('app-config-taxas-lucro', 'max')
 }
