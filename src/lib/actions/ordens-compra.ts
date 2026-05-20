@@ -94,6 +94,7 @@ export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
         pedido:pedidos(
           id,
           codigo,
+          sequencial,
           cliente:clientes(id, nome)
         ),
         itens:fila_reposicao_itens(id)
@@ -105,7 +106,7 @@ export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
 
     return (data ?? []).map((row) => {
       const pedido = (Array.isArray(row.pedido) ? row.pedido[0] : row.pedido) as {
-        id: string; codigo: string
+        id: string; codigo: string; sequencial: number | null
         cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
       } | null
       const cliente = pedido?.cliente
@@ -116,6 +117,7 @@ export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
         id: row.id,
         pedido_id: row.pedido_id,
         pedido_codigo: pedido?.codigo ?? '—',
+        pedido_sequencial: pedido?.sequencial ?? null,
         cliente_nome: cliente?.nome ?? '—',
         status: row.status as FilaReposicao['status'],
         created_at: row.created_at ?? '',
@@ -143,6 +145,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
         pedido:pedidos(
           id,
           codigo,
+          sequencial,
           cliente:clientes(id, nome),
           pedido_itens(
             faca_id,
@@ -181,7 +184,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
     if (filaErr || !filaRow) throw new Error(filaErr?.message ?? 'Fila não encontrada.')
 
     const pedido = (Array.isArray(filaRow.pedido) ? filaRow.pedido[0] : filaRow.pedido) as {
-      id: string; codigo: string
+      id: string; codigo: string; sequencial: number | null
       cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
       pedido_itens: Array<{
         faca_id: string
@@ -241,6 +244,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
       id: filaRow.id,
       pedido_id: filaRow.pedido_id,
       pedido_codigo: pedido?.codigo ?? '—',
+      pedido_sequencial: pedido?.sequencial ?? null,
       cliente_nome: cliente?.nome ?? '—',
       status: filaRow.status as FilaReposicao['status'],
       created_at: filaRow.created_at ?? '',
@@ -469,6 +473,7 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
         pedido:pedidos(
           id,
           codigo,
+          sequencial,
           cliente:clientes(id, nome)
         )
       ),
@@ -492,7 +497,7 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
   const mapped = (data ?? []).map((row: RowOC) => {
     const fila = (Array.isArray(row.fila) ? row.fila[0] : row.fila) as {
       id: string
-      pedido: { id: string; codigo: string; cliente: { nome: string } | { nome: string }[] | null } | { id: string; codigo: string; cliente: { nome: string } | { nome: string }[] | null }[] | null
+      pedido: { id: string; codigo: string; sequencial: number | null; cliente: { nome: string } | { nome: string }[] | null } | { id: string; codigo: string; sequencial: number | null; cliente: { nome: string } | { nome: string }[] | null }[] | null
     } | null
     const pedido = fila?.pedido
       ? (Array.isArray(fila.pedido) ? fila.pedido[0] : fila.pedido)
@@ -508,6 +513,7 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
       fornecedor,
       pedido_id: pedido?.id ?? null,
       pedido_codigo: pedido?.codigo ?? null,
+      pedido_sequencial: pedido?.sequencial ?? null,
       cliente_nome: cliente?.nome ?? null,
     }
     const { status, pago } = normalizarStatusEPago(row as { status?: unknown; pago?: unknown })
