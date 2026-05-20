@@ -470,6 +470,10 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
                   >
                     <td className="px-4 py-3 font-mono text-xs font-semibold" style={{ color: 'var(--ac-muted)' }}>
+                      {p.sequencial != null && (
+                        <span style={{ color: 'var(--ac-accent)' }}>#{p.sequencial}</span>
+                      )}
+                      {p.sequencial != null && <span className="mx-1.5 opacity-50">·</span>}
                       {p.codigo}
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--ac-text)' }}>
@@ -565,7 +569,11 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir venda">
         <div className="flex flex-col gap-4">
           <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
-            Tem certeza que deseja excluir a venda <strong>{deletando?.codigo}</strong>? Esta ação não pode ser desfeita.
+            Tem certeza que deseja excluir a venda{' '}
+            <strong>
+              {deletando?.sequencial != null ? `#${deletando.sequencial} · ` : ''}
+              {deletando?.codigo}
+            </strong>? Esta ação não pode ser desfeita.
           </p>
           {erroDelete && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroDelete}</p>
