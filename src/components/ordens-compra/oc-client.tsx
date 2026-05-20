@@ -121,7 +121,7 @@ function exportarPDF(oc: OrdemCompra) {
   </style>
 </head>
 <body>
-  <h1>ORDEM DE COMPRA — ${oc.codigo}</h1>
+  <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ''}${oc.codigo}</h1>
   <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
 
   <div class="meta">
@@ -201,7 +201,7 @@ function ocBodyHtml(oc: OrdemCompra) {
 
   return `
   <section class="oc-page">
-    <h1>ORDEM DE COMPRA — ${oc.codigo}</h1>
+    <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ''}${oc.codigo}</h1>
     <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
     <div class="meta">
       <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span></div>
@@ -519,7 +519,7 @@ function OcDetalheModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={`${oc.codigo} — ${oc.fornecedor?.nome ?? 'Sem fornecedor'}`} width="760px">
+    <Modal open onClose={onClose} title={`${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ''}${oc.codigo} — ${oc.fornecedor?.nome ?? 'Sem fornecedor'}`} width="760px">
       <div className="space-y-5">
         {/* Resumo */}
         <div className="flex items-center gap-6 text-sm flex-wrap" style={{ color: 'var(--ac-muted)' }}>
@@ -1411,6 +1411,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
     type Grupo = {
       key: string
       pedido_codigo: string | null
+      pedido_sequencial: number | null
       cliente_nome: string | null
       ocs: OrdemCompra[]
       maisRecente: string
@@ -1426,6 +1427,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
         map.set(key, {
           key,
           pedido_codigo: oc.pedido_codigo ?? null,
+          pedido_sequencial: oc.pedido_sequencial ?? null,
           cliente_nome: oc.cliente_nome ?? null,
           ocs: [oc],
           maisRecente: oc.created_at,
@@ -1607,6 +1609,9 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
                       onClick={() => setFilaAberta(item)}
                     >
                       <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
+                        {item.pedido_sequencial != null && (
+                          <>#{item.pedido_sequencial}<span className="mx-1 opacity-60">·</span></>
+                        )}
                         {item.pedido_codigo}
                       </td>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
@@ -1821,12 +1826,20 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
                           />
                         </td>
                         <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
+                          {oc.sequencial_fornecedor != null && (
+                            <>#{oc.sequencial_fornecedor}<span className="mx-1 opacity-60">·</span></>
+                          )}
                           {oc.codigo}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           {oc.pedido_codigo ? (
                             <div>
-                              <div className="font-mono font-semibold" style={{ color: 'var(--ac-text)' }}>{oc.pedido_codigo}</div>
+                              <div className="font-mono font-semibold" style={{ color: 'var(--ac-text)' }}>
+                                {oc.pedido_sequencial != null && (
+                                  <span style={{ color: 'var(--ac-accent)' }}>#{oc.pedido_sequencial} · </span>
+                                )}
+                                {oc.pedido_codigo}
+                              </div>
                               <div style={{ color: 'var(--ac-muted)' }}>{oc.cliente_nome ?? '—'}</div>
                             </div>
                           ) : (
@@ -1925,7 +1938,10 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
                               <div className="flex items-center gap-2 flex-wrap text-sm">
                                 {grupo.pedido_codigo ? (
                                   <>
-                                    <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{grupo.pedido_codigo}</span>
+                                    {grupo.pedido_sequencial != null && (
+                                      <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>#{grupo.pedido_sequencial}</span>
+                                    )}
+                                    <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{grupo.pedido_sequencial != null ? `· ${grupo.pedido_codigo}` : grupo.pedido_codigo}</span>
                                     <span style={{ color: 'var(--ac-text)' }}>· {grupo.cliente_nome ?? '—'}</span>
                                   </>
                                 ) : (
@@ -2002,7 +2018,11 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir Ordem de Compra">
         <div className="space-y-4">
           <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-            Tem certeza que deseja excluir a OC <strong style={{ color: 'var(--ac-text)' }}>{deletando?.codigo}</strong>?
+            Tem certeza que deseja excluir a OC{' '}
+            <strong style={{ color: 'var(--ac-text)' }}>
+              {deletando?.sequencial_fornecedor != null ? `#${deletando.sequencial_fornecedor} · ` : ''}
+              {deletando?.codigo}
+            </strong>?
             Esta ação não pode ser desfeita.
           </p>
           {erroDelete && (
