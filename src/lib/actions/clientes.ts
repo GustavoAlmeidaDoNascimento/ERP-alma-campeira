@@ -1,20 +1,24 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { assertPermissao } from '@/lib/auth'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { fetchClientesList } from '@/lib/cache/list-data'
 import type { Cliente, TipoDocumento } from '@/types'
 import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
 
+async function revalidateClientesList() {
+  try {
+    const userId = await requireAuthenticatedUserId()
+    revalidateTag(`list-clientes-${userId}`, 'max')
+  } catch {}
+}
+
 export async function getClientes(limit = 50): Promise<Cliente[]> {
+  const userId = await requireAuthenticatedUserId()
   await assertPermissao('clientes', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('clientes')
-    .select('*')
-    .order('nome')
-    .limit(limit)
-  if (error) throw new Error(error.message)
-  return data as Cliente[]
+  const rows = await fetchClientesList(userId)
+  return rows.slice(0, limit)
 }
 
 type ClienteInput = {
@@ -88,6 +92,7 @@ export async function criarCliente(input: ClienteInput) {
   const row = normalizarClientePayload(input)
   const { error } = await supabase.from('clientes').insert(row)
   if (error) throw new Error(error.message)
+  await revalidateClientesList()
 }
 
 export async function atualizarCliente(id: string, input: ClienteInput) {
@@ -96,6 +101,7 @@ export async function atualizarCliente(id: string, input: ClienteInput) {
   const row = normalizarClientePayload(input)
   const { error } = await supabase.from('clientes').update(row).eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateClientesList()
 }
 
 export async function deletarCliente(id: string) {
@@ -114,4 +120,5 @@ export async function deletarCliente(id: string) {
 
   const { error } = await supabase.from('clientes').delete().eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateClientesList()
 }
