@@ -18,6 +18,8 @@ async function revalidateMPLists() {
   revalidateTag(`list-materias-primas-${userId}`, 'max')
   revalidateTag(`list-fornecedores-select-${userId}`, 'max')
   revalidateTag(`list-categorias-mp-${userId}`, 'max')
+  // Custo das facas depende de preco_custo das MPs → invalida lista de facas também.
+  revalidateTag(`list-facas-${userId}`, 'max')
 }
 
 export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
