@@ -125,7 +125,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     <Modal
       open={!!pedido}
       onClose={onClose}
-      title={`Venda ${pedido.codigo}`}
+      title={`Venda ${pedido.sequencial != null ? `#${pedido.sequencial} · ` : ''}${pedido.codigo}`}
       width="600px"
     >
       <div className="flex flex-col gap-5">
