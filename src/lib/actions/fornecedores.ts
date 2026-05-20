@@ -1,20 +1,25 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { assertPermissao } from '@/lib/auth'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { fetchFornecedoresFullList } from '@/lib/cache/list-data'
 import type { Fornecedor, TipoDocumento } from '@/types'
 import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
 
+async function revalidateFornecedoresList() {
+  try {
+    const userId = await requireAuthenticatedUserId()
+    revalidateTag(`list-fornecedores-${userId}`, 'max')
+    revalidateTag(`list-fornecedores-select-${userId}`, 'max')
+  } catch {}
+}
+
 export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
+  const userId = await requireAuthenticatedUserId()
   await assertPermissao('fornecedores', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('fornecedores')
-    .select('*')
-    .order('nome')
-    .limit(limit)
-  if (error) throw new Error(error.message)
-  return data as Fornecedor[]
+  const rows = await fetchFornecedoresFullList(userId)
+  return rows.slice(0, limit)
 }
 
 /** Mantido para compatibilidade — agora idêntico a `getFornecedores`. */
@@ -82,6 +87,7 @@ export async function criarFornecedor(input: FornecedorInput) {
   const row = normalizarFornecedorPayload(input)
   const { error } = await supabase.from('fornecedores').insert(row)
   if (error) throw new Error(error.message)
+  await revalidateFornecedoresList()
 }
 
 export async function atualizarFornecedor(id: string, input: FornecedorInput) {
@@ -90,6 +96,7 @@ export async function atualizarFornecedor(id: string, input: FornecedorInput) {
   const row = normalizarFornecedorPayload(input)
   const { error } = await supabase.from('fornecedores').update(row).eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateFornecedoresList()
 }
 
 export async function deletarFornecedor(id: string) {
@@ -108,4 +115,5 @@ export async function deletarFornecedor(id: string) {
 
   const { error } = await supabase.from('fornecedores').delete().eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateFornecedoresList()
 }
