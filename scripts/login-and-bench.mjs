@@ -80,9 +80,15 @@ async function main() {
   const session = await login()
   const cookie = buildCookies(session)
 
-  // Aquecimento global
-  for (const r of ROUTES) await measure(r, cookie)
+  // Primeira hit sem warmup (cold cache do Next + Supabase)
+  console.log('\nCOLD (primeira hit, cache vazio):')
+  for (const r of ROUTES) {
+    const t = await measure(r, cookie)
+    const icon = t.ms <= 700 ? '✓' : t.ms <= 2000 ? '~' : '✗'
+    console.log(`${icon} ${r.padEnd(20)} ${String(t.ms).padStart(5)}ms (status ${t.status})`)
+  }
 
+  console.log('\nWARM (3 amostras após warmup):')
   const results = []
   for (const r of ROUTES) {
     const samples = []
