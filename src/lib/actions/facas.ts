@@ -6,11 +6,25 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 import { withTiming } from '@/lib/perf/timing'
+import { fetchFacasComCustoList } from '@/lib/cache/list-data'
+import { revalidateTag } from 'next/cache'
+
+async function revalidateFacasLists() {
+  try {
+    const userId = await requireAuthenticatedUserId()
+    revalidateTag(`list-facas-${userId}`, 'max')
+  } catch {}
+}
 
 export async function getFacas(limit = 80, options?: { comCusto?: boolean }): Promise<Faca[]> {
   const comCusto = options?.comCusto ?? true
   return withTiming(`getFacas${comCusto ? '' : '(sem custo)'}`, async () => {
+    const userId = await requireAuthenticatedUserId()
     await assertPermissao('facas', 'ver')
+    if (comCusto) {
+      const rows = await fetchFacasComCustoList(userId)
+      return rows.slice(0, limit)
+    }
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('facas')
@@ -18,14 +32,8 @@ export async function getFacas(limit = 80, options?: { comCusto?: boolean }): Pr
       .order('codigo')
       .limit(limit)
     if (error) throw new Error(error.message)
-    const facas = data as Faca[]
-    if (!comCusto) {
-      // Quando o consumidor não usa preco_custo (ex.: dropdown em /vendas, /orcamentos),
-      // pular o JOIN com BOM economiza ~600-800ms.
-      return facas.map((f) => ({ ...f, preco_custo: 0 }))
-    }
-    const custoByFaca = await calcularPrecoCustoPorFaca(supabase, facas)
-    return facas.map((f) => ({ ...f, preco_custo: custoByFaca.get(f.id) ?? 0 }))
+    const facas = (data ?? []) as Faca[]
+    return facas.map((f) => ({ ...f, preco_custo: 0 }))
   })
 }
 
@@ -58,6 +66,7 @@ export async function criarFaca(input: FacaInput) {
   })
 
   if (error) throw new Error(error.message)
+  await revalidateFacasLists()
 }
 
 export async function atualizarFaca(id: string, input: FacaInput) {
@@ -78,6 +87,7 @@ export async function atualizarFaca(id: string, input: FacaInput) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  await revalidateFacasLists()
 }
 
 export type DeletarFacaModo = 'desmontar' | 'apagar_materias_primas'
@@ -271,6 +281,7 @@ export async function salvarFacaComFoto(formData: FormData) {
     .insert(bomRows)
   if (insBomErr) throw new Error(insBomErr.message)
 
+  await revalidateFacasLists()
 }
 
 function round3(n: number) {
@@ -380,6 +391,7 @@ export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar
     if (error) throw new Error(error.message)
   }
 
+  await revalidateFacasLists()
 }
 
 // ============================================================
