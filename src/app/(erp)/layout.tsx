@@ -15,6 +15,9 @@ import {
   fetchCategoriasFacaList,
   fetchClientesList,
   fetchTaxasLucroConfig,
+  fetchOrdensCompraList,
+  fetchFilaReposicaoList as fetchFilaReposicaoListCache,
+  fetchUsuariosRegistroOC,
 } from '@/lib/cache/list-data'
 
 /**
@@ -39,6 +42,11 @@ function aquecerListas(userId: string, perms: ReturnType<typeof permissoesParaVe
   }
   if (perms.fornecedores) fire(fetchFornecedoresFullList(userId))
   if (perms.clientes) fire(fetchClientesList(userId))
+  if (perms.ordens_compra) {
+    fire(fetchOrdensCompraList(userId))
+    fire(fetchFilaReposicaoListCache(userId))
+    fire(fetchUsuariosRegistroOC(userId))
+  }
 }
 
 export default async function ErpLayout({ children }: { children: React.ReactNode }) {
