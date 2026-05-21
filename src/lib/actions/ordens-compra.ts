@@ -286,8 +286,19 @@ export async function atualizarItemFila(
   const update: Record<string, unknown> = {}
   if (patch.selecionado !== undefined) update.selecionado = patch.selecionado
   if (patch.quantidade_adicional !== undefined) {
-    if (!Number.isFinite(patch.quantidade_adicional) || patch.quantidade_adicional < 0) {
+    if (!Number.isFinite(patch.quantidade_adicional)) {
       throw new Error('Quantidade adicional inválida.')
+    }
+    const { data: itemAtual, error: itemErr } = await supabase
+      .from('fila_reposicao_itens')
+      .select('quantidade_sugerida')
+      .eq('id', item_id)
+      .single()
+    if (itemErr || !itemAtual) throw new Error(itemErr?.message ?? 'Item da fila não encontrado.')
+    const sugerida = Number(itemAtual.quantidade_sugerida)
+    const total = sugerida + patch.quantidade_adicional
+    if (total < 0) {
+      throw new Error('A quantidade total não pode ser negativa.')
     }
     update.quantidade_adicional = patch.quantidade_adicional
   }
