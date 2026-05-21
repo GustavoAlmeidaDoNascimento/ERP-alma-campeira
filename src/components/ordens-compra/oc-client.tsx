@@ -38,6 +38,8 @@ type Props = {
   perm: Perm
   /** perfil usuarios_perfis.id do login — pré-selecionado no registro de alterações */
   usuarioLogadoId: string | null
+  /** usuários ativos para o select "Quem registra a alteração" — pré-buscado no server */
+  usuariosRegistroInicial?: { id: string; nome: string }[]
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -333,6 +335,7 @@ function OcDetalheModal({
   oc,
   perm,
   usuarioLogadoId,
+  usuariosRegistroInicial,
   onClose,
   onRefresh,
   onRequestExcluir,
@@ -340,6 +343,7 @@ function OcDetalheModal({
   oc: OrdemCompra
   perm: Perm
   usuarioLogadoId: string | null
+  usuariosRegistroInicial?: { id: string; nome: string }[]
   onClose: () => void
   onRefresh: () => void | Promise<void>
   onRequestExcluir?: () => void
@@ -359,6 +363,7 @@ function OcDetalheModal({
 
   const { data: usuariosRegistro = [], isPending: carregandoUsuariosRegistro } = useUsuariosParaRegistroOC({
     enabled: perm.editar,
+    initialData: usuariosRegistroInicial,
   })
 
   const mpSectionRef = useRef<HTMLDivElement>(null)
@@ -1220,7 +1225,7 @@ function OcCriarModal({
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
-export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  const { refreshActiveTab } = useErpTabs()
+export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistroInicial }: Props) {  const { refreshActiveTab } = useErpTabs()
   const queryClient = useQueryClient()
   const [aba, setAba] = useState<'fila' | 'historico'>('fila')
   const { data: ordensLista = ordens } = useOrdensCompra({ initialData: ordens })
@@ -1993,6 +1998,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId }: Props) {  cons
           oc={ocAberta}
           perm={perm}
           usuarioLogadoId={usuarioLogadoId}
+          usuariosRegistroInicial={usuariosRegistroInicial}
           onClose={() => setOcAberta(null)}
           onRefresh={refresh}
           onRequestExcluir={() => {
