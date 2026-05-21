@@ -788,9 +788,9 @@ function OcDetalheModal({
             <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm px-2">
               <input
                 type="checkbox"
-                checked={oc.pago}
-                disabled={alterandoPago}
-                onChange={(e) => { void alternarPago(e.target.checked) }}
+                checked={pagoDraft}
+                disabled={salvandoTudo}
+                onChange={(e) => setPagoDraft(e.target.checked)}
                 className="w-4 h-4 rounded"
                 style={{ accentColor: 'var(--ac-accent)' }}
               />
@@ -847,20 +847,9 @@ function OcDetalheModal({
               </label>
               <select
                 id="oc-status-select"
-                value={oc.status}
-                disabled={mudandoStatus}
-                onChange={(e) => {
-                  const novo = e.target.value as StatusOC
-                  if (novo === oc.status) return
-                  if (novo === 'recebida') {
-                    const ok = window.confirm('Confirmar recebimento dará entrada no estoque das matérias-primas. Confirmar?')
-                    if (!ok) { e.target.value = oc.status; return }
-                  } else if (oc.status === 'recebida') {
-                    const ok = window.confirm('Voltar de Recebida irá estornar a entrada de estoque (criando movimentações de ajuste). Confirmar?')
-                    if (!ok) { e.target.value = oc.status; return }
-                  }
-                  void mudarStatus(novo)
-                }}
+                value={statusDraft}
+                disabled={salvandoTudo}
+                onChange={(e) => setStatusDraft(e.target.value as StatusOC)}
                 className="text-sm rounded px-2 py-1.5"
                 style={{
                   border: '1px solid var(--ac-border)',
@@ -874,6 +863,17 @@ function OcDetalheModal({
                 ))}
               </select>
             </div>
+          )}
+
+          {perm.editar && (
+            <Button
+              variant="primary"
+              onClick={salvarTudo}
+              loading={salvandoTudo}
+              disabled={!temAlteracoes || salvandoTudo}
+            >
+              Salvar alterações
+            </Button>
           )}
         </div>
       </div>
