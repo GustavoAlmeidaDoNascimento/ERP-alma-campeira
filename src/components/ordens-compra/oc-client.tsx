@@ -345,13 +345,12 @@ function OcDetalheModal({
   onRefresh: () => void | Promise<void>
   onRequestExcluir?: () => void
 }) {
-  /** String editável da quantidade total do item (vendido + adicional); igual conceito à fila de reposição. */
+  /** Drafts editáveis — só são persistidos no Salvar. */
   const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({})
-  const [salvando, setSalvando] = useState<string | null>(null)
   const [obs, setObs] = useState(oc.observacao ?? '')
-  const [salvandoObs, setSalvandoObs] = useState(false)
-  const [mudandoStatus, setMudandoStatus] = useState(false)
-  const [alterandoPago, setAlterandoPago] = useState(false)
+  const [pagoDraft, setPagoDraft] = useState(oc.pago)
+  const [statusDraft, setStatusDraft] = useState<StatusOC>(oc.status)
+  const [salvandoTudo, setSalvandoTudo] = useState(false)
   const [erro, setErro] = useState('')
   const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
   const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
@@ -428,7 +427,10 @@ function OcDetalheModal({
 
   useEffect(() => {
     setObs(oc.observacao ?? '')
-  }, [oc.id, oc.observacao])
+    setPagoDraft(oc.pago)
+    setStatusDraft(oc.status)
+    setEditandoQtdTotal({})
+  }, [oc.id, oc.observacao, oc.pago, oc.status])
 
   useEffect(() => {
     setUsuarioRegistroId(usuarioLogadoId ?? '')
