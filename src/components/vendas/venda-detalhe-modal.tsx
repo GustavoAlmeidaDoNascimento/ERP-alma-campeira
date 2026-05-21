@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { alterarStatus } from '@/lib/actions/vendas'
@@ -9,6 +9,7 @@ import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
 
 const STATUS_OPTIONS: StatusPedido[] = ['em_espera', 'em_producao', 'entregue']
 import { gerarPdfVendaSemValor } from '@/components/vendas/venda-sem-valor-pdf'
+import { gerarPdfPedido } from '@/components/vendas/venda-pedido-pdf'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
 
@@ -77,7 +78,26 @@ type Props = {
 export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Props) {
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(false)
+  const [imprimirOpen, setImprimirOpen] = useState(false)
   const [erro, setErro] = useState('')
+  const imprimirRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!imprimirOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (!imprimirRef.current) return
+      if (!imprimirRef.current.contains(e.target as Node)) setImprimirOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setImprimirOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [imprimirOpen])
 
   if (!pedido) return null
 
@@ -88,9 +108,25 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     const p = pedido
     if (!p) return
     setErro('')
+    setImprimirOpen(false)
     setLoadingPdf(true)
     try {
       await gerarPdfVendaSemValor(p)
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o PDF.')
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
+
+  async function exportarPedido() {
+    const p = pedido
+    if (!p) return
+    setErro('')
+    setImprimirOpen(false)
+    setLoadingPdf(true)
+    try {
+      await gerarPdfPedido(p)
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Não foi possível gerar o PDF.')
     } finally {
@@ -391,56 +427,95 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
           <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>
         )}
 
-        {/* Ações de status */}
-        {perm.editar && (
-          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
-            <div className="flex gap-2 items-center">
+        {/* Botão Imprimir (dropdown) — reutilizado em ambos os modos */}
+        {(() => {
+          const imprimirDropdown = (
+            <div ref={imprimirRef} style={{ position: 'relative' }}>
               <Button
                 variant="secondary"
                 loading={loadingPdf}
-                onClick={() => void exportarVendaSemValor()}
+                onClick={() => setImprimirOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={imprimirOpen}
               >
-                Venda sem valor
+                Imprimir ▾
               </Button>
+              {imprimirOpen && (
+                <div
+                  role="menu"
+                  className="rounded-md shadow-lg"
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 4px)',
+                    left: 0,
+                    minWidth: 200,
+                    background: 'var(--ac-card)',
+                    border: '1px solid var(--ac-border)',
+                    zIndex: 50,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void exportarVendaSemValor()}
+                    className="w-full text-left px-3 py-2 text-sm hover:opacity-80"
+                    style={{ color: 'var(--ac-text)', background: 'transparent' }}
+                  >
+                    Venda sem valor
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void exportarPedido()}
+                    className="w-full text-left px-3 py-2 text-sm hover:opacity-80"
+                    style={{ color: 'var(--ac-text)', background: 'transparent', borderTop: '1px solid var(--ac-border)' }}
+                  >
+                    Imprimir pedido
+                  </button>
+                </div>
+              )}
             </div>
+          )
 
-            <div className="flex gap-2 items-center">
-              <label className="text-xs font-semibold" style={{ color: 'var(--ac-muted)' }}>
-                Status
-              </label>
-              <select
-                value={pedido.status}
-                disabled={loadingStatus}
-                onChange={(e) => void handleAlterarStatus(e.target.value as StatusPedido)}
-                className="text-sm rounded px-2 py-1.5"
-                style={{
-                  border: '1px solid var(--ac-border)',
-                  background: 'var(--ac-card)',
-                  color: 'var(--ac-text)',
-                  minWidth: 180,
-                }}
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{STATUS_PEDIDO[s].label}</option>
-                ))}
-              </select>
-              <Button variant="secondary" onClick={onClose} disabled={loadingStatus}>Fechar</Button>
+          if (perm.editar) {
+            return (
+              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
+                <div className="flex gap-2 items-center">{imprimirDropdown}</div>
+
+                <div className="flex gap-2 items-center">
+                  <label className="text-xs font-semibold" style={{ color: 'var(--ac-muted)' }}>
+                    Status
+                  </label>
+                  <select
+                    value={pedido.status}
+                    disabled={loadingStatus}
+                    onChange={(e) => void handleAlterarStatus(e.target.value as StatusPedido)}
+                    className="text-sm rounded px-2 py-1.5"
+                    style={{
+                      border: '1px solid var(--ac-border)',
+                      background: 'var(--ac-card)',
+                      color: 'var(--ac-text)',
+                      minWidth: 180,
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>{STATUS_PEDIDO[s].label}</option>
+                    ))}
+                  </select>
+                  <Button variant="secondary" onClick={onClose} disabled={loadingStatus}>Fechar</Button>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
+              {imprimirDropdown}
+              <Button variant="secondary" onClick={onClose}>Fechar</Button>
             </div>
-          </div>
-        )}
-
-        {!perm.editar && (
-          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
-            <Button
-              variant="secondary"
-              loading={loadingPdf}
-              onClick={() => void exportarVendaSemValor()}
-            >
-              Venda sem valor
-            </Button>
-            <Button variant="secondary" onClick={onClose}>Fechar</Button>
-          </div>
-        )}
+          )
+        })()}
       </div>
     </Modal>
   )
