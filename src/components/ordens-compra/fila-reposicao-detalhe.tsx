@@ -124,11 +124,7 @@ export function FilaReposicaoDetalheModal({
     const raw = quantidadesLocais[item.id] ?? String(item.quantidade_sugerida + item.quantidade_adicional)
     const total = parseNumero(raw)
     if (!Number.isFinite(total) || total < 0) {
-      setErro('Quantidade inválida.')
-      return
-    }
-    if (total < item.quantidade_sugerida) {
-      setErro(`A quantidade não pode ser menor que a sugerida (${fmtQtd(item.quantidade_sugerida)}).`)
+      setErro('A quantidade não pode ser negativa.')
       return
     }
     const adicional = total - item.quantidade_sugerida
@@ -476,13 +472,13 @@ export function FilaReposicaoDetalheModal({
                         </div>
                       </td>
 
-                      {/* Quantidade (total a comprar; mínimo = sugerida pelo sistema) */}
+                      {/* Quantidade total a comprar (sugerida é referência, pode ser reduzida) */}
                       <td className="px-3 py-3 text-right">
                         {perm.editar && item.selecionado ? (
                           <div className="flex items-center justify-end gap-1">
                             <input
                               type="number"
-                              min={item.quantidade_sugerida}
+                              min={0}
                               step="any"
                               value={qtdRaw}
                               onChange={(e) =>
