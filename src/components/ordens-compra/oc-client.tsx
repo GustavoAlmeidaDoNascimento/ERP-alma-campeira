@@ -527,23 +527,6 @@ function OcDetalheModal({
           <span className="inline-flex items-center gap-2 flex-wrap">
             Status: <BadgeStatus status={oc.status} />
           </span>
-          {perm.editar ? (
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={oc.pago}
-                disabled={alterandoPago}
-                onChange={(e) => { void alternarPago(e.target.checked) }}
-                className="w-4 h-4 rounded"
-                style={{ accentColor: 'var(--ac-accent)' }}
-              />
-              <span style={{ color: 'var(--ac-text)' }}>Pago</span>
-            </label>
-          ) : (
-            <span style={{ color: 'var(--ac-text)' }}>
-              Pagamento: {oc.pago ? 'sim' : 'não'}
-            </span>
-          )}
           <span className="ml-auto font-semibold text-base" style={{ color: 'var(--ac-text)' }}>{fmt(total)}</span>
         </div>
 
@@ -827,6 +810,24 @@ function OcDetalheModal({
             </svg>
             Exportar PDF
           </Button>
+
+          {perm.editar ? (
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm px-2">
+              <input
+                type="checkbox"
+                checked={oc.pago}
+                disabled={alterandoPago}
+                onChange={(e) => { void alternarPago(e.target.checked) }}
+                className="w-4 h-4 rounded"
+                style={{ accentColor: 'var(--ac-accent)' }}
+              />
+              <span style={{ color: 'var(--ac-text)' }}>Pago</span>
+            </label>
+          ) : (
+            <span className="text-sm px-2" style={{ color: 'var(--ac-muted)' }}>
+              Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'não'}</strong>
+            </span>
+          )}
 
           {perm.deletar && oc.status === 'pendente' && onRequestExcluir && (
             <Button variant="danger" onClick={onRequestExcluir}>
