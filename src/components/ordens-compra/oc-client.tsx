@@ -766,115 +766,123 @@ function OcDetalheModal({
           </p>
         )}
 
-        {/* Ações de status + PDF */}
+        {/* Rodapé: campos de alteração + ações */}
         <div
-          className="flex flex-wrap items-end gap-2 pt-1"
+          className="flex flex-col gap-3 pt-3"
           style={{ borderTop: '1px solid var(--ac-border)' }}
         >
-          <Button
-            variant="secondary"
-            onClick={() => exportarPDF(oc)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-            </svg>
-            Exportar PDF
-          </Button>
-
           {perm.editar ? (
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm px-2">
-              <input
-                type="checkbox"
-                checked={pagoDraft}
-                disabled={salvandoTudo}
-                onChange={(e) => setPagoDraft(e.target.checked)}
-                className="w-4 h-4 rounded"
-                style={{ accentColor: 'var(--ac-accent)' }}
-              />
-              <span style={{ color: 'var(--ac-text)' }}>Pago</span>
-            </label>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+              <div
+                className="flex flex-col gap-1 min-w-0"
+                title="Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança."
+              >
+                <label
+                  htmlFor="oc-registro-usuario"
+                  className="text-[11px] font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Quem registra a alteração
+                </label>
+                <SearchableSelect
+                  id="oc-registro-usuario"
+                  value={usuarioRegistroId}
+                  onChange={setUsuarioRegistroId}
+                  options={opcoesUsuarioRegistro}
+                  placeholder="Selecione o usuário…"
+                  loading={carregandoUsuariosRegistro}
+                  emptyMessage="Nenhum usuário ativo encontrado"
+                  className="w-full"
+                  showThumbnails={false}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="oc-status-select"
+                  className="text-[11px] font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Status
+                </label>
+                <select
+                  id="oc-status-select"
+                  value={statusDraft}
+                  disabled={salvandoTudo}
+                  onChange={(e) => setStatusDraft(e.target.value as StatusOC)}
+                  className="text-sm rounded px-2 h-[34px]"
+                  style={{
+                    border: '1px solid var(--ac-border)',
+                    background: 'var(--ac-card)',
+                    color: 'var(--ac-text)',
+                    minWidth: 180,
+                  }}
+                >
+                  {(['pendente', 'enviada', 'recebida'] as StatusOC[]).map((s) => (
+                    <option key={s} value={s}>{STATUS_OC[s].label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span
+                  className="text-[11px] font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Pagamento
+                </span>
+                <label
+                  className="inline-flex items-center gap-2 cursor-pointer select-none text-sm rounded px-2.5 h-[34px]"
+                  style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pagoDraft}
+                    disabled={salvandoTudo}
+                    onChange={(e) => setPagoDraft(e.target.checked)}
+                    className="w-4 h-4 rounded"
+                    style={{ accentColor: 'var(--ac-accent)' }}
+                  />
+                  <span style={{ color: 'var(--ac-text)' }}>Pago</span>
+                </label>
+              </div>
+            </div>
           ) : (
-            <span className="text-sm px-2" style={{ color: 'var(--ac-muted)' }}>
+            <div className="text-sm" style={{ color: 'var(--ac-muted)' }}>
               Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'não'}</strong>
-            </span>
-          )}
-
-          {perm.deletar && oc.status === 'pendente' && onRequestExcluir && (
-            <Button variant="danger" onClick={onRequestExcluir}>
-              Excluir OC
-            </Button>
-          )}
-
-          <div className="flex-1 min-w-[0.5rem]" />
-
-          {perm.editar && (
-            <div
-              className="flex w-full min-[480px]:w-auto min-[480px]:max-w-[min(100%,280px)] flex-col gap-1"
-              title="Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança."
-            >
-              <label
-                htmlFor="oc-registro-usuario"
-                className="text-[11px] font-semibold uppercase tracking-wide"
-                style={{ color: 'var(--ac-muted)' }}
-              >
-                Quem registra a alteração
-              </label>
-              <SearchableSelect
-                id="oc-registro-usuario"
-                value={usuarioRegistroId}
-                onChange={setUsuarioRegistroId}
-                options={opcoesUsuarioRegistro}
-                placeholder="Selecione o usuário…"
-                loading={carregandoUsuariosRegistro}
-                emptyMessage="Nenhum usuário ativo encontrado"
-                className="w-full"
-                showThumbnails={false}
-              />
             </div>
           )}
 
-          {perm.editar && (
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="oc-status-select"
-                className="text-[11px] font-semibold uppercase tracking-wide"
-                style={{ color: 'var(--ac-muted)' }}
-              >
-                Status
-              </label>
-              <select
-                id="oc-status-select"
-                value={statusDraft}
-                disabled={salvandoTudo}
-                onChange={(e) => setStatusDraft(e.target.value as StatusOC)}
-                className="text-sm rounded px-2 py-1.5"
-                style={{
-                  border: '1px solid var(--ac-border)',
-                  background: 'var(--ac-card)',
-                  color: 'var(--ac-text)',
-                  minWidth: 180,
-                }}
-              >
-                {(['pendente', 'enviada', 'recebida'] as StatusOC[]).map((s) => (
-                  <option key={s} value={s}>{STATUS_OC[s].label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {perm.editar && (
-            <Button
-              variant="primary"
-              onClick={salvarTudo}
-              loading={salvandoTudo}
-              disabled={!temAlteracoes || salvandoTudo}
-            >
-              Salvar alterações
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => exportarPDF(oc)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+              Exportar PDF
             </Button>
-          )}
+
+            {perm.deletar && oc.status === 'pendente' && onRequestExcluir && (
+              <Button variant="danger" onClick={onRequestExcluir}>
+                Excluir OC
+              </Button>
+            )}
+
+            <div className="flex-1 min-w-[0.5rem]" />
+
+            {perm.editar && (
+              <Button
+                variant="primary"
+                onClick={salvarTudo}
+                loading={salvandoTudo}
+                disabled={!temAlteracoes || salvandoTudo}
+              >
+                Salvar alterações
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </Modal>
