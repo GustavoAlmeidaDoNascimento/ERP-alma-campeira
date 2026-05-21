@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
+import { withTiming } from '@/lib/perf/timing'
 import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 import type { ModuloKey } from '@/types'
@@ -11,9 +12,11 @@ import type { User } from '@supabase/supabase-js'
 type Acao = 'ver' | 'criar' | 'editar' | 'deletar'
 
 export const getAuthenticatedUser = cache(async (): Promise<User | null> => {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
+  return withTiming('auth.getUser', async () => {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+  })
 })
 
 export async function requireAuthenticatedUserId(): Promise<string> {
@@ -90,9 +93,11 @@ const getPermissoesEfetivasCached = unstable_cache(
  * Se o usuário não tem perfil ainda (primeiro admin), retorna acesso total.
  */
 export const getPermissoesEfetivas = cache(async (): Promise<PermMap> => {
-  const user = await getAuthenticatedUser()
-  if (!user) return permissoesVazias()
-  return withSupabaseCookieContext(() => getPermissoesEfetivasCached(user.id))
+  return withTiming('getPermissoesEfetivas', async () => {
+    const user = await getAuthenticatedUser()
+    if (!user) return permissoesVazias()
+    return withSupabaseCookieContext(() => getPermissoesEfetivasCached(user.id))
+  })
 })
 
 /** Lança erro se o usuário não tiver a permissão solicitada */
