@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
+import { withTiming } from '@/lib/perf/timing'
 import type {
   MateriaPrima,
   Fornecedor,
@@ -7,7 +8,23 @@ import type {
   Faca,
   CategoriaFacaDB,
   Cliente,
+  OrdemCompra,
+  FilaReposicao,
+  StatusOC,
 } from '@/types'
+
+const STATUS_OC_VALIDOS: readonly StatusOC[] = ['pendente', 'enviada', 'recebida']
+function normalizarStatusEPagoCache(row: { status?: unknown; pago?: unknown }): { status: StatusOC; pago: boolean } {
+  let status = String(row.status ?? 'pendente')
+  let pago = Boolean(row.pago)
+  if (status === 'pago') { status = 'enviada'; pago = true }
+  if (!STATUS_OC_VALIDOS.includes(status as StatusOC)) status = 'pendente'
+  return { status: status as StatusOC, pago }
+}
+function embedUm<T>(v: T | T[] | null | undefined): T | null {
+  if (v == null) return null
+  return Array.isArray(v) ? (v[0] ?? null) : v
+}
 
 type TaxasLucroConfig = {
   taxa_producao: number
@@ -231,4 +248,158 @@ const taxasLucroCacheFn = unstable_cache(
 
 export function fetchTaxasLucroConfig(): Promise<TaxasLucroConfig> {
   return withSupabaseCookieContext(() => taxasLucroCacheFn())
+}
+
+// ============================================================
+// Ordens de Compra (lista) — colapsa 4 round-trips em 1 query embed.
+// Cache curto pra reduzir overhead de waterfall em re-rendes / F5.
+// ============================================================
+
+function ordensCompraCache(userId: string) {
+  return unstable_cache(
+    async (): Promise<OrdemCompra[]> => {
+      const supabase = await createClient()
+      const { data, error } = await supabase
+        .from('ordens_compra')
+        .select(`
+          *,
+          fornecedor:fornecedores!fornecedor_id(id, nome),
+          ultima_alteracao_usuario:usuarios_perfis!ultima_alteracao_usuario_id(id, nome),
+          itens:ordem_compra_itens(
+            id, ordem_compra_id, materia_prima_id,
+            quantidade, quantidade_vendida, quantidade_adicional,
+            preco_unitario,
+            materia_prima:materias_primas(id, codigo, nome)
+          ),
+          fila:fila_reposicao!fila_reposicao_id(
+            id,
+            pedido:pedidos(id, codigo, sequencial, cliente:clientes(id, nome))
+          )
+        `)
+        .order('created_at', { ascending: false })
+      if (error) throw new Error(error.message)
+
+      type Row = Record<string, unknown> & {
+        id: string
+        status?: unknown
+        pago?: unknown
+        fila?: unknown
+        ultima_alteracao_usuario?: unknown
+        fornecedor?: unknown
+        itens?: unknown
+      }
+      type FilaEmbed = {
+        id: string
+        pedido: { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null } | { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null }[] | null
+      }
+      type ItemEmbed = {
+        id: string; ordem_compra_id: string; materia_prima_id: string
+        quantidade: number; quantidade_vendida: number; quantidade_adicional: number; preco_unitario: number
+        materia_prima: { id: string; codigo: string; nome: string } | { id: string; codigo: string; nome: string }[] | null
+      }
+
+      return ((data ?? []) as Row[]).map((row) => {
+        const fila = embedUm(row.fila as FilaEmbed | FilaEmbed[] | null)
+        const pedido = fila?.pedido ? embedUm(fila.pedido) : null
+        const cliente = pedido?.cliente ? embedUm(pedido.cliente) : null
+        const fornecedor = embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null)
+        const ultUser = embedUm(row.ultima_alteracao_usuario as { id: string; nome: string } | { id: string; nome: string }[] | null)
+        const itens = ((row.itens as ItemEmbed[]) ?? []).map((it) => ({ ...it, materia_prima: embedUm(it.materia_prima) }))
+        const { status, pago } = normalizarStatusEPagoCache(row)
+        return {
+          ...row,
+          fornecedor,
+          ultima_alteracao_usuario: ultUser,
+          itens,
+          fila: undefined,
+          pedido_id: pedido?.id ?? null,
+          pedido_codigo: pedido?.codigo ?? null,
+          pedido_sequencial: pedido?.sequencial ?? null,
+          cliente_nome: cliente?.nome ?? null,
+          status,
+          pago,
+        }
+      }) as unknown as OrdemCompra[]
+    },
+    ['list-ordens-compra', userId],
+    { revalidate: 60, tags: [`list-ordens-compra-${userId}`] },
+  )
+}
+
+export function fetchOrdensCompraList(userId: string): Promise<OrdemCompra[]> {
+  return withSupabaseCookieContext(() =>
+    withTiming('cache:fetchOrdensCompraList', () => ordensCompraCache(userId)()),
+  )
+}
+
+// ============================================================
+// Fila de Reposição (lista) — só pendentes, com contagem de itens.
+// ============================================================
+
+function filaReposicaoCache(userId: string) {
+  return unstable_cache(
+    async (): Promise<FilaReposicao[]> => {
+      const supabase = await createClient()
+      const { data, error } = await supabase
+        .from('fila_reposicao')
+        .select(`
+          id, pedido_id, status, created_at,
+          pedido:pedidos(id, codigo, sequencial, cliente:clientes(id, nome)),
+          itens:fila_reposicao_itens(id)
+        `)
+        .in('status', ['pendente'])
+        .order('created_at', { ascending: false })
+      if (error) throw new Error(error.message)
+
+      return (data ?? []).map((row) => {
+        const pedido = embedUm(row.pedido as { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null } | { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null }[] | null)
+        const cliente = pedido?.cliente ? embedUm(pedido.cliente) : null
+        return {
+          id: row.id,
+          pedido_id: row.pedido_id,
+          pedido_codigo: pedido?.codigo ?? '—',
+          pedido_sequencial: pedido?.sequencial ?? null,
+          cliente_nome: cliente?.nome ?? '—',
+          status: row.status as FilaReposicao['status'],
+          created_at: row.created_at ?? '',
+          itens_count: Array.isArray(row.itens) ? row.itens.length : 0,
+        }
+      })
+    },
+    ['list-fila-reposicao', userId],
+    { revalidate: 60, tags: [`list-fila-reposicao-${userId}`] },
+  )
+}
+
+export function fetchFilaReposicaoList(userId: string): Promise<FilaReposicao[]> {
+  return withSupabaseCookieContext(() =>
+    withTiming('cache:fetchFilaReposicaoList', () => filaReposicaoCache(userId)()),
+  )
+}
+
+// ============================================================
+// Usuários ativos (para registrar alteração na OC)
+// ============================================================
+
+function usuariosRegistroOCCache(userId: string) {
+  return unstable_cache(
+    async (): Promise<{ id: string; nome: string }[]> => {
+      const supabase = await createClient()
+      const { data, error } = await supabase
+        .from('usuarios_perfis')
+        .select('id, nome')
+        .eq('ativo', true)
+        .order('nome')
+      if (error) throw new Error(error.message)
+      return data ?? []
+    },
+    ['list-usuarios-registro-oc', userId],
+    { revalidate: 300, tags: [`list-usuarios-registro-oc-${userId}`] },
+  )
+}
+
+export function fetchUsuariosRegistroOC(userId: string): Promise<{ id: string; nome: string }[]> {
+  return withSupabaseCookieContext(() =>
+    withTiming('cache:fetchUsuariosRegistroOC', () => usuariosRegistroOCCache(userId)()),
+  )
 }
