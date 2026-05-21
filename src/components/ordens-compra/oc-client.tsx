@@ -605,47 +605,24 @@ function OcDetalheModal({
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       {perm.editar && oc.status === 'pendente' ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <input
-                            type="number"
-                            min={vendido > 0 ? vendido : 1}
-                            step="any"
-                            value={isEditing ? editandoQtdTotal[item.id] : String(salvoTotal)}
-                            onChange={(e) => setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                            onFocus={() => {
-                              if (!isEditing) {
-                                setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: String(salvoTotal) }))
-                              }
-                            }}
-                            className="w-24 px-2 py-1 rounded text-sm text-right font-semibold"
-                            style={{
-                              border: '1px solid var(--ac-border)',
-                              background: 'var(--ac-bg)',
-                              color: 'var(--ac-accent)',
-                            }}
-                          />
-                          {isEditing && (
-                            <button
-                              type="button"
-                              onClick={() => salvarQtdTotal(item)}
-                              disabled={salvando === item.id || Math.abs(totalQty - salvoTotal) < 1e-9}
-                              className="px-2 py-1 rounded text-xs font-semibold"
-                              style={{ background: 'var(--ac-accent)', color: '#111827' }}
-                            >
-                              {salvando === item.id ? '…' : 'OK'}
-                            </button>
-                          )}
-                          {isEditing && (
-                            <button
-                              type="button"
-                              onClick={() => setEditandoQtdTotal((prev) => { const n = { ...prev }; delete n[item.id]; return n })}
-                              className="px-1.5 py-1 rounded text-xs"
-                              style={{ color: 'var(--ac-muted)' }}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
+                        <input
+                          type="number"
+                          min={vendido > 0 ? vendido : 1}
+                          step="any"
+                          value={isEditing ? editandoQtdTotal[item.id] : String(salvoTotal)}
+                          onChange={(e) => setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          onFocus={() => {
+                            if (!isEditing) {
+                              setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: String(salvoTotal) }))
+                            }
+                          }}
+                          className="w-24 px-2 py-1 rounded text-sm text-right font-semibold"
+                          style={{
+                            border: '1px solid var(--ac-border)',
+                            background: 'var(--ac-bg)',
+                            color: 'var(--ac-accent)',
+                          }}
+                        />
                       ) : (
                         <span className="font-semibold" style={{ color: 'var(--ac-accent)' }}>
                           {fmtQtd(salvoTotal)}
@@ -762,23 +739,18 @@ function OcDetalheModal({
             <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
               Observações
             </label>
-            <div className="flex gap-2">
-              <textarea
-                rows={2}
-                value={obs}
-                onChange={(e) => setObs(e.target.value)}
-                placeholder="Notas para o fornecedor..."
-                className="flex-1 px-3 py-2 rounded-lg text-sm resize-none"
-                style={{
-                  border: '1px solid var(--ac-border)',
-                  background: 'var(--ac-bg)',
-                  color: 'var(--ac-text)',
-                }}
-              />
-              <Button variant="secondary" onClick={salvarObs} loading={salvandoObs} className="self-end">
-                Salvar
-              </Button>
-            </div>
+            <textarea
+              rows={2}
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+              placeholder="Notas para o fornecedor..."
+              className="w-full px-3 py-2 rounded-lg text-sm resize-none"
+              style={{
+                border: '1px solid var(--ac-border)',
+                background: 'var(--ac-bg)',
+                color: 'var(--ac-text)',
+              }}
+            />
           </div>
         )}
         {!perm.editar && oc.observacao && (
