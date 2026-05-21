@@ -352,7 +352,6 @@ function OcDetalheModal({
   const [mudandoStatus, setMudandoStatus] = useState(false)
   const [alterandoPago, setAlterandoPago] = useState(false)
   const [erro, setErro] = useState('')
-  const [confirmandoRecebimento, setConfirmandoRecebimento] = useState(false)
   const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
   const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
   const [adicionandoItem, setAdicionandoItem] = useState(false)
@@ -424,10 +423,6 @@ function OcDetalheModal({
     () => usuariosRegistro.map((u) => ({ value: u.id, label: u.nome })),
     [usuariosRegistro],
   )
-
-  useEffect(() => {
-    setConfirmandoRecebimento(false)
-  }, [oc.id, oc.status])
 
   useEffect(() => {
     setObs(oc.observacao ?? '')
@@ -862,40 +857,44 @@ function OcDetalheModal({
             </div>
           )}
 
-          {perm.editar && oc.status === 'pendente' && (
-            <Button
-              variant="primary"
-              loading={mudandoStatus}
-              onClick={() => mudarStatus('enviada')}
-            >
-              Marcar como Enviada
-            </Button>
-          )}
-          {perm.editar && oc.status === 'enviada' && !confirmandoRecebimento && (
-            <Button
-              variant="primary"
-              loading={mudandoStatus}
-              onClick={() => setConfirmandoRecebimento(true)}
-            >
-              Confirmar Recebimento
-            </Button>
-          )}
-          {perm.editar && oc.status === 'enviada' && confirmandoRecebimento && (
-            <>
-              <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                Isso vai dar entrada no estoque. Confirmar?
-              </span>
-              <Button variant="secondary" onClick={() => setConfirmandoRecebimento(false)}>
-                Cancelar
-              </Button>
-              <Button
-                variant="primary"
-                loading={mudandoStatus}
-                onClick={() => mudarStatus('recebida')}
+          {perm.editar && (
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="oc-status-select"
+                className="text-[11px] font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--ac-muted)' }}
               >
-                Confirmar
-              </Button>
-            </>
+                Status
+              </label>
+              <select
+                id="oc-status-select"
+                value={oc.status}
+                disabled={mudandoStatus}
+                onChange={(e) => {
+                  const novo = e.target.value as StatusOC
+                  if (novo === oc.status) return
+                  if (novo === 'recebida') {
+                    const ok = window.confirm('Confirmar recebimento dará entrada no estoque das matérias-primas. Confirmar?')
+                    if (!ok) { e.target.value = oc.status; return }
+                  } else if (oc.status === 'recebida') {
+                    const ok = window.confirm('Voltar de Recebida irá estornar a entrada de estoque (criando movimentações de ajuste). Confirmar?')
+                    if (!ok) { e.target.value = oc.status; return }
+                  }
+                  void mudarStatus(novo)
+                }}
+                className="text-sm rounded px-2 py-1.5"
+                style={{
+                  border: '1px solid var(--ac-border)',
+                  background: 'var(--ac-card)',
+                  color: 'var(--ac-text)',
+                  minWidth: 180,
+                }}
+              >
+                {(['pendente', 'enviada', 'recebida'] as StatusOC[]).map((s) => (
+                  <option key={s} value={s}>{STATUS_OC[s].label}</option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
       </div>
