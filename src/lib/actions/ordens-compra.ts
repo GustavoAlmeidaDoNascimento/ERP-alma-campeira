@@ -969,6 +969,37 @@ export async function definirPagoOrdemCompra(
   if (error) throw new Error(error.message)
 }
 
+/**
+ * Salva todas as alterações pendentes da OC em uma única chamada.
+ * Apenas os campos presentes no input são tocados.
+ * Registra `ultima_alteracao_em` uma vez (a última write vence).
+ */
+export async function salvarAlteracoesOC(input: {
+  id: string
+  observacao?: string | null
+  pago?: boolean
+  status?: StatusOC
+  itensQtd?: { item_id: string; quantidade_adicional: number }[]
+  usuarioRegistroId?: string | null
+}): Promise<void> {
+  await assertPermissao('ordens_compra', 'editar')
+
+  if (input.itensQtd?.length) {
+    for (const { item_id, quantidade_adicional } of input.itensQtd) {
+      await atualizarUnidadesAdicionaisItem(item_id, quantidade_adicional, input.usuarioRegistroId)
+    }
+  }
+  if (input.observacao !== undefined) {
+    await atualizarObservacaoOC(input.id, input.observacao ?? '', input.usuarioRegistroId)
+  }
+  if (input.pago !== undefined) {
+    await definirPagoOrdemCompra(input.id, input.pago, input.usuarioRegistroId)
+  }
+  if (input.status !== undefined) {
+    await mudarStatusOC(input.id, input.status, input.usuarioRegistroId)
+  }
+}
+
 export async function deletarOC(id: string) {
   await assertPermissao('ordens_compra', 'deletar')
   const supabase = await createClient()

@@ -11,11 +11,8 @@ import {
   getFilaReposicaoDetalhe,
   getOrdensCompra,
   criarOrdemCompraManual,
-  atualizarUnidadesAdicionaisItem,
   criarItemOrdemCompra,
-  atualizarObservacaoOC,
-  mudarStatusOC,
-  definirPagoOrdemCompra,
+  salvarAlteracoesOC,
   deletarOC,
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
