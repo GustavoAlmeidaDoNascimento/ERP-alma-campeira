@@ -449,71 +449,73 @@ function OcDetalheModal({
     })
   )
 
-  async function salvarQtdTotal(item: OrdemCompraItem) {
-    const raw = editandoQtdTotal[item.id]
-    if (raw === undefined) return
-    const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
-    const totalQty = parseNumero(raw)
-    if (!Number.isFinite(totalQty)) {
-      setErro('Quantidade total inválida.')
-      return
+  /** Itens com qtd_total alterada (e validada) — usados para diff e save. */
+  const itensQtdDiff = useMemo(() => {
+    const out: { item_id: string; quantidade_adicional: number }[] = []
+    for (const item of itens) {
+      const raw = editandoQtdTotal[item.id]
+      if (raw === undefined) continue
+      const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
+      const adicionalBase = Number(item.quantidade_adicional ?? 0)
+      const salvoTotal = vendido + adicionalBase
+      const totalQty = parseNumero(raw)
+      if (!Number.isFinite(totalQty)) continue
+      if (Math.abs(totalQty - salvoTotal) < 1e-9) continue
+      out.push({ item_id: item.id, quantidade_adicional: totalQty - vendido })
     }
-    const minTotal = vendido > 0 ? vendido : 1
-    if (totalQty < minTotal) {
-      setErro(`A quantidade total não pode ser menor que ${fmtQtd(minTotal)}.`)
-      return
-    }
-    const adicional = totalQty - vendido
-    if (!Number.isFinite(adicional) || adicional < 0) {
-      setErro('Quantidade total inválida.')
-      return
-    }
-    setSalvando(item.id); setErro('')
-    try {
-      await atualizarUnidadesAdicionaisItem(item.id, adicional, usuarioRegistroId || null)
-      setEditandoQtdTotal((prev) => { const n = { ...prev }; delete n[item.id]; return n })
-      onRefresh()
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
-    } finally {
-      setSalvando(null)
-    }
-  }
+    return out
+  }, [itens, editandoQtdTotal])
 
-  async function salvarObs() {
-    setSalvandoObs(true); setErro('')
+  const obsAlterada = (obs ?? '') !== (oc.observacao ?? '')
+  const pagoAlterado = pagoDraft !== oc.pago
+  const statusAlterado = statusDraft !== oc.status
+  const temAlteracoes =
+    obsAlterada || pagoAlterado || statusAlterado || itensQtdDiff.length > 0
+
+  async function salvarTudo() {
+    setErro('')
+
+    // Validação local dos drafts de qtd.
+    for (const item of itens) {
+      const raw = editandoQtdTotal[item.id]
+      if (raw === undefined) continue
+      const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
+      const totalQty = parseNumero(raw)
+      if (!Number.isFinite(totalQty)) {
+        setErro(`Quantidade total inválida em ${item.materia_prima?.codigo ?? 'um item'}.`)
+        return
+      }
+      const minTotal = vendido > 0 ? vendido : 1
+      if (totalQty < minTotal) {
+        setErro(`A quantidade total de ${item.materia_prima?.codigo ?? 'um item'} não pode ser menor que ${fmtQtd(minTotal)}.`)
+        return
+      }
+    }
+
+    if (statusAlterado) {
+      if (statusDraft === 'recebida') {
+        if (!window.confirm('Confirmar recebimento dará entrada no estoque das matérias-primas. Confirmar?')) return
+      } else if (oc.status === 'recebida') {
+        if (!window.confirm('Voltar de Recebida irá estornar a entrada de estoque (criando movimentações de ajuste). Confirmar?')) return
+      }
+    }
+
+    setSalvandoTudo(true)
     try {
-      await atualizarObservacaoOC(oc.id, obs, usuarioRegistroId || null)
+      await salvarAlteracoesOC({
+        id: oc.id,
+        observacao: obsAlterada ? obs : undefined,
+        pago: pagoAlterado ? pagoDraft : undefined,
+        status: statusAlterado ? statusDraft : undefined,
+        itensQtd: itensQtdDiff.length > 0 ? itensQtdDiff : undefined,
+        usuarioRegistroId: usuarioRegistroId || null,
+      })
+      setEditandoQtdTotal({})
       await Promise.resolve(onRefresh())
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao salvar observação.')
+      setErro(e instanceof Error ? e.message : 'Erro ao salvar alterações.')
     } finally {
-      setSalvandoObs(false)
-    }
-  }
-
-  async function mudarStatus(status: StatusOC) {
-    setMudandoStatus(true); setErro('')
-    try {
-      await mudarStatusOC(oc.id, status, usuarioRegistroId || null)
-      await Promise.resolve(onRefresh())
-      onClose()
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao mudar status.')
-    } finally {
-      setMudandoStatus(false)
-    }
-  }
-
-  async function alternarPago(checked: boolean) {
-    setAlterandoPago(true); setErro('')
-    try {
-      await definirPagoOrdemCompra(oc.id, checked, usuarioRegistroId || null)
-      await Promise.resolve(onRefresh())
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao atualizar pagamento.')
-    } finally {
-      setAlterandoPago(false)
+      setSalvandoTudo(false)
     }
   }
 
