@@ -1,7 +1,14 @@
 'use server'
 
+import { revalidateTag } from 'next/cache'
 import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao } from '@/lib/auth'
+import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { withTiming } from '@/lib/perf/timing'
+import {
+  fetchOrdensCompraList,
+  fetchFilaReposicaoList as fetchFilaReposicaoListCached,
+  fetchUsuariosRegistroOC,
+} from '@/lib/cache/list-data'
 import {
   gerarCodigoOC,
   gerarOCsDeFilaItens,
@@ -14,6 +21,19 @@ import type {
   FilaReposicaoPedidoItem,
   StatusOC,
 } from '@/types'
+
+async function revalidateOCLists(opts: { estoque?: boolean } = {}) {
+  try {
+    const userId = await requireAuthenticatedUserId()
+    revalidateTag(`list-ordens-compra-${userId}`, 'max')
+    revalidateTag(`list-fila-reposicao-${userId}`, 'max')
+    if (opts.estoque) {
+      revalidateTag(`list-materias-primas-${userId}`, 'max')
+    }
+  } catch {
+    // sem usuário (improvável dentro de mutation) — ignorar
+  }
+}
 
 const STATUS_OC_VALIDOS: readonly StatusOC[] = ['pendente', 'enviada', 'recebida']
 
@@ -63,68 +83,21 @@ async function marcarUltimaAlteracaoOC(ordemCompraId: string, usuarioId: string)
     .update(camposRegistroAlteracao(usuarioId))
     .eq('id', ordemCompraId)
   if (error) throw new Error(error.message)
+  await revalidateOCLists()
 }
 
 export async function getUsuariosParaRegistroOC(): Promise<{ id: string; nome: string }[]> {
   await assertPermissao('ordens_compra', 'editar')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('usuarios_perfis')
-    .select('id, nome')
-    .eq('ativo', true)
-    .order('nome')
-  if (error) throw new Error(error.message)
-  return data ?? []
+  const userId = await requireAuthenticatedUserId()
+  return fetchUsuariosRegistroOC(userId)
 }
 
 // ─── Fila de Reposição ────────────────────────────────────────────────────────
 
 export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
   await assertPermissao('ordens_compra', 'ver')
-  return withSupabaseCookieContext(async () => {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-      .from('fila_reposicao')
-      .select(`
-        id,
-        pedido_id,
-        status,
-        created_at,
-        pedido:pedidos(
-          id,
-          codigo,
-          sequencial,
-          cliente:clientes(id, nome)
-        ),
-        itens:fila_reposicao_itens(id)
-      `)
-      .in('status', ['pendente'])
-      .order('created_at', { ascending: false })
-
-    if (error) throw new Error(error.message)
-
-    return (data ?? []).map((row) => {
-      const pedido = (Array.isArray(row.pedido) ? row.pedido[0] : row.pedido) as {
-        id: string; codigo: string; sequencial: number | null
-        cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
-      } | null
-      const cliente = pedido?.cliente
-        ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
-        : null
-
-      return {
-        id: row.id,
-        pedido_id: row.pedido_id,
-        pedido_codigo: pedido?.codigo ?? '—',
-        pedido_sequencial: pedido?.sequencial ?? null,
-        cliente_nome: cliente?.nome ?? '—',
-        status: row.status as FilaReposicao['status'],
-        created_at: row.created_at ?? '',
-        itens_count: Array.isArray(row.itens) ? row.itens.length : 0,
-      }
-    })
-  })
+  const userId = await requireAuthenticatedUserId()
+  return fetchFilaReposicaoListCached(userId)
 }
 
 export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaReposicaoDetalhe> {
@@ -325,6 +298,7 @@ export async function atualizarItemFila(
     .eq('id', item_id)
 
   if (error) throw new Error(error.message)
+  await revalidateOCLists()
 }
 
 export async function gerarOCsDaFila(fila_id: string): Promise<string[]> {
@@ -332,6 +306,7 @@ export async function gerarOCsDaFila(fila_id: string): Promise<string[]> {
   const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(undefined)
   const codigos = await gerarOCsDeFilaItens(supabase, fila_id, uid)
+  await revalidateOCLists()
   return codigos
 }
 
@@ -345,6 +320,7 @@ export async function dispensarFila(fila_id: string): Promise<void> {
     .eq('id', fila_id)
 
   if (error) throw new Error(error.message)
+  await revalidateOCLists()
 }
 
 // ─── OC Manual ────────────────────────────────────────────────────────────────
@@ -450,6 +426,7 @@ export async function criarOrdemCompraManual(input: {
     throw new Error(itensErr.message)
   }
 
+  await revalidateOCLists()
   return codigo
 }
 
@@ -651,8 +628,12 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
 
 export async function getOrdensCompra(): Promise<OrdemCompra[]> {
   await assertPermissao('ordens_compra', 'ver')
-  return withSupabaseCookieContext(() => getOrdensCompraQuery())
+  const userId = await requireAuthenticatedUserId()
+  return withTiming('getOrdensCompra', () => fetchOrdensCompraList(userId))
 }
+
+// Mantida em volta caso algo a chame, mas a fonte real agora é o cache.
+void getOrdensCompraQuery
 
 // ─── Editar OC ────────────────────────────────────────────────────────────────
 
@@ -886,6 +867,8 @@ export async function mudarStatusOC(
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  // status='recebida' (e reversão) mexem no estoque das MPs → invalida materias_primas também.
+  await revalidateOCLists({ estoque: true })
 }
 
 /**
@@ -967,6 +950,7 @@ export async function definirPagoOrdemCompra(
     .update({ pago, ...camposRegistroAlteracao(uid) })
     .eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateOCLists()
 }
 
 /**
@@ -1014,4 +998,5 @@ export async function deletarOC(id: string) {
 
   const { error } = await supabase.from('ordens_compra').delete().eq('id', id)
   if (error) throw new Error(error.message)
+  await revalidateOCLists()
 }
