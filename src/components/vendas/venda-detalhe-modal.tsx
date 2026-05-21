@@ -3,9 +3,11 @@
 import { useState, type ReactNode } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { avancarStatus, marcarEntregue } from '@/lib/actions/vendas'
+import { alterarStatus } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO } from '@/types'
 import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
+
+const STATUS_OPTIONS: StatusPedido[] = ['em_espera', 'em_producao', 'entregue']
 import { gerarPdfVendaSemValor } from '@/components/vendas/venda-sem-valor-pdf'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
@@ -73,7 +75,7 @@ type Props = {
 }
 
 export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Props) {
-  const [loading, setLoading] = useState<string | null>(null)
+  const [loadingStatus, setLoadingStatus] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -96,21 +98,26 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     }
   }
 
-  async function acao(
-    fn: () => Promise<void>,
-    key: string,
-    novoStatus?: StatusPedido,
-    entregue_at?: string,
-  ) {
-    setErro(''); setLoading(key)
+  async function handleAlterarStatus(novoStatus: StatusPedido) {
+    if (!pedido || novoStatus === pedido.status) return
+    if (novoStatus === 'entregue') {
+      const ok = window.confirm('Marcar como entregue dará baixa no estoque das facas. Confirmar?')
+      if (!ok) return
+    } else if (pedido.status === 'entregue') {
+      const ok = window.confirm('Voltar de Entregue irá reverter a baixa de estoque (criando movimentações de ajuste). Confirmar?')
+      if (!ok) return
+    }
+    setErro('')
+    setLoadingStatus(true)
     try {
-      await fn()
-      if (novoStatus) onStatusChange?.(pedidoId, novoStatus, entregue_at)
+      await alterarStatus(pedidoId, novoStatus)
+      const entregue_at = novoStatus === 'entregue' ? new Date().toISOString() : undefined
+      onStatusChange?.(pedidoId, novoStatus, entregue_at)
       onClose()
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro.')
+      setErro(e instanceof Error ? e.message : 'Erro ao alterar status.')
     } finally {
-      setLoading(null)
+      setLoadingStatus(false)
     }
   }
 
@@ -387,7 +394,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
         {/* Ações de status */}
         {perm.editar && (
           <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <Button
                 variant="secondary"
                 loading={loadingPdf}
@@ -397,36 +404,27 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
               </Button>
             </div>
 
-            {/* Avançar status (direita) */}
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={onClose}>Fechar</Button>
-              {pedido.status === 'em_espera' && (
-                <Button
-                  loading={loading === 'producao'}
-                  onClick={() => acao(
-                    () => avancarStatus(pedido.id, 'em_producao'),
-                    'producao',
-                    'em_producao',
-                  )}
-                  style={{ background: '#b45309', color: '#fff', border: 'none' }}
-                >
-                  Iniciar produção
-                </Button>
-              )}
-              {pedido.status === 'em_producao' && (
-                <Button
-                  loading={loading === 'entregar'}
-                  onClick={() => acao(
-                    () => marcarEntregue(pedido.id),
-                    'entregar',
-                    'entregue',
-                    new Date().toISOString(),
-                  )}
-                  style={{ background: '#15803d', color: '#fff', border: 'none' }}
-                >
-                  Marcar como entregue
-                </Button>
-              )}
+            <div className="flex gap-2 items-center">
+              <label className="text-xs font-semibold" style={{ color: 'var(--ac-muted)' }}>
+                Status
+              </label>
+              <select
+                value={pedido.status}
+                disabled={loadingStatus}
+                onChange={(e) => void handleAlterarStatus(e.target.value as StatusPedido)}
+                className="text-sm rounded px-2 py-1.5"
+                style={{
+                  border: '1px solid var(--ac-border)',
+                  background: 'var(--ac-card)',
+                  color: 'var(--ac-text)',
+                  minWidth: 180,
+                }}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{STATUS_PEDIDO[s].label}</option>
+                ))}
+              </select>
+              <Button variant="secondary" onClick={onClose} disabled={loadingStatus}>Fechar</Button>
             </div>
           </div>
         )}
