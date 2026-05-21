@@ -714,6 +714,56 @@ export async function mudarStatusOC(
   const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
 
+  const { data: statusRow, error: statusErr } = await supabase
+    .from('ordens_compra')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (statusErr) throw new Error(statusErr.message)
+  const statusAtual = normalizarStatusEPago(statusRow ?? {}).status
+  if (statusAtual === status) return
+
+  if (statusAtual === 'recebida' && status !== 'recebida') {
+    const { data: ocCabecalho } = await supabase
+      .from('ordens_compra')
+      .select('codigo')
+      .eq('id', id)
+      .single()
+
+    const { data: itens, error: itensErr } = await supabase
+      .from('ordem_compra_itens')
+      .select('materia_prima_id, quantidade')
+      .eq('ordem_compra_id', id)
+    if (itensErr) throw new Error(itensErr.message)
+
+    const obs = ocCabecalho?.codigo
+      ? `Reversão de recebimento — ${ocCabecalho.codigo}`
+      : 'Reversão de recebimento OC'
+
+    for (const item of itens ?? []) {
+      const { data: mp } = await supabase
+        .from('materias_primas')
+        .select('estoque_atual')
+        .eq('id', item.materia_prima_id)
+        .single()
+
+      if (mp) {
+        await supabase
+          .from('materias_primas')
+          .update({ estoque_atual: Number(mp.estoque_atual) - Number(item.quantidade) })
+          .eq('id', item.materia_prima_id)
+      }
+
+      await supabase.from('movimentacoes_estoque').insert({
+        tipo: 'ajuste',
+        materia_prima_id: item.materia_prima_id,
+        quantidade: -Number(item.quantidade),
+        observacao: obs,
+        usuario_id: uid,
+      })
+    }
+  }
+
   if (status === 'recebida') {
     const { data: ocCabecalho, error: ocErr } = await supabase
       .from('ordens_compra')
