@@ -463,42 +463,109 @@ function embedUm<T>(v: T | T[] | null | undefined): T | null {
 
 async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
   const supabase = await createClient()
+
+  // Query principal: só a tabela + fornecedor (FK direta, embed barato).
+  // Embeds aninhados (fila→pedido→cliente, itens→materia_prima) viravam
+  // um único SQL com vários LEFT JOINs e estouravam o statement timeout.
   const { data, error } = await supabase
     .from('ordens_compra')
     .select(`
       *,
-      fornecedor:fornecedores!fornecedor_id(id, nome),
-      fila:fila_reposicao(
-        id,
-        pedido:pedidos(
-          id,
-          codigo,
-          sequencial,
-          cliente:clientes(id, nome)
-        )
-      ),
-      itens:ordem_compra_itens(
-        id, ordem_compra_id, materia_prima_id,
-        quantidade, quantidade_vendida, quantidade_adicional,
-        preco_unitario,
-        materia_prima:materias_primas(id, codigo, nome)
-      )
+      fornecedor:fornecedores!fornecedor_id(id, nome)
     `)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
 
   type RowOC = Record<string, unknown> & {
+    id: string
     fornecedor?: unknown
     fornecedores?: unknown
     fornecedor_id?: string | null
+    fila_reposicao_id?: string | null
   }
 
-  const mapped = (data ?? []).map((row: RowOC) => {
-    const fila = (Array.isArray(row.fila) ? row.fila[0] : row.fila) as {
+  const rows = (data ?? []) as RowOC[]
+  const ocIds = rows.map((r) => r.id)
+  const filaIds = [
+    ...new Set(
+      rows
+        .map((r) => r.fila_reposicao_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  ]
+
+  type ItemRow = {
+    id: string
+    ordem_compra_id: string
+    materia_prima_id: string
+    quantidade: number
+    quantidade_vendida: number
+    quantidade_adicional: number
+    preco_unitario: number
+    materia_prima: { id: string; codigo: string; nome: string } | { id: string; codigo: string; nome: string }[] | null
+  }
+
+  type FilaRow = {
+    id: string
+    pedido: {
       id: string
-      pedido: { id: string; codigo: string; sequencial: number | null; cliente: { nome: string } | { nome: string }[] | null } | { id: string; codigo: string; sequencial: number | null; cliente: { nome: string } | { nome: string }[] | null }[] | null
-    } | null
+      codigo: string
+      sequencial: number | null
+      cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
+    } | {
+      id: string
+      codigo: string
+      sequencial: number | null
+      cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
+    }[] | null
+  }
+
+  const [itensRes, filaRes] = await Promise.all([
+    ocIds.length === 0
+      ? Promise.resolve({ data: [] as ItemRow[], error: null })
+      : supabase
+          .from('ordem_compra_itens')
+          .select(`
+            id, ordem_compra_id, materia_prima_id,
+            quantidade, quantidade_vendida, quantidade_adicional,
+            preco_unitario,
+            materia_prima:materias_primas(id, codigo, nome)
+          `)
+          .in('ordem_compra_id', ocIds),
+    filaIds.length === 0
+      ? Promise.resolve({ data: [] as FilaRow[], error: null })
+      : supabase
+          .from('fila_reposicao')
+          .select(`
+            id,
+            pedido:pedidos(
+              id,
+              codigo,
+              sequencial,
+              cliente:clientes(id, nome)
+            )
+          `)
+          .in('id', filaIds),
+  ])
+
+  if (itensRes.error) throw new Error(itensRes.error.message)
+  if (filaRes.error) throw new Error(filaRes.error.message)
+
+  const itensPorOC = new Map<string, ItemRow[]>()
+  for (const it of (itensRes.data ?? []) as ItemRow[]) {
+    const arr = itensPorOC.get(it.ordem_compra_id) ?? []
+    arr.push(it)
+    itensPorOC.set(it.ordem_compra_id, arr)
+  }
+
+  const filaPorId = new Map<string, FilaRow>()
+  for (const f of (filaRes.data ?? []) as FilaRow[]) {
+    filaPorId.set(f.id, f)
+  }
+
+  const mapped = rows.map((row) => {
+    const fila = row.fila_reposicao_id ? filaPorId.get(row.fila_reposicao_id) ?? null : null
     const pedido = fila?.pedido
       ? (Array.isArray(fila.pedido) ? fila.pedido[0] : fila.pedido)
       : null
@@ -508,9 +575,14 @@ async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
     const fornecedor =
       embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null) ??
       embedUm(row.fornecedores as { id: string; nome: string } | { id: string; nome: string }[] | null)
+    const itens = itensPorOC.get(row.id) ?? []
     const mappedRow = {
       ...row,
       fornecedor,
+      itens: itens.map((it) => ({
+        ...it,
+        materia_prima: embedUm(it.materia_prima),
+      })),
       pedido_id: pedido?.id ?? null,
       pedido_codigo: pedido?.codigo ?? null,
       pedido_sequencial: pedido?.sequencial ?? null,
