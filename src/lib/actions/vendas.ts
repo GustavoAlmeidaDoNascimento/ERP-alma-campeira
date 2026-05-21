@@ -357,6 +357,89 @@ export async function avancarStatus(id: string, novoStatus: 'em_producao') {
   if (error) throw new Error(error.message)
 }
 
+async function reverterEntregaPedido(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  novoStatus: 'em_espera' | 'em_producao',
+) {
+  const { data: itens, error: itensErr } = await supabase
+    .from('pedido_itens')
+    .select('faca_id, quantidade')
+    .eq('pedido_id', id)
+  if (itensErr) throw new Error(itensErr.message)
+
+  const facaIds = [...new Set((itens ?? []).map((i) => i.faca_id))]
+  const { data: facas } = await supabase
+    .from('facas')
+    .select('id, nome, estoque_atual')
+    .in('id', facaIds)
+  const facaMap = new Map((facas ?? []).map((f) => [f.id, f]))
+
+  const user = await getAuthenticatedUser()
+
+  for (const item of itens ?? []) {
+    const faca = facaMap.get(item.faca_id)
+    if (!faca) continue
+    const novoEstoque = Number(faca.estoque_atual) + Number(item.quantidade)
+
+    const { error: estoqueErr } = await supabase
+      .from('facas')
+      .update({ estoque_atual: novoEstoque })
+      .eq('id', item.faca_id)
+    if (estoqueErr) throw new Error(`Erro ao reverter estoque de ${faca.nome}: ${estoqueErr.message}`)
+    faca.estoque_atual = novoEstoque
+
+    const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+      tipo: 'ajuste',
+      faca_id: item.faca_id,
+      quantidade: item.quantidade,
+      observacao: `Reversão de venda entregue (pedido ${id})`,
+      usuario_id: user?.id ?? null,
+    })
+    if (movErr) throw new Error(`Erro ao registrar reversão para ${faca.nome}: ${movErr.message}`)
+  }
+
+  const { error: upErr } = await supabase
+    .from('pedidos')
+    .update({ status: novoStatus, entregue_at: null })
+    .eq('id', id)
+  if (upErr) throw new Error(upErr.message)
+}
+
+export async function alterarStatus(id: string, novoStatus: StatusPedido) {
+  await assertPermissao('vendas', 'editar')
+  const supabase = await createClient()
+
+  const { data: pedido, error: pedidoErr } = await supabase
+    .from('pedidos')
+    .select('status, itens:pedido_itens(faca_id, quantidade)')
+    .eq('id', id)
+    .single()
+  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
+
+  const statusAtual = normalizeStatusPedido(String(pedido.status))
+  if (statusAtual === novoStatus) return
+
+  if (statusAtual === 'entregue') {
+    if (novoStatus === 'em_espera' || novoStatus === 'em_producao') {
+      await reverterEntregaPedido(supabase, id, novoStatus)
+      return
+    }
+  }
+
+  if (novoStatus === 'entregue') {
+    const itens = (pedido.itens ?? []) as { faca_id: string; quantidade: number }[]
+    await executarEntregaPedido(supabase, id, itens)
+    return
+  }
+
+  const { error } = await supabase
+    .from('pedidos')
+    .update({ status: novoStatus })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 async function executarEntregaPedido(
   supabase: Awaited<ReturnType<typeof createClient>>,
   id: string,
