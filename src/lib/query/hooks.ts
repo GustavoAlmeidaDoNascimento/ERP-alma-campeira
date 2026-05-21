@@ -140,7 +140,7 @@ export function useOrdensCompra(opts: Opts<Awaited<ReturnType<typeof getOrdensCo
 
 /** Usuários ativos para registrar quem alterou OC — cache longo; compartilhado entre aberturas do modal. */
 export function useUsuariosParaRegistroOC(
-  opts: { enabled?: boolean } = {},
+  opts: { enabled?: boolean; initialData?: Awaited<ReturnType<typeof getUsuariosParaRegistroOC>> } = {},
 ) {
   return useQuery({
     queryKey: qk.usuarios.registroOC(),
@@ -148,6 +148,7 @@ export function useUsuariosParaRegistroOC(
     enabled: opts.enabled ?? true,
     staleTime: 5 * 60_000,
     gcTime: 15 * 60_000,
+    initialData: opts.initialData,
   })
 }
 
