@@ -251,67 +251,121 @@ export function fetchTaxasLucroConfig(): Promise<TaxasLucroConfig> {
 }
 
 // ============================================================
-// Ordens de Compra (lista) — colapsa 4 round-trips em 1 query embed.
-// Cache curto pra reduzir overhead de waterfall em re-rendes / F5.
+// Ordens de Compra (lista) — 4 queries em paralelo, depois cacheado.
+// IMPORTANTE: NÃO unificar isso num único embed aninhado. Já tentamos
+// e o PostgREST gera um SQL com vários LEFT JOIN LATERAL que ESTOURA
+// o statement_timeout do Supabase (>30s mesmo em base pequena).
+// O padrão atual mantém cada round-trip <1s mesmo cold; combinado
+// com unstable_cache (revalidate 60s), F5 vira ~10ms.
 // ============================================================
+
+type FornecedorRef = { id: string; nome: string }
+type UsuarioRef = { id: string; nome: string }
+type MateriaPrimaRef = { id: string; codigo: string; nome: string }
+
+type OcItemRow = {
+  id: string
+  ordem_compra_id: string
+  materia_prima_id: string
+  quantidade: number
+  quantidade_vendida: number
+  quantidade_adicional: number
+  preco_unitario: number
+  materia_prima: MateriaPrimaRef | MateriaPrimaRef[] | null
+}
+
+type FilaRefRow = {
+  id: string
+  pedido:
+    | { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null }
+    | { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null }[]
+    | null
+}
 
 function ordensCompraCache(userId: string) {
   return unstable_cache(
     async (): Promise<OrdemCompra[]> => {
       const supabase = await createClient()
+
+      // 1ª round: cabeçalho + embeds rasos (1:1, FK direta — embed barato).
       const { data, error } = await supabase
         .from('ordens_compra')
         .select(`
           *,
           fornecedor:fornecedores!fornecedor_id(id, nome),
-          ultima_alteracao_usuario:usuarios_perfis!ultima_alteracao_usuario_id(id, nome),
-          itens:ordem_compra_itens(
-            id, ordem_compra_id, materia_prima_id,
-            quantidade, quantidade_vendida, quantidade_adicional,
-            preco_unitario,
-            materia_prima:materias_primas(id, codigo, nome)
-          ),
-          fila:fila_reposicao!fila_reposicao_id(
-            id,
-            pedido:pedidos(id, codigo, sequencial, cliente:clientes(id, nome))
-          )
+          ultima_alteracao_usuario:usuarios_perfis!ultima_alteracao_usuario_id(id, nome)
         `)
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
 
-      type Row = Record<string, unknown> & {
+      type RowOC = Record<string, unknown> & {
         id: string
-        status?: unknown
-        pago?: unknown
-        fila?: unknown
-        ultima_alteracao_usuario?: unknown
-        fornecedor?: unknown
-        itens?: unknown
+        fornecedor?: FornecedorRef | FornecedorRef[] | null
+        ultima_alteracao_usuario?: UsuarioRef | UsuarioRef[] | null
+        fornecedor_id?: string | null
+        fila_reposicao_id?: string | null
       }
-      type FilaEmbed = {
-        id: string
-        pedido: { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null } | { id: string; codigo: string; sequencial: number | null; cliente: { id: string; nome: string } | { id: string; nome: string }[] | null }[] | null
-      }
-      type ItemEmbed = {
-        id: string; ordem_compra_id: string; materia_prima_id: string
-        quantidade: number; quantidade_vendida: number; quantidade_adicional: number; preco_unitario: number
-        materia_prima: { id: string; codigo: string; nome: string } | { id: string; codigo: string; nome: string }[] | null
-      }
+      const rows = (data ?? []) as RowOC[]
+      const ocIds = rows.map((r) => r.id)
+      const filaIds = [
+        ...new Set(
+          rows
+            .map((r) => r.fila_reposicao_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      ]
 
-      return ((data ?? []) as Row[]).map((row) => {
-        const fila = embedUm(row.fila as FilaEmbed | FilaEmbed[] | null)
+      // 2ª round: itens e filas em paralelo (2 queries, mas paralelas — 1 RTT efetivo).
+      const [itensRes, filaRes] = await Promise.all([
+        ocIds.length === 0
+          ? Promise.resolve({ data: [] as OcItemRow[], error: null })
+          : supabase
+              .from('ordem_compra_itens')
+              .select(`
+                id, ordem_compra_id, materia_prima_id,
+                quantidade, quantidade_vendida, quantidade_adicional,
+                preco_unitario,
+                materia_prima:materias_primas(id, codigo, nome)
+              `)
+              .in('ordem_compra_id', ocIds),
+        filaIds.length === 0
+          ? Promise.resolve({ data: [] as FilaRefRow[], error: null })
+          : supabase
+              .from('fila_reposicao')
+              .select(`
+                id,
+                pedido:pedidos(id, codigo, sequencial, cliente:clientes(id, nome))
+              `)
+              .in('id', filaIds),
+      ])
+      if (itensRes.error) throw new Error(itensRes.error.message)
+      if (filaRes.error) throw new Error(filaRes.error.message)
+
+      const itensPorOC = new Map<string, OcItemRow[]>()
+      for (const it of (itensRes.data ?? []) as OcItemRow[]) {
+        const arr = itensPorOC.get(it.ordem_compra_id) ?? []
+        arr.push(it)
+        itensPorOC.set(it.ordem_compra_id, arr)
+      }
+      const filaPorId = new Map<string, FilaRefRow>()
+      for (const f of (filaRes.data ?? []) as FilaRefRow[]) filaPorId.set(f.id, f)
+
+      return rows.map((row) => {
+        const fila = row.fila_reposicao_id ? filaPorId.get(row.fila_reposicao_id) ?? null : null
         const pedido = fila?.pedido ? embedUm(fila.pedido) : null
         const cliente = pedido?.cliente ? embedUm(pedido.cliente) : null
-        const fornecedor = embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null)
-        const ultUser = embedUm(row.ultima_alteracao_usuario as { id: string; nome: string } | { id: string; nome: string }[] | null)
-        const itens = ((row.itens as ItemEmbed[]) ?? []).map((it) => ({ ...it, materia_prima: embedUm(it.materia_prima) }))
-        const { status, pago } = normalizarStatusEPagoCache(row)
+        const fornecedor = embedUm(row.fornecedor ?? null)
+        const ultUser = embedUm(row.ultima_alteracao_usuario ?? null)
+        const itens = (itensPorOC.get(row.id) ?? []).map((it) => ({
+          ...it,
+          materia_prima: embedUm(it.materia_prima),
+        }))
+        const { status, pago } = normalizarStatusEPagoCache(row as { status?: unknown; pago?: unknown })
         return {
           ...row,
           fornecedor,
           ultima_alteracao_usuario: ultUser,
           itens,
-          fila: undefined,
           pedido_id: pedido?.id ?? null,
           pedido_codigo: pedido?.codigo ?? null,
           pedido_sequencial: pedido?.sequencial ?? null,
