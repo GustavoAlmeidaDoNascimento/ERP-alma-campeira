@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
+import { DateInputBR } from '@/components/ui/date-input-br'
 import { Button } from '@/components/ui/button'
 import { criarBoleto, atualizarBoleto, type BoletoInput, type ParcelaInput } from '@/lib/actions/boletos'
 import type { Boleto, BoletoTipo, Cliente, Fornecedor } from '@/types'
@@ -344,12 +345,11 @@ export function BoletoModal({
               value={unidades}
               onChange={(e) => setUnidades(e.target.value)}
             />
-            <Input
+            <DateInputBR
               id="b-emitido"
               label="Emitido em"
-              type="date"
               value={emitidoEm}
-              onChange={(e) => setEmitidoEm(e.target.value)}
+              onChange={setEmitidoEm}
             />
           </div>
         )}
@@ -363,12 +363,11 @@ export function BoletoModal({
               onChange={(e) => setNumeroDocumento(e.target.value)}
               placeholder="Opcional"
             />
-            <Input
+            <DateInputBR
               id="b-emitido-s"
               label="Emitido em"
-              type="date"
               value={emitidoEm}
-              onChange={(e) => setEmitidoEm(e.target.value)}
+              onChange={setEmitidoEm}
             />
           </div>
         )}
@@ -423,10 +422,9 @@ export function BoletoModal({
                 <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
                   <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{p.numero}</td>
                   <td className="px-3 py-2">
-                    <input
-                      type="date"
+                    <DateInputBR
                       value={p.vencimento}
-                      onChange={(e) => atualizarLinha(i, { vencimento: e.target.value })}
+                      onChange={(iso) => atualizarLinha(i, { vencimento: iso })}
                       className="rounded px-2 py-1 text-sm outline-none w-full"
                       style={inputStyle}
                     />
@@ -454,10 +452,9 @@ export function BoletoModal({
                     />
                   </td>
                   <td className="px-3 py-2">
-                    <input
-                      type="date"
+                    <DateInputBR
                       value={p.pago_em}
-                      onChange={(e) => atualizarLinha(i, { pago_em: e.target.value })}
+                      onChange={(iso) => atualizarLinha(i, { pago_em: iso })}
                       disabled={!p.pago}
                       className="rounded px-2 py-1 text-sm outline-none w-full disabled:opacity-50"
                       style={inputStyle}
