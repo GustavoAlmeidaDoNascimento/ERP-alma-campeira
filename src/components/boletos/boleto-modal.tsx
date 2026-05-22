@@ -235,7 +235,7 @@ export function BoletoModal({
       title={editando ? 'Editar boleto' : `Novo boleto de ${isEntrada ? 'entrada' : 'saída'}`}
       width="780px"
     >
-      <div className="flex flex-col gap-4 max-h-[min(80vh,720px)] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-4">
         {/* Tipo */}
         <div className="flex gap-2">
           {(['saida', 'entrada'] as const).map((t) => {
@@ -405,8 +405,11 @@ export function BoletoModal({
           </div>
         </div>
 
-        {/* Tabela de parcelas */}
-        <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+        {/* Tabela de parcelas — shrink-0 evita cortar linhas no flex; rolagem própria se 5–6x */}
+        <div
+          className="shrink-0 overflow-auto rounded-lg"
+          style={{ border: '1px solid var(--ac-border)', maxHeight: 'min(50vh, 340px)' }}
+        >
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--ac-bg)' }}>
