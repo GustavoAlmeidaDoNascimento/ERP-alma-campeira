@@ -405,10 +405,10 @@ export function BoletoModal({
           </div>
         </div>
 
-        {/* Tabela de parcelas — shrink-0 evita cortar linhas no flex; rolagem própria se 5–6x */}
+        {/* Tabela de parcelas — altura natural; rolagem só no corpo do modal */}
         <div
-          className="shrink-0 overflow-auto rounded-lg"
-          style={{ border: '1px solid var(--ac-border)', maxHeight: 'min(50vh, 340px)' }}
+          className="shrink-0 rounded-lg"
+          style={{ border: '1px solid var(--ac-border)' }}
         >
           <table className="w-full text-sm">
             <thead>
