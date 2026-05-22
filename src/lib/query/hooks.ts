@@ -20,6 +20,7 @@ import { getOrcamentos } from '@/lib/actions/orcamentos'
 import { getOrdensCompra, getFilaReposicaoList, getUsuariosParaRegistroOC } from '@/lib/actions/ordens-compra'
 import { getConsumiveis } from '@/lib/actions/consumiveis'
 import { listarGastos } from '@/lib/actions/gastos'
+import { listarBoletos } from '@/lib/actions/boletos'
 import { getUsuarios } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
 import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
@@ -35,6 +36,8 @@ import type {
   Orcamento,
   Consumivel,
   Gasto,
+  Boleto,
+  BoletoTipo,
   Usuario,
   Cargo,
   CategoriaFacaDB,
@@ -172,6 +175,14 @@ export function useGastos(opts: Opts<Gasto[]> = {}) {
   return useQuery({
     queryKey: qk.gastos.list(),
     queryFn: () => listarGastos(),
+    initialData: opts.initialData,
+  })
+}
+
+export function useBoletos(tipo?: BoletoTipo, opts: Opts<Boleto[]> = {}) {
+  return useQuery({
+    queryKey: qk.boletos.list(tipo),
+    queryFn: () => listarBoletos(tipo),
     initialData: opts.initialData,
   })
 }
