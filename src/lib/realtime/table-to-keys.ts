@@ -29,6 +29,8 @@ export const TABLE_TO_KEYS: Record<string, ReadonlyArray<readonly unknown[]>> = 
 
   // Financeiro
   gastos: [qk.gastos.all, qk.metricas.all],
+  boletos: [qk.boletos.all, qk.metricas.all],
+  boleto_parcelas: [qk.boletos.all, qk.metricas.all],
 
   // Pessoas
   usuarios_perfis: [qk.usuarios.all, qk.vendas.all, qk.orcamentos.all, qk.gastos.all],
