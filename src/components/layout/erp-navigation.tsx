@@ -114,6 +114,15 @@ const iconGastos = (
   </svg>
 )
 
+const iconBoletos = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 4v16" />
+    <path d="M11 4v16" />
+    <path d="M17 4v16" />
+  </svg>
+)
+
 const iconOrcamento = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -154,7 +163,8 @@ export const sections: NavSection[] = [
   {
     label: 'Financeiro',
     items: [
-      { href: '/gastos', label: 'Gastos', available: true, icon: iconGastos, moduloKey: 'gastos' },
+      { href: '/gastos',  label: 'Gastos',  available: true, icon: iconGastos,  moduloKey: 'gastos'  },
+      { href: '/boletos', label: 'Boletos', available: true, icon: iconBoletos, moduloKey: 'boletos' },
     ],
   },
   {
