@@ -46,6 +46,11 @@ export const qk = {
     all: ['gastos'] as const,
     list: () => [...qk.gastos.all, 'list'] as const,
   },
+  boletos: {
+    all: ['boletos'] as const,
+    list: (tipo?: 'entrada' | 'saida') =>
+      (tipo ? [...qk.boletos.all, 'list', tipo] : [...qk.boletos.all, 'list']) as readonly unknown[],
+  },
   usuarios: {
     all: ['usuarios'] as const,
     list: () => [...qk.usuarios.all, 'list'] as const,
