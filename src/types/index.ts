@@ -181,6 +181,7 @@ export const MODULOS = [
   { key: 'clientes',        label: 'Clientes' },
   { key: 'ordens_compra',   label: 'Ordens de Compra' },
   { key: 'gastos',          label: 'Gastos' },
+  { key: 'boletos',         label: 'Boletos' },
   { key: 'usuarios',        label: 'Usuários' },
   { key: 'cargos',          label: 'Cargos' },
   { key: 'lucro',           label: 'Lucro (facas)' },
@@ -622,4 +623,67 @@ export type Gasto = {
   created_at: string
   ordem_compra?: Pick<OrdemCompra, 'id' | 'codigo'> | null
   usuario?: { id: string; nome: string } | null
+}
+
+// ============================================================
+// Boletos (financeiro — a pagar / a receber)
+// ============================================================
+export type BoletoTipo = 'entrada' | 'saida'
+
+export type BoletoParcela = {
+  id: string
+  boleto_id: string
+  numero: number
+  vencimento: string
+  valor: number
+  pago_em: string | null
+  valor_pago: number | null
+  created_at: string
+}
+
+export type Boleto = {
+  id: string
+  tipo: BoletoTipo
+  contraparte_nome: string
+  cnpj_cpf: string | null
+  cliente_id: string | null
+  fornecedor_id: string | null
+  vendedor_id: string | null
+  unidades: number | null
+  numero_documento: string | null
+  valor_total: number
+  emitido_em: string | null
+  observacao: string | null
+  criado_por: string | null
+  created_at: string
+  updated_at: string
+  parcelas: BoletoParcela[]
+  cliente?: Pick<Cliente, 'id' | 'nome'> | null
+  fornecedor?: Pick<Fornecedor, 'id' | 'nome'> | null
+  vendedor?: { id: string; nome: string } | null
+  criador?: { id: string; nome: string } | null
+}
+
+export type BoletoStatus = 'pago' | 'vencido' | 'aberto'
+
+/** Status agregado a partir das parcelas. "vencido" só vale se houver parcela em aberto cuja data já passou. */
+export function statusBoleto(b: Pick<Boleto, 'parcelas'>, hojeISO?: string): BoletoStatus {
+  const hoje = hojeISO ?? new Date().toISOString().slice(0, 10)
+  let temAberto = false
+  let temVencido = false
+  for (const p of b.parcelas) {
+    if (p.pago_em) continue
+    temAberto = true
+    if (p.vencimento && p.vencimento < hoje) temVencido = true
+  }
+  if (!temAberto) return 'pago'
+  return temVencido ? 'vencido' : 'aberto'
+}
+
+export function totalPagoBoleto(b: Pick<Boleto, 'parcelas'>): number {
+  return b.parcelas.reduce((s, p) => s + Number(p.valor_pago ?? 0), 0)
+}
+
+export function totalAbertoBoleto(b: Pick<Boleto, 'valor_total' | 'parcelas'>): number {
+  return Math.max(0, Number(b.valor_total) - totalPagoBoleto(b))
 }
