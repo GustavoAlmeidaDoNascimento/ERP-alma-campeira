@@ -155,6 +155,24 @@ export function BoletoModal({
     setParcelas(linhasVazias(n, base, Number.isFinite(total) ? total : 0))
   }
 
+  function distribuirValor(novoTotal: string) {
+    setValorTotal(novoTotal)
+    const total = Number(novoTotal.replace(',', '.'))
+    if (!Number.isFinite(total)) return
+    setParcelas((prev) => {
+      const n = prev.length
+      if (n === 0) return prev
+      const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0
+      let acumulado = 0
+      return prev.map((l, i) => {
+        const ult = i === n - 1
+        const v = ult ? Math.max(0, Number((total - acumulado).toFixed(2))) : vCada
+        acumulado += v
+        return { ...l, valor: v > 0 ? String(v.toFixed(2)) : '' }
+      })
+    })
+  }
+
   function atualizarLinha(idx: number, patch: Partial<Linha>) {
     setParcelas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)))
   }
@@ -380,7 +398,7 @@ export function BoletoModal({
             step="0.01"
             min="0"
             value={valorTotal}
-            onChange={(e) => setValorTotal(e.target.value)}
+            onChange={(e) => distribuirValor(e.target.value)}
             placeholder="0,00"
           />
           <div className="flex flex-col gap-1.5">
