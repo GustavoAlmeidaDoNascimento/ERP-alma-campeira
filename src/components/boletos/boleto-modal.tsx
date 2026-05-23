@@ -215,15 +215,24 @@ export function BoletoModal({
     if (!Number.isFinite(total) || total < 0) { setErro('Valor total inválido.'); return }
     if (parcelas.length === 0) { setErro('Adicione ao menos uma parcela.'); return }
 
-    const parcelasInput: ParcelaInput[] = parcelas.map((p) => ({
-      numero: p.numero,
-      vencimento: p.vencimento,
-      valor: Number(p.valor.replace(',', '.')) || 0,
-      pago_em: p.pago ? (p.pago_em || hoje()) : null,
-      valor_pago: p.pago
-        ? (p.valor_pago ? Number(p.valor_pago.replace(',', '.')) : Number(p.valor.replace(',', '.')) || 0)
-        : null,
-    }))
+    // Saída: gera 1 "parcela" interna correspondente ao único pagamento
+    const parcelasInput: ParcelaInput[] = tipo === 'saida'
+      ? [{
+          numero: 1,
+          vencimento: emitidoEm || hoje(),
+          valor: total,
+          pago_em: parcelas[0]?.pago ? (parcelas[0]?.pago_em || hoje()) : null,
+          valor_pago: parcelas[0]?.pago ? total : null,
+        }]
+      : parcelas.map((p) => ({
+          numero: p.numero,
+          vencimento: p.vencimento,
+          valor: Number(p.valor.replace(',', '.')) || 0,
+          pago_em: p.pago ? (p.pago_em || hoje()) : null,
+          valor_pago: p.pago
+            ? (p.valor_pago ? Number(p.valor_pago.replace(',', '.')) : Number(p.valor.replace(',', '.')) || 0)
+            : null,
+        }))
 
     const input: BoletoInput = {
       tipo,
@@ -260,7 +269,11 @@ export function BoletoModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={editando ? 'Editar boleto' : `Novo boleto de ${isEntrada ? 'entrada' : 'saída'}`}
+      title={
+        editando
+          ? (isEntrada ? 'Editar boleto a receber' : 'Editar pagamento')
+          : (isEntrada ? 'Novo boleto a receber' : 'Novo pagamento (saída)')
+      }
       width="780px"
     >
       <div className="flex flex-col gap-4">
