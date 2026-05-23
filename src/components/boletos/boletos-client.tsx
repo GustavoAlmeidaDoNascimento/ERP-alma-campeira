@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { BoletoModal } from './boleto-modal'
@@ -16,6 +17,7 @@ import {
 } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useBoletos } from '@/lib/query/hooks'
+import { qk } from '@/lib/query/keys'
 import { DateInputBR } from '@/components/ui/date-input-br'
 
 const MESES = [
@@ -74,7 +76,9 @@ export function BoletosClient({
   perm: Perm
 }) {
   const { refreshActiveTab } = useErpTabs()
+  const queryClient = useQueryClient()
   const { data: boletos = initialBoletos } = useBoletos(undefined, { initialData: initialBoletos })
+  const [marcandoIds, setMarcandoIds] = useState<Set<string>>(new Set())
 
   const [tipoAtivo, setTipoAtivo] = useState<BoletoTipo>('saida')
   const [modalAberto, setModalAberto] = useState(false)
