@@ -154,7 +154,12 @@ export async function deletarBoleto(id: string) {
   if (error) throw new Error(error.message)
 }
 
-/** Marca/desmarca uma parcela como paga. Se pago=true e não passar valor_pago, usa valor da parcela. */
+/**
+ * Marca/desmarca uma parcela como paga.
+ * O cliente DEVE passar `valor_pago` (vem do estado local da parcela) para
+ * evitar um SELECT extra no servidor — mantém o caminho rápido em 1 UPDATE.
+ * Se não vier, faz fallback com SELECT+UPDATE (uso defensivo).
+ */
 export async function marcarParcela(
   parcela_id: string,
   pago: boolean,
@@ -164,18 +169,19 @@ export async function marcarParcela(
   const supabase = await createClient()
   if (pago) {
     const pago_em = opts?.pago_em ?? new Date().toISOString().slice(0, 10)
-    const payload: Record<string, unknown> = { pago_em }
-    if (opts?.valor_pago != null) payload.valor_pago = opts.valor_pago
-    else {
-      // se valor_pago não informado, copia do valor da própria parcela
+    let valor_pago = opts?.valor_pago
+    if (valor_pago == null) {
       const { data: parcela } = await supabase
         .from('boleto_parcelas')
         .select('valor')
         .eq('id', parcela_id)
         .single()
-      payload.valor_pago = Number(parcela?.valor ?? 0)
+      valor_pago = Number(parcela?.valor ?? 0)
     }
-    const { error } = await supabase.from('boleto_parcelas').update(payload).eq('id', parcela_id)
+    const { error } = await supabase
+      .from('boleto_parcelas')
+      .update({ pago_em, valor_pago })
+      .eq('id', parcela_id)
     if (error) throw new Error(error.message)
   } else {
     const { error } = await supabase
