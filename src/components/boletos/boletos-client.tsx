@@ -184,12 +184,43 @@ export function BoletosClient({
     }
   }
 
-  async function alternarParcela(parcelaId: string, pago: boolean) {
+  async function alternarParcela(parcelaId: string, pagoAtual: boolean, valor: number) {
+    if (marcandoIds.has(parcelaId)) return // anti-double-click
+    const novoPago = !pagoAtual
+    const hojeData = new Date().toISOString().slice(0, 10)
+
+    // Snapshot pra rollback
+    const queryKey = qk.boletos.list()
+    const snapshot = queryClient.getQueryData<Boleto[]>(queryKey)
+
+    // Update otimista — UI atualiza instantâneo
+    queryClient.setQueryData<Boleto[]>(queryKey, (prev) => {
+      if (!prev) return prev
+      return prev.map((b) => ({
+        ...b,
+        parcelas: b.parcelas.map((p) =>
+          p.id === parcelaId
+            ? { ...p, pago_em: novoPago ? hojeData : null, valor_pago: novoPago ? valor : null }
+            : p,
+        ),
+      }))
+    })
+
+    setMarcandoIds((prev) => new Set(prev).add(parcelaId))
     try {
-      await marcarParcela(parcelaId, !pago)
+      await marcarParcela(parcelaId, novoPago, novoPago ? { valor_pago: valor } : undefined)
+      // Realtime/refresh sincroniza dados finais (data exata do servidor etc.)
       refreshActiveTab()
     } catch (e: unknown) {
+      // Rollback se falhar
+      if (snapshot) queryClient.setQueryData(queryKey, snapshot)
       alert(e instanceof Error ? e.message : 'Erro ao atualizar parcela.')
+    } finally {
+      setMarcandoIds((prev) => {
+        const n = new Set(prev)
+        n.delete(parcelaId)
+        return n
+      })
     }
   }
 
