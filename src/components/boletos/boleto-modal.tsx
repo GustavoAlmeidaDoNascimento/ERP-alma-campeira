@@ -198,6 +198,9 @@ export function BoletoModal({
     if (c) {
       setContraparteNome(c.nome)
       setCnpjCpf(c.documento ?? '')
+    } else {
+      setContraparteNome('')
+      setCnpjCpf('')
     }
   }
   function selecionarFornecedor(id: string) {
@@ -206,11 +209,15 @@ export function BoletoModal({
     if (f) {
       setContraparteNome(f.nome)
       setCnpjCpf(f.documento ?? '')
+    } else {
+      setContraparteNome('')
+      setCnpjCpf('')
     }
   }
 
   async function salvar() {
-    if (!contraparteNome.trim()) { setErro('Informe o nome do cliente/fornecedor.'); return }
+    if (isEntrada && !clienteId) { setErro('Selecione um cliente.'); return }
+    if (!isEntrada && !fornecedorId) { setErro('Selecione um fornecedor.'); return }
     const total = Number(valorTotal.replace(',', '.'))
     if (!Number.isFinite(total) || total < 0) { setErro('Valor total inválido.'); return }
     if (parcelas.length === 0) { setErro('Adicione ao menos uma parcela.'); return }
@@ -318,7 +325,7 @@ export function BoletoModal({
                 className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
                 style={{ ...inputStyle, ...selectChevron }}
               >
-                <option value="">— sem vínculo (texto livre abaixo) —</option>
+                <option value="">— Selecione —</option>
                 {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
             ) : (
@@ -328,7 +335,7 @@ export function BoletoModal({
                 className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
                 style={{ ...inputStyle, ...selectChevron }}
               >
-                <option value="">— sem vínculo (texto livre abaixo) —</option>
+                <option value="">— Selecione —</option>
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </select>
             )}
@@ -350,22 +357,13 @@ export function BoletoModal({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            id="b-contraparte"
-            label={`${isEntrada ? 'Cliente' : 'Fornecedor'} (nome exibido) *`}
-            value={contraparteNome}
-            onChange={(e) => setContraparteNome(e.target.value)}
-            placeholder={isEntrada ? 'Ex.: Rama facas artesanais Ltda' : 'Ex.: Rodrigo'}
-          />
-          <Input
-            id="b-cnpj"
-            label="CNPJ / CPF"
-            value={cnpjCpf}
-            onChange={(e) => setCnpjCpf(e.target.value)}
-            placeholder="Opcional"
-          />
-        </div>
+        <Input
+          id="b-cnpj"
+          label="CNPJ / CPF"
+          value={cnpjCpf}
+          onChange={(e) => setCnpjCpf(e.target.value)}
+          placeholder="Preenchido ao selecionar o cadastro"
+        />
 
         {/* Campos extras de entrada */}
         {isEntrada && (
