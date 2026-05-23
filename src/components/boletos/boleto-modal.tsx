@@ -141,11 +141,21 @@ export function BoletoModal({
     setErro('')
   }, [open, editando, tipoInicial])
 
-  // Quando muda tipo, limpa vínculos do outro lado
+  // Quando muda tipo, limpa vínculos do outro lado e reseta parcelas
   function trocarTipo(novo: BoletoTipo) {
     setTipo(novo)
-    if (novo === 'entrada') setFornecedorId('')
-    else { setClienteId(''); setVendedorId('') }
+    if (novo === 'entrada') {
+      setFornecedorId('')
+    } else {
+      setClienteId('')
+      setVendedorId('')
+      setNumeroDocumento('')
+      setUnidades('')
+      // Saída: sempre 1 "parcela" interna (corresponde ao único pagamento)
+      setQtdParcelas(1)
+      const total = Number(valorTotal.replace(',', '.'))
+      setParcelas(linhasVazias(1, emitidoEm || hoje(), Number.isFinite(total) ? total : 0))
+    }
   }
 
   function aplicarParcelar(n: number) {
@@ -373,23 +383,49 @@ export function BoletoModal({
         )}
 
         {!isEntrada && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              id="b-numero-s"
-              label="Número do documento"
-              value={numeroDocumento}
-              onChange={(e) => setNumeroDocumento(e.target.value)}
-              placeholder="Opcional"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <DateInputBR
               id="b-emitido-s"
-              label="Emitido em"
+              label="Data *"
               value={emitidoEm}
               onChange={setEmitidoEm}
             />
+            <Input
+              id="b-total-s"
+              label="Valor (R$) *"
+              type="number"
+              step="0.01"
+              min="0"
+              value={valorTotal}
+              onChange={(e) => distribuirValor(e.target.value)}
+              placeholder="0,00"
+            />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Pago?</label>
+              <label
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer"
+                style={inputStyle}
+              >
+                <input
+                  type="checkbox"
+                  checked={parcelas[0]?.pago ?? false}
+                  onChange={(e) => atualizarLinha(0, {
+                    pago: e.target.checked,
+                    pago_em: e.target.checked ? (parcelas[0]?.pago_em || hoje()) : '',
+                  })}
+                  className="size-4"
+                />
+                <span className="text-sm">
+                  {parcelas[0]?.pago
+                    ? `Pago em ${parcelas[0]?.pago_em ? new Date(parcelas[0].pago_em + 'T00:00').toLocaleDateString('pt-BR') : ''}`
+                    : 'Marcar como pago'}
+                </span>
+              </label>
+            </div>
           </div>
         )}
 
+        {isEntrada && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             id="b-total"
@@ -422,8 +458,10 @@ export function BoletoModal({
             </div>
           </div>
         </div>
+        )}
 
-        {/* Tabela de parcelas — altura natural; rolagem só no corpo do modal */}
+        {/* Tabela de parcelas — só para boletos de entrada */}
+        {isEntrada && (
         <div
           className="shrink-0 rounded-lg"
           style={{ border: '1px solid var(--ac-border)' }}
@@ -501,6 +539,7 @@ export function BoletoModal({
             </tfoot>
           </table>
         </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Observação</label>
