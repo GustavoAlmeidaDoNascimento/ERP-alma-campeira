@@ -209,8 +209,9 @@ export function BoletosClient({
     setMarcandoIds((prev) => new Set(prev).add(parcelaId))
     try {
       await marcarParcela(parcelaId, novoPago, novoPago ? { valor_pago: valor } : undefined)
-      // Realtime/refresh sincroniza dados finais (data exata do servidor etc.)
-      refreshActiveTab()
+      // Realtime do Supabase invalida a query automaticamente quando
+      // boleto_parcelas muda — NÃO precisamos chamar refreshActiveTab()
+      // (era ele que dobrava a latência visível).
     } catch (e: unknown) {
       // Rollback se falhar
       if (snapshot) queryClient.setQueryData(queryKey, snapshot)
@@ -512,28 +513,24 @@ export function BoletosClient({
                             </span>
                             <button
                               type="button"
-                              disabled={!perm.editar || marcando}
+                              disabled={!perm.editar}
                               onClick={(e) => { e.stopPropagation(); alternarParcela(p.id, pPago, Number(p.valor)) }}
                               title={pPago ? `Pago em ${formatarData(p.pago_em)} — clique para desmarcar` : `Marcar parcela ${n} como paga`}
-                              className="inline-flex items-center justify-center rounded size-5 transition-colors"
+                              className={`inline-flex items-center justify-center rounded size-5 transition-colors ${marcando ? 'animate-pulse' : ''}`}
                               style={{
                                 background: pPago ? '#16a34a' : 'transparent',
                                 border: `1.5px solid ${pPago ? '#16a34a' : vencido ? '#fca5a5' : 'var(--ac-border)'}`,
-                                cursor: marcando ? 'wait' : perm.editar ? 'pointer' : 'default',
-                                opacity: marcando ? 0.7 : 1,
+                                cursor: perm.editar ? 'pointer' : 'default',
+                                boxShadow: marcando ? '0 0 0 2px rgba(22,163,74,0.30)' : 'none',
                               }}
                               aria-label={pPago ? 'Pago — desmarcar' : 'Marcar como pago'}
                               aria-busy={marcando}
                             >
-                              {marcando ? (
-                                <svg viewBox="0 0 24 24" fill="none" stroke={pPago ? 'white' : '#6b7280'} strokeWidth={3} className="size-3 animate-spin">
-                                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                </svg>
-                              ) : pPago ? (
+                              {pPago && (
                                 <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="size-3.5">
                                   <polyline points="20 6 9 17 4 12" />
                                 </svg>
-                              ) : null}
+                              )}
                             </button>
                           </div>
                         </td>
@@ -554,27 +551,23 @@ export function BoletosClient({
                       return (
                         <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
-                            disabled={!perm.editar || marcando}
+                            disabled={!perm.editar}
                             onClick={() => alternarParcela(parcelaUnica.id, pagoSaida, Number(parcelaUnica.valor))}
                             title={pagoSaida ? `Pago em ${formatarData(parcelaUnica.pago_em)} — clique para desmarcar` : 'Marcar como pago'}
-                            className="inline-flex items-center justify-center rounded size-6 transition-colors"
+                            className={`inline-flex items-center justify-center rounded size-6 transition-colors ${marcando ? 'animate-pulse' : ''}`}
                             style={{
                               background: pagoSaida ? '#16a34a' : 'transparent',
                               border: `1.5px solid ${pagoSaida ? '#16a34a' : 'var(--ac-border)'}`,
-                              cursor: marcando ? 'wait' : perm.editar ? 'pointer' : 'default',
-                              opacity: marcando ? 0.7 : 1,
+                              cursor: perm.editar ? 'pointer' : 'default',
+                              boxShadow: marcando ? '0 0 0 2px rgba(22,163,74,0.30)' : 'none',
                             }}
                             aria-busy={marcando}
                           >
-                            {marcando ? (
-                              <svg viewBox="0 0 24 24" fill="none" stroke={pagoSaida ? 'white' : '#6b7280'} strokeWidth={3} className="size-3.5 animate-spin">
-                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                              </svg>
-                            ) : pagoSaida ? (
+                            {pagoSaida && (
                               <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="size-4">
                                 <polyline points="20 6 9 17 4 12" />
                               </svg>
-                            ) : null}
+                            )}
                           </button>
                         </td>
                       )
