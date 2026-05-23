@@ -484,6 +484,7 @@ export function BoletosClient({
                       if (!p) return <td key={n} className="px-2 py-2 text-center text-xs" style={{ color: 'var(--ac-muted)' }}>—</td>
                       const pPago = !!p.pago_em
                       const vencido = !pPago && p.vencimento < hojeISO
+                      const marcando = marcandoIds.has(p.id)
                       return (
                         <td key={n} className="px-2 py-2">
                           <div className="flex flex-col items-center gap-1">
@@ -499,22 +500,28 @@ export function BoletosClient({
                             </span>
                             <button
                               type="button"
-                              disabled={!perm.editar}
-                              onClick={() => alternarParcela(p.id, pPago)}
+                              disabled={!perm.editar || marcando}
+                              onClick={() => alternarParcela(p.id, pPago, Number(p.valor))}
                               title={pPago ? `Pago em ${formatarData(p.pago_em)} — clique para desmarcar` : `Marcar parcela ${n} como paga`}
-                              className="inline-flex items-center justify-center rounded size-5 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                              className="inline-flex items-center justify-center rounded size-5 transition-colors"
                               style={{
                                 background: pPago ? '#16a34a' : 'transparent',
                                 border: `1.5px solid ${pPago ? '#16a34a' : vencido ? '#fca5a5' : 'var(--ac-border)'}`,
-                                cursor: perm.editar ? 'pointer' : 'default',
+                                cursor: marcando ? 'wait' : perm.editar ? 'pointer' : 'default',
+                                opacity: marcando ? 0.7 : 1,
                               }}
                               aria-label={pPago ? 'Pago — desmarcar' : 'Marcar como pago'}
+                              aria-busy={marcando}
                             >
-                              {pPago && (
+                              {marcando ? (
+                                <svg viewBox="0 0 24 24" fill="none" stroke={pPago ? 'white' : '#6b7280'} strokeWidth={3} className="size-3 animate-spin">
+                                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                </svg>
+                              ) : pPago ? (
                                 <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="size-3.5">
                                   <polyline points="20 6 9 17 4 12" />
                                 </svg>
-                              )}
+                              ) : null}
                             </button>
                           </div>
                         </td>
