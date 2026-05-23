@@ -33,6 +33,9 @@ const TABELAS_LABEL: Record<string, string> = {
   pedido_itens: 'Item de pedido',
   ordens_compra: 'Ordem de compra',
   ordem_compra_itens: 'Item de ordem de compra',
+  gastos: 'Gasto',
+  boletos: 'Boleto',
+  boleto_parcelas: 'Parcela de boleto',
   app_config: 'Configuração global',
   audit_logs: 'Auditoria',
 }
@@ -161,6 +164,23 @@ const FIELD_LABEL: Record<string, string> = {
   criar: 'Pode criar',
   editar: 'Pode editar',
   deletar: 'Pode deletar',
+
+  // boletos / parcelas
+  contraparte_nome: 'Cliente / Fornecedor',
+  cnpj_cpf: 'CNPJ / CPF',
+  numero_documento: 'Número(s) NF / pedido',
+  unidades: 'Unidades',
+  emitido_em: 'Emitido em',
+  vencimento: 'Vencimento',
+  valor: 'Valor',
+  pago_em: 'Pago em',
+  valor_pago: 'Valor pago',
+  boleto_id: 'Boleto',
+  criado_por: 'Criado por',
+
+  // gastos
+  data_gasto: 'Data do gasto',
+  forma_pagamento: 'Forma de pagamento',
 }
 
 /** Campos "técnicos" que escondemos da visão normal (aparecem só no modo técnico). */
@@ -182,6 +202,11 @@ const CAMPOS_PRIORITARIOS = [
   'foto_url', 'observacao',
   'modulo', 'ver', 'criar', 'editar', 'deletar',
   'cor', 'cor_texto', 'cor_fundo', 'cor_borda', 'ordem', 'ativo',
+  // boletos / parcelas
+  'contraparte_nome', 'cnpj_cpf', 'numero_documento', 'emitido_em',
+  'vencimento', 'valor', 'pago_em', 'valor_pago', 'boleto_id', 'unidades',
+  // gastos
+  'data_gasto', 'forma_pagamento',
 ]
 
 function fieldLabel(f: string): string {
