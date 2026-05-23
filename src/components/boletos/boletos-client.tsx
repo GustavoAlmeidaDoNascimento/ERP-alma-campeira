@@ -450,21 +450,38 @@ export function BoletosClient({
                       const pPago = !!p.pago_em
                       const vencido = !pPago && p.vencimento < hojeISO
                       return (
-                        <td key={n} className="px-2 py-2 text-center">
-                          <button
-                            disabled={!perm.editar}
-                            onClick={() => alternarParcela(p.id, pPago)}
-                            title={pPago ? `Pago em ${formatarData(p.pago_em)} — clique para desmarcar` : `Vence em ${formatarData(p.vencimento)} — clique para marcar como pago`}
-                            className="rounded px-1.5 py-1 text-[11px] font-mono whitespace-nowrap transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                            style={{
-                              background: pPago ? '#dcfce7' : vencido ? '#fee2e2' : 'var(--ac-bg)',
-                              color: pPago ? '#15803d' : vencido ? '#b91c1c' : 'var(--ac-text)',
-                              border: `1px solid ${pPago ? '#86efac' : vencido ? '#fca5a5' : 'var(--ac-border)'}`,
-                              cursor: perm.editar ? 'pointer' : 'default',
-                            }}
-                          >
-                            {formatarData(p.vencimento)}
-                          </button>
+                        <td key={n} className="px-2 py-2">
+                          <div className="flex flex-col items-center gap-1">
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[11px] font-mono whitespace-nowrap"
+                              style={{
+                                background: pPago ? '#dcfce7' : vencido ? '#fee2e2' : 'var(--ac-bg)',
+                                color: pPago ? '#15803d' : vencido ? '#b91c1c' : 'var(--ac-text)',
+                                border: `1px solid ${pPago ? '#86efac' : vencido ? '#fca5a5' : 'var(--ac-border)'}`,
+                              }}
+                            >
+                              {formatarData(p.vencimento)}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!perm.editar}
+                              onClick={() => alternarParcela(p.id, pPago)}
+                              title={pPago ? `Pago em ${formatarData(p.pago_em)} — clique para desmarcar` : `Marcar parcela ${n} como paga`}
+                              className="inline-flex items-center justify-center rounded size-5 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                              style={{
+                                background: pPago ? '#16a34a' : 'transparent',
+                                border: `1.5px solid ${pPago ? '#16a34a' : vencido ? '#fca5a5' : 'var(--ac-border)'}`,
+                                cursor: perm.editar ? 'pointer' : 'default',
+                              }}
+                              aria-label={pPago ? 'Pago — desmarcar' : 'Marcar como pago'}
+                            >
+                              {pPago && (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="size-3.5">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         </td>
                       )
                     })}
