@@ -16,6 +16,16 @@ import {
 } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useBoletos } from '@/lib/query/hooks'
+import { DateInputBR } from '@/components/ui/date-input-br'
+
+const MESES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+function ultimoDiaDoMes(ano: number, mes1a12: number) {
+  return new Date(ano, mes1a12, 0).getDate()
+}
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type UsuarioMin = { id: string; nome: string }
@@ -74,8 +84,53 @@ export function BoletosClient({
   const [loadingDelete, setLoadingDelete] = useState(false)
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<'' | 'pago' | 'aberto' | 'vencido'>('')
+  const [dataDe, setDataDe] = useState('')
+  const [dataAte, setDataAte] = useState('')
+  const [filtroMes, setFiltroMes] = useState<string>('')
+  const [filtroAno, setFiltroAno] = useState<string>('')
 
   const hojeISO = new Date().toISOString().slice(0, 10)
+
+  const anosDisponiveis = useMemo(() => {
+    const set = new Set<number>()
+    for (const b of boletos) {
+      if (b.emitido_em) {
+        const y = Number(b.emitido_em.slice(0, 4))
+        if (y) set.add(y)
+      }
+    }
+    set.add(new Date().getFullYear())
+    return Array.from(set).sort((a, b) => b - a)
+  }, [boletos])
+
+  function aplicarMesAno(mes: string, ano: string) {
+    setFiltroMes(mes)
+    setFiltroAno(ano)
+    if (mes && ano) {
+      const m = Number(mes)
+      const a = Number(ano)
+      const ultDia = ultimoDiaDoMes(a, m)
+      const mm = String(m).padStart(2, '0')
+      setDataDe(`${a}-${mm}-01`)
+      setDataAte(`${a}-${mm}-${String(ultDia).padStart(2, '0')}`)
+    } else if (ano && !mes) {
+      setDataDe(`${ano}-01-01`)
+      setDataAte(`${ano}-12-31`)
+    } else if (mes && !ano) {
+      setDataDe('')
+      setDataAte('')
+    } else {
+      setDataDe('')
+      setDataAte('')
+    }
+  }
+
+  function limparPeriodo() {
+    setFiltroMes('')
+    setFiltroAno('')
+    setDataDe('')
+    setDataAte('')
+  }
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -83,6 +138,9 @@ export function BoletosClient({
       .filter((b) => b.tipo === tipoAtivo)
       .filter((b) => {
         if (filtroStatus && statusBoleto(b, hojeISO) !== filtroStatus) return false
+        const emitido = (b.emitido_em ?? '').slice(0, 10)
+        if (dataDe && (!emitido || emitido < dataDe)) return false
+        if (dataAte && (!emitido || emitido > dataAte)) return false
         if (!q) return true
         return (
           b.contraparte_nome.toLowerCase().includes(q) ||
@@ -91,7 +149,7 @@ export function BoletosClient({
           (b.observacao ?? '').toLowerCase().includes(q)
         )
       })
-  }, [boletos, tipoAtivo, busca, filtroStatus, hojeISO])
+  }, [boletos, tipoAtivo, busca, filtroStatus, hojeISO, dataDe, dataAte])
 
   const totais = useMemo(() => {
     let total = 0, pago = 0, aberto = 0, vencido = 0
@@ -223,6 +281,63 @@ export function BoletosClient({
             <option value="pago">Pago</option>
           </select>
         </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Mês</label>
+          <select
+            value={filtroMes}
+            onChange={(e) => aplicarMesAno(e.target.value, filtroAno)}
+            className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+            style={{ ...inputStyle, ...selectChevron, minWidth: '140px' }}
+          >
+            <option value="">Todos</option>
+            {MESES.map((nome, i) => (
+              <option key={i + 1} value={String(i + 1)}>{nome}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Ano</label>
+          <select
+            value={filtroAno}
+            onChange={(e) => aplicarMesAno(filtroMes, e.target.value)}
+            className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+            style={{ ...inputStyle, ...selectChevron, minWidth: '110px' }}
+          >
+            <option value="">Todos</option>
+            {anosDisponiveis.map((a) => (
+              <option key={a} value={String(a)}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>De</label>
+          <DateInputBR
+            value={dataDe}
+            onChange={(iso) => { setDataDe(iso); setFiltroMes(''); setFiltroAno('') }}
+            className="rounded-lg px-3 py-2.5 text-sm outline-none"
+            style={{ ...inputStyle, width: '140px' }}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Até</label>
+          <DateInputBR
+            value={dataAte}
+            onChange={(iso) => { setDataAte(iso); setFiltroMes(''); setFiltroAno('') }}
+            className="rounded-lg px-3 py-2.5 text-sm outline-none"
+            style={{ ...inputStyle, width: '140px' }}
+          />
+        </div>
+        {(dataDe || dataAte || filtroMes || filtroAno) && (
+          <button
+            type="button"
+            onClick={limparPeriodo}
+            className="text-xs font-semibold px-3 py-2.5 rounded-lg"
+            style={{ color: 'var(--ac-muted)', border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}
+            title="Limpar período"
+          >
+            Limpar período
+          </button>
+        )}
       </div>
 
       {/* Tabela */}
