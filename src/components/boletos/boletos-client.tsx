@@ -440,7 +440,19 @@ export function BoletosClient({
                 const bgLinha = tipoAtivo === 'saida' && pagoSaida ? '#dcfce7' : 'var(--ac-card)'
                 return (
                   <tr key={b.id}
+                    onClick={() => perm.editar && abrirEditar(b)}
+                    role={perm.editar ? 'button' : undefined}
+                    tabIndex={perm.editar ? 0 : undefined}
+                    onKeyDown={perm.editar ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        abrirEditar(b)
+                      }
+                    } : undefined}
+                    className={perm.editar ? 'cursor-pointer' : undefined}
                     style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: bgLinha }}
+                    onMouseEnter={perm.editar ? (e) => { e.currentTarget.style.background = 'var(--ac-bg)' } : undefined}
+                    onMouseLeave={perm.editar ? (e) => { e.currentTarget.style.background = bgLinha } : undefined}
                   >
                     {tipoAtivo === 'entrada' && (
                       <>
@@ -501,7 +513,7 @@ export function BoletosClient({
                             <button
                               type="button"
                               disabled={!perm.editar || marcando}
-                              onClick={() => alternarParcela(p.id, pPago, Number(p.valor))}
+                              onClick={(e) => { e.stopPropagation(); alternarParcela(p.id, pPago, Number(p.valor)) }}
                               title={pPago ? `Pago em ${formatarData(p.pago_em)} — clique para desmarcar` : `Marcar parcela ${n} como paga`}
                               className="inline-flex items-center justify-center rounded size-5 transition-colors"
                               style={{
@@ -540,7 +552,7 @@ export function BoletosClient({
                     {tipoAtivo === 'saida' && parcelaUnica && (() => {
                       const marcando = marcandoIds.has(parcelaUnica.id)
                       return (
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
                             disabled={!perm.editar || marcando}
                             onClick={() => alternarParcela(parcelaUnica.id, pagoSaida, Number(parcelaUnica.valor))}
@@ -567,7 +579,7 @@ export function BoletosClient({
                         </td>
                       )
                     })()}
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         {perm.editar && (
                           <button onClick={() => abrirEditar(b)} className="p-1.5 rounded-lg" style={{ color: 'var(--ac-muted)' }} title="Editar">
