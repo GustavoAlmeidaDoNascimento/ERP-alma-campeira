@@ -234,11 +234,11 @@ export function BoletosClient({
       </div>
 
       {/* KPIs */}
-      <div className="px-8 pt-6 grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className={`px-8 pt-6 grid grid-cols-1 gap-3 ${tipoAtivo === 'saida' ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
         <div className="rounded-xl p-4" style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)' }}>
           <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: 'var(--ac-muted)' }}>{tituloPagina} — total</p>
           <p className="text-2xl font-bold mt-1" style={{ color: 'var(--ac-text)' }}>{moedaBR.format(totais.total)}</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>{filtrados.length} {filtrados.length === 1 ? 'boleto' : 'boletos'}</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>{filtrados.length} {filtrados.length === 1 ? (tipoAtivo === 'saida' ? 'lançamento' : 'boleto') : (tipoAtivo === 'saida' ? 'lançamentos' : 'boletos')}</p>
         </div>
         <div className="rounded-xl p-4" style={{ background: 'var(--ac-card)', border: '1px solid #86efac' }}>
           <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#15803d' }}>Pago</p>
@@ -246,12 +246,14 @@ export function BoletosClient({
         </div>
         <div className="rounded-xl p-4" style={{ background: 'var(--ac-card)', border: '1px solid #fde047' }}>
           <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#a16207' }}>{labelAberto}</p>
-          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--ac-text)' }}>{moedaBR.format(totais.aberto)}</p>
+          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--ac-text)' }}>{moedaBR.format(totais.aberto + (tipoAtivo === 'saida' ? totais.vencido : 0))}</p>
         </div>
-        <div className="rounded-xl p-4" style={{ background: 'var(--ac-card)', border: '1px solid #fca5a5' }}>
-          <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#b91c1c' }}>Vencido</p>
-          <p className="text-2xl font-bold mt-1" style={{ color: 'var(--ac-text)' }}>{moedaBR.format(totais.vencido)}</p>
-        </div>
+        {tipoAtivo === 'entrada' && (
+          <div className="rounded-xl p-4" style={{ background: 'var(--ac-card)', border: '1px solid #fca5a5' }}>
+            <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: '#b91c1c' }}>Vencido</p>
+            <p className="text-2xl font-bold mt-1" style={{ color: 'var(--ac-text)' }}>{moedaBR.format(totais.vencido)}</p>
+          </div>
+        )}
       </div>
 
       {/* Filtros */}
@@ -347,36 +349,47 @@ export function BoletosClient({
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 {tipoAtivo === 'entrada' && (
-                  <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</th>
-                )}
-                {tipoAtivo === 'entrada' && (
-                  <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>UN</th>
+                  <>
+                    <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</th>
+                    <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>UN</th>
+                  </>
                 )}
                 <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                   {tipoAtivo === 'entrada' ? 'Cliente' : 'Fornecedor'}
                 </th>
                 {tipoAtivo === 'entrada' && (
-                  <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CNPJ/CPF</th>
+                  <>
+                    <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CNPJ/CPF</th>
+                    <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nº</th>
+                  </>
                 )}
-                {tipoAtivo === 'entrada' && (
-                  <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nº</th>
-                )}
-                <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Emitido</th>
-                <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Total</th>
-                {[1, 2, 3, 4, 5, 6].map((n) => (
+                <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                  {tipoAtivo === 'entrada' ? 'Emitido' : 'Data'}
+                </th>
+                <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                  {tipoAtivo === 'entrada' ? 'Total' : 'Valor'}
+                </th>
+                {tipoAtivo === 'entrada' && [1, 2, 3, 4, 5, 6].map((n) => (
                   <th key={n} className="text-center px-2 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                     {n}° venc.
                   </th>
                 ))}
-                <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pago</th>
-                <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Aberto</th>
+                {tipoAtivo === 'entrada' && (
+                  <>
+                    <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pago</th>
+                    <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Aberto</th>
+                  </>
+                )}
+                {tipoAtivo === 'saida' && (
+                  <th className="text-center px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pago</th>
+                )}
                 <th className="px-3 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={tipoAtivo === 'entrada' ? 15 : 11} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={tipoAtivo === 'entrada' ? 15 : 5} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     Nenhum boleto registrado neste filtro.
                   </td>
                 </tr>
@@ -386,39 +399,44 @@ export function BoletosClient({
                 const meta = STATUS_META[status]
                 const aberto = totalAbertoBoleto(b)
                 const pago = totalPagoBoleto(b)
+                const parcelaUnica = b.parcelas[0]
+                const pagoSaida = !!parcelaUnica?.pago_em
                 const parcelasPorNumero = new Map(b.parcelas.map((p) => [p.numero, p]))
+                const bgLinha = tipoAtivo === 'saida' && pagoSaida ? '#dcfce7' : 'var(--ac-card)'
                 return (
                   <tr key={b.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
+                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: bgLinha }}
                   >
                     {tipoAtivo === 'entrada' && (
-                      <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
-                        {b.vendedor?.nome ?? '—'}
-                      </td>
-                    )}
-                    {tipoAtivo === 'entrada' && (
-                      <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
-                        {b.unidades ?? '—'}
-                      </td>
+                      <>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
+                          {b.vendedor?.nome ?? '—'}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
+                          {b.unidades ?? '—'}
+                        </td>
+                      </>
                     )}
                     <td className="px-3 py-2">
                       <div className="flex flex-col">
                         <span className="font-medium" style={{ color: 'var(--ac-text)' }}>{b.contraparte_nome}</span>
-                        <span className="inline-flex items-center self-start mt-1 px-2 py-0.5 rounded text-[10px] font-semibold"
-                          style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}>
-                          {meta.label}
-                        </span>
+                        {tipoAtivo === 'entrada' && (
+                          <span className="inline-flex items-center self-start mt-1 px-2 py-0.5 rounded text-[10px] font-semibold"
+                            style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}>
+                            {meta.label}
+                          </span>
+                        )}
                       </div>
                     </td>
                     {tipoAtivo === 'entrada' && (
-                      <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
-                        {b.cnpj_cpf ?? '—'}
-                      </td>
-                    )}
-                    {tipoAtivo === 'entrada' && (
-                      <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
-                        {b.numero_documento ?? '—'}
-                      </td>
+                      <>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
+                          {b.cnpj_cpf ?? '—'}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
+                          {b.numero_documento ?? '—'}
+                        </td>
+                      </>
                     )}
                     <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
                       {formatarData(b.emitido_em)}
@@ -426,7 +444,7 @@ export function BoletosClient({
                     <td className="px-3 py-2 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--ac-text)' }}>
                       {moedaBR.format(Number(b.valor_total))}
                     </td>
-                    {[1, 2, 3, 4, 5, 6].map((n) => {
+                    {tipoAtivo === 'entrada' && [1, 2, 3, 4, 5, 6].map((n) => {
                       const p = parcelasPorNumero.get(n)
                       if (!p) return <td key={n} className="px-2 py-2 text-center text-xs" style={{ color: 'var(--ac-muted)' }}>—</td>
                       const pPago = !!p.pago_em
@@ -450,12 +468,36 @@ export function BoletosClient({
                         </td>
                       )
                     })}
-                    <td className="px-3 py-2 text-right whitespace-nowrap" style={{ color: '#15803d' }}>
-                      {moedaBR.format(pago)}
-                    </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap" style={{ color: aberto > 0 ? '#b91c1c' : 'var(--ac-muted)' }}>
-                      {moedaBR.format(aberto)}
-                    </td>
+                    {tipoAtivo === 'entrada' && (
+                      <>
+                        <td className="px-3 py-2 text-right whitespace-nowrap" style={{ color: '#15803d' }}>
+                          {moedaBR.format(pago)}
+                        </td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap" style={{ color: aberto > 0 ? '#b91c1c' : 'var(--ac-muted)' }}>
+                          {moedaBR.format(aberto)}
+                        </td>
+                      </>
+                    )}
+                    {tipoAtivo === 'saida' && parcelaUnica && (
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          disabled={!perm.editar}
+                          onClick={() => alternarParcela(parcelaUnica.id, pagoSaida)}
+                          title={pagoSaida ? `Pago em ${formatarData(parcelaUnica.pago_em)} — clique para desmarcar` : 'Marcar como pago'}
+                          className="inline-flex items-center justify-center rounded size-6 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{
+                            background: pagoSaida ? '#16a34a' : 'transparent',
+                            border: `1.5px solid ${pagoSaida ? '#16a34a' : 'var(--ac-border)'}`,
+                          }}
+                        >
+                          {pagoSaida && (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="size-4">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
                         {perm.editar && (
