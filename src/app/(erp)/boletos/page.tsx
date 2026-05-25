@@ -6,13 +6,13 @@ import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { BoletosClient } from '@/components/boletos/boletos-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { BoletosSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Boletos — Alma Campeira' }
 
 export default async function BoletosPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<BoletosSkeleton />}>
       <BoletosPageData />
     </Suspense>
   )
