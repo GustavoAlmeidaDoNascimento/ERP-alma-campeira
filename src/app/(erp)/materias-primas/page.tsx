@@ -3,13 +3,13 @@ import { Suspense } from 'react'
 import { getMatériasPrimas } from '@/lib/actions/materias-primas'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { MPClient } from '@/components/materias-primas/mp-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { MateriasPrimasSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Matérias-Primas — Alma Campeira' }
 
 export default async function MatériasPrimasPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<MateriasPrimasSkeleton />}>
       <MateriasPrimasPageData />
     </Suspense>
   )
