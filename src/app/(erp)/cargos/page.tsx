@@ -3,13 +3,13 @@ import { Suspense } from 'react'
 import { getCargos } from '@/lib/actions/cargos'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { CargosClient } from '@/components/cargos/cargos-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { CargosSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Cargos — Alma Campeira' }
 
 export default async function CargosPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<CargosSkeleton />}>
       <CargosPageData />
     </Suspense>
   )
