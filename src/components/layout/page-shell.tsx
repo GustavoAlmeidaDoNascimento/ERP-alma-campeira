@@ -11,6 +11,11 @@ export function PageShellTitle({ title, subtitle }: { title: string; subtitle: s
   )
 }
 
+/**
+ * Fallback genérico para Suspense. Páginas devem preferir passar um skeleton
+ * específico (ex: TablePageSkeleton com as colunas reais) para o swap visual
+ * ficar imperceptível.
+ */
 export function PageShellFallback() {
   return <PageSkeleton />
 }

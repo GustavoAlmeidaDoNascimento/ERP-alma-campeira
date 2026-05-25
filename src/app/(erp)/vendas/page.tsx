@@ -6,13 +6,13 @@ import { getFacas } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { VendasClient } from '@/components/vendas/vendas-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { VendasSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Vendas — Alma Campeira' }
 
 export default async function VendasPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<VendasSkeleton />}>
       <VendasPageData />
     </Suspense>
   )
