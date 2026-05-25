@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/page-skeleton'
+import { OrdensCompraSkeleton } from '@/components/ui/page-skeletons-config'
 
 export default function Loading() {
-  return <PageSkeleton />
+  return <OrdensCompraSkeleton />
 }

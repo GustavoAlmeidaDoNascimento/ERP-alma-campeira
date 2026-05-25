@@ -6,13 +6,13 @@ import { getFacas } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { OrcamentosClient } from '@/components/orcamentos/orcamentos-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { OrcamentosSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Orçamentos — Alma Campeira' }
 
 export default async function OrcamentosPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<OrcamentosSkeleton />}>
       <OrcamentosPageData />
     </Suspense>
   )
