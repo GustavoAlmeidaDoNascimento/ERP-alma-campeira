@@ -3,13 +3,13 @@ import { Suspense } from 'react'
 import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { FornecedoresClient } from '@/components/fornecedores/fornecedores-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { FornecedoresSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Fornecedores — Alma Campeira' }
 
 export default async function FornecedoresPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<FornecedoresSkeleton />}>
       <FornecedoresPageData />
     </Suspense>
   )
