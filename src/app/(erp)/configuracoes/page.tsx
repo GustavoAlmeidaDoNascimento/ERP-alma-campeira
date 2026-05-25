@@ -6,13 +6,13 @@ import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getTaxasLucroConfig } from '@/lib/actions/app-config'
 import { getEmpresa } from '@/lib/actions/empresa'
 import { getPermissoesEfetivas } from '@/lib/auth'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { ConfiguracoesSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Configurações — Alma Campeira' }
 
 export default async function ConfiguracoesPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<ConfiguracoesSkeleton />}>
       <ConfiguracoesPageData />
     </Suspense>
   )
