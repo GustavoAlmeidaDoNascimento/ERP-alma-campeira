@@ -5,13 +5,13 @@ import { getCategoriasFaca } from '@/lib/actions/categorias-faca'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { getTaxasLucroConfig } from '@/lib/actions/app-config'
 import { FacasClient } from '@/components/facas/facas-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { FacasSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Facas — Alma Campeira' }
 
 export default async function FacasPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<FacasSkeleton />}>
       <FacasPageData />
     </Suspense>
   )
