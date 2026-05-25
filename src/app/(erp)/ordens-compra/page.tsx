@@ -3,14 +3,14 @@ import { Suspense } from 'react'
 import { getPermissoesEfetivas, getAuthenticatedUser } from '@/lib/auth'
 import { getFilaReposicaoList, getOrdensCompra, getUsuariosParaRegistroOC } from '@/lib/actions/ordens-compra'
 import { OcClient } from '@/components/ordens-compra/oc-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { OrdensCompraSkeleton } from '@/components/ui/page-skeletons-config'
 import { withTiming } from '@/lib/perf/timing'
 
 export const metadata = { title: 'Ordens de Compra — Alma Campeira' }
 
 export default async function OrdensCompraPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<OrdensCompraSkeleton />}>
       <OrdensCompraPageData />
     </Suspense>
   )
