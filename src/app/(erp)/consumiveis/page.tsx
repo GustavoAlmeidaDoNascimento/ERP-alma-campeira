@@ -5,13 +5,13 @@ import { getFornecedores } from '@/lib/actions/fornecedores'
 import { getCategoriasConsumivel } from '@/lib/actions/categorias-consumivel'
 import { getPermissoesEfetivas } from '@/lib/auth'
 import { ConsumivelClient } from '@/components/consumiveis/consumivel-client'
-import { PageShellFallback } from '@/components/layout/page-shell'
+import { ConsumiveisSkeleton } from '@/components/ui/page-skeletons-config'
 
 export const metadata = { title: 'Consumíveis — Alma Campeira' }
 
 export default async function ConsumiveisPage() {
   return (
-    <Suspense fallback={<PageShellFallback />}>
+    <Suspense fallback={<ConsumiveisSkeleton />}>
       <ConsumiveisPageData />
     </Suspense>
   )
