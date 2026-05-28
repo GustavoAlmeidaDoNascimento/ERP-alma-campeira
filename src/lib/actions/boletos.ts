@@ -24,6 +24,7 @@ export type BoletoInput = {
   valor_total: number
   emitido_em?: string | null
   observacao?: string | null
+  ordem_compra_id?: string | null
   parcelas: ParcelaInput[]
 }
 
@@ -66,6 +67,7 @@ function normalizar(input: BoletoInput) {
       valor_total,
       emitido_em: input.emitido_em || null,
       observacao: (input.observacao ?? '').toString().trim() || null,
+      ordem_compra_id: input.ordem_compra_id ?? null,
     },
     parcelas: parcelas
       .sort((a, b) => a.numero - b.numero)
@@ -183,11 +185,75 @@ export async function marcarParcela(
       .update({ pago_em, valor_pago })
       .eq('id', parcela_id)
     if (error) throw new Error(error.message)
+
+    await criarGastoDaParcela(supabase, parcela_id, pago_em, valor_pago ?? 0)
   } else {
     const { error } = await supabase
       .from('boleto_parcelas')
       .update({ pago_em: null, valor_pago: null })
       .eq('id', parcela_id)
     if (error) throw new Error(error.message)
+
+    await supabase
+      .from('gastos')
+      .delete()
+      .eq('boleto_parcela_id', parcela_id)
   }
+}
+
+async function criarGastoDaParcela(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parcelaId: string,
+  pagoEm: string,
+  valorPago: number,
+) {
+  const { data: existing } = await supabase
+    .from('gastos')
+    .select('id')
+    .eq('boleto_parcela_id', parcelaId)
+    .limit(1)
+    .maybeSingle()
+  if (existing) return
+
+  const { data: parcela } = await supabase
+    .from('boleto_parcelas')
+    .select('boleto_id, numero')
+    .eq('id', parcelaId)
+    .single()
+  if (!parcela) return
+
+  const { data: boleto } = await supabase
+    .from('boletos')
+    .select('tipo, contraparte_nome, ordem_compra_id')
+    .eq('id', parcela.boleto_id)
+    .single()
+  if (!boleto || boleto.tipo !== 'saida') return
+
+  const uid = await requireAuthenticatedUserId().catch(() => null)
+
+  let descricao = `Boleto parcela ${parcela.numero} — ${boleto.contraparte_nome}`
+  let tipo: string = 'outros'
+
+  if (boleto.ordem_compra_id) {
+    const { data: oc } = await supabase
+      .from('ordens_compra')
+      .select('codigo')
+      .eq('id', boleto.ordem_compra_id)
+      .single()
+    if (oc) {
+      descricao = `Pagamento OC ${oc.codigo} — parcela ${parcela.numero} — ${boleto.contraparte_nome}`
+      tipo = 'pagamento_oc'
+    }
+  }
+
+  await supabase.from('gastos').insert({
+    tipo,
+    descricao,
+    valor: valorPago,
+    forma_pagamento: 'boleto',
+    data_gasto: pagoEm,
+    ordem_compra_id: boleto.ordem_compra_id ?? null,
+    boleto_parcela_id: parcelaId,
+    usuario_id: uid,
+  })
 }
