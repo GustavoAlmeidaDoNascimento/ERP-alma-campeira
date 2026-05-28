@@ -422,6 +422,7 @@ export type OrdemCompra = {
   status: StatusOC
   /** Pagamento registrado (independente do status operacional pendente → enviada → recebida). */
   pago: boolean
+  forma_pagamento: FormaPagamentoOC | null
   data_geracao: string
   observacao: string | null
   ultima_alteracao_usuario_id?: string | null
@@ -610,6 +611,15 @@ export const FORMAS_PAGAMENTO: Record<FormaPagamento, { label: string }> = {
   outro:          { label: 'Outro' },
 }
 
+export type FormaPagamentoOC = 'pix' | 'dinheiro' | 'cartao_credito' | 'boleto'
+
+export const FORMAS_PAGAMENTO_OC: Record<FormaPagamentoOC, { label: string }> = {
+  pix:            { label: 'PIX' },
+  dinheiro:       { label: 'Dinheiro' },
+  cartao_credito: { label: 'Cartão de crédito' },
+  boleto:         { label: 'Boleto' },
+}
+
 export type Gasto = {
   id: string
   tipo: TipoGasto
@@ -618,6 +628,7 @@ export type Gasto = {
   forma_pagamento: FormaPagamento
   data_gasto: string
   ordem_compra_id: string | null
+  boleto_parcela_id: string | null
   observacao: string | null
   usuario_id: string | null
   created_at: string
@@ -653,6 +664,7 @@ export type Boleto = {
   numero_documento: string | null
   valor_total: number
   emitido_em: string | null
+  ordem_compra_id: string | null
   observacao: string | null
   criado_por: string | null
   created_at: string
