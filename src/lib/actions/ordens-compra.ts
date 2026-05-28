@@ -891,12 +891,13 @@ export async function definirPagoOrdemCompra(
   id: string,
   pago: boolean,
   usuarioRegistroId?: string | null,
+  formaPagamento?: string | null,
 ) {
   await assertPermissao('ordens_compra', 'editar')
   const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
 
-  if (pago) {
+  if (pago && formaPagamento !== 'boleto') {
     const { data: ocCabecalho, error: ocErr } = await supabase
       .from('ordens_compra')
       .select('codigo, fornecedor:fornecedores(nome)')
@@ -931,28 +932,34 @@ export async function definirPagoOrdemCompra(
       .select('id')
       .eq('ordem_compra_id', id)
       .eq('tipo', 'pagamento_oc')
+      .is('boleto_parcela_id', null)
       .limit(1)
       .maybeSingle()
 
     if (!gastoExistente) {
       const hoje = new Date().toISOString().slice(0, 10)
+      const forma = formaPagamento === 'cartao_credito' ? 'cartao_credito'
+        : formaPagamento === 'dinheiro' ? 'dinheiro'
+        : formaPagamento === 'pix' ? 'pix'
+        : 'transferencia'
       const { error: gastoErr } = await supabase.from('gastos').insert({
         tipo: 'pagamento_oc',
         descricao,
         valor: valorTotal,
-        forma_pagamento: 'transferencia',
+        forma_pagamento: forma,
         data_gasto: hoje,
         ordem_compra_id: id,
         usuario_id: uid,
       })
       if (gastoErr) throw new Error(gastoErr.message)
     }
-  } else {
+  } else if (!pago) {
     const { error: delErr } = await supabase
       .from('gastos')
       .delete()
       .eq('ordem_compra_id', id)
       .eq('tipo', 'pagamento_oc')
+      .is('boleto_parcela_id', null)
     if (delErr) throw new Error(delErr.message)
   }
 
@@ -973,6 +980,7 @@ export async function salvarAlteracoesOC(input: {
   id: string
   observacao?: string | null
   pago?: boolean
+  forma_pagamento?: string | null
   status?: StatusOC
   itensQtd?: { item_id: string; quantidade_adicional: number }[]
   usuarioRegistroId?: string | null
@@ -987,8 +995,16 @@ export async function salvarAlteracoesOC(input: {
   if (input.observacao !== undefined) {
     await atualizarObservacaoOC(input.id, input.observacao ?? '', input.usuarioRegistroId)
   }
+  if (input.forma_pagamento !== undefined) {
+    const supabase = await createClient()
+    const uid = await resolverUsuarioRegistroOC(input.usuarioRegistroId)
+    await supabase
+      .from('ordens_compra')
+      .update({ forma_pagamento: input.forma_pagamento, ...camposRegistroAlteracao(uid) })
+      .eq('id', input.id)
+  }
   if (input.pago !== undefined) {
-    await definirPagoOrdemCompra(input.id, input.pago, input.usuarioRegistroId)
+    await definirPagoOrdemCompra(input.id, input.pago, input.usuarioRegistroId, input.forma_pagamento)
   }
   if (input.status !== undefined) {
     await mudarStatusOC(input.id, input.status, input.usuarioRegistroId)
