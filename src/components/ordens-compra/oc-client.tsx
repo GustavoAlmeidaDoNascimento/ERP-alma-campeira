@@ -16,8 +16,10 @@ import {
   deletarOC,
 } from '@/lib/actions/ordens-compra'
 import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
-import { STATUS_OC } from '@/types'
-import type { FilaReposicao, FilaReposicaoDetalhe, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC } from '@/types'
+import { STATUS_OC, FORMAS_PAGAMENTO_OC } from '@/types'
+import type { FilaReposicao, FilaReposicaoDetalhe, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC, FormaPagamentoOC } from '@/types'
+import { criarBoleto, type ParcelaInput } from '@/lib/actions/boletos'
+import { DateInputBR } from '@/components/ui/date-input-br'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useOrdensCompra, useFilaReposicao, useUsuariosParaRegistroOC } from '@/lib/query/hooks'
 import { qk } from '@/lib/query/keys'
@@ -349,7 +351,12 @@ function OcDetalheModal({
   const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({})
   const [obs, setObs] = useState(oc.observacao ?? '')
   const [pagoDraft, setPagoDraft] = useState(oc.pago)
+  const [formaPagamentoDraft, setFormaPagamentoDraft] = useState<FormaPagamentoOC | ''>(oc.forma_pagamento ?? '')
   const [statusDraft, setStatusDraft] = useState<StatusOC>(oc.status)
+  const [qtdParcelas, setQtdParcelas] = useState(1)
+  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string }[]>(() => [
+    { numero: 1, vencimento: '', valor: '' },
+  ])
   const [salvandoTudo, setSalvandoTudo] = useState(false)
   const [erro, setErro] = useState('')
   const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
@@ -428,9 +435,10 @@ function OcDetalheModal({
   useEffect(() => {
     setObs(oc.observacao ?? '')
     setPagoDraft(oc.pago)
+    setFormaPagamentoDraft(oc.forma_pagamento ?? '')
     setStatusDraft(oc.status)
     setEditandoQtdTotal({})
-  }, [oc.id, oc.observacao, oc.pago, oc.status])
+  }, [oc.id, oc.observacao, oc.pago, oc.forma_pagamento, oc.status])
 
   useEffect(() => {
     setUsuarioRegistroId(usuarioLogadoId ?? '')
@@ -468,9 +476,10 @@ function OcDetalheModal({
 
   const obsAlterada = (obs ?? '') !== (oc.observacao ?? '')
   const pagoAlterado = pagoDraft !== oc.pago
+  const formaAlterada = (formaPagamentoDraft || null) !== (oc.forma_pagamento ?? null)
   const statusAlterado = statusDraft !== oc.status
   const temAlteracoes =
-    obsAlterada || pagoAlterado || statusAlterado || itensQtdDiff.length > 0
+    obsAlterada || pagoAlterado || formaAlterada || statusAlterado || itensQtdDiff.length > 0
 
   async function salvarTudo() {
     setErro('')
@@ -500,16 +509,52 @@ function OcDetalheModal({
       }
     }
 
+    if (pagoDraft && formaPagamentoDraft === 'boleto' && pagoAlterado) {
+      const temParcela = boletoParcelas.some((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
+      if (!temParcela) {
+        setErro('Preencha ao menos uma parcela do boleto.')
+        return
+      }
+    }
+
     setSalvandoTudo(true)
     try {
+      const formaParaSalvar = formaAlterada ? (formaPagamentoDraft || null) : undefined
       await salvarAlteracoesOC({
         id: oc.id,
         observacao: obsAlterada ? obs : undefined,
         pago: pagoAlterado ? pagoDraft : undefined,
+        forma_pagamento: formaParaSalvar,
         status: statusAlterado ? statusDraft : undefined,
         itensQtd: itensQtdDiff.length > 0 ? itensQtdDiff : undefined,
         usuarioRegistroId: usuarioRegistroId || null,
       })
+
+      if (pagoDraft && formaPagamentoDraft === 'boleto' && pagoAlterado) {
+        const fornecedorNome = oc.fornecedor?.nome ?? ''
+        const fornecedorId = oc.fornecedor_id ?? undefined
+        const valorBoleto = boletoParcelas.reduce(
+          (s, p) => s + (Number(p.valor.replace(',', '.')) || 0), 0,
+        )
+        const parcelasInput: ParcelaInput[] = boletoParcelas
+          .filter((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
+          .map((p) => ({
+            numero: p.numero,
+            vencimento: p.vencimento,
+            valor: Number(p.valor.replace(',', '.')) || 0,
+          }))
+        await criarBoleto({
+          tipo: 'saida',
+          contraparte_nome: fornecedorNome,
+          fornecedor_id: fornecedorId ?? null,
+          valor_total: valorBoleto,
+          emitido_em: new Date().toISOString().slice(0, 10),
+          observacao: `Boleto gerado da OC ${oc.codigo}`,
+          ordem_compra_id: oc.id,
+          parcelas: parcelasInput,
+        })
+      }
+
       setEditandoQtdTotal({})
       await Promise.resolve(onRefresh())
     } catch (e: unknown) {
@@ -772,7 +817,8 @@ function OcDetalheModal({
           style={{ borderTop: '1px solid var(--ac-border)' }}
         >
           {perm.editar ? (
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+            <>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
               <div
                 className="flex flex-col gap-1 min-w-0"
                 title="Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança."
@@ -846,10 +892,130 @@ function OcDetalheModal({
                   <span style={{ color: 'var(--ac-text)' }}>Pago</span>
                 </label>
               </div>
+
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="oc-forma-pagamento"
+                  className="text-[11px] font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--ac-muted)' }}
+                >
+                  Forma de pagamento
+                </label>
+                <select
+                  id="oc-forma-pagamento"
+                  value={formaPagamentoDraft}
+                  disabled={salvandoTudo}
+                  onChange={(e) => setFormaPagamentoDraft(e.target.value as FormaPagamentoOC | '')}
+                  className="text-sm rounded px-2 h-[34px]"
+                  style={{
+                    border: '1px solid var(--ac-border)',
+                    background: 'var(--ac-card)',
+                    color: 'var(--ac-text)',
+                    minWidth: 180,
+                  }}
+                >
+                  <option value="">— Selecione —</option>
+                  {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {/* Inline boleto form — aparece quando forma=boleto e pago=true */}
+            {formaPagamentoDraft === 'boleto' && pagoDraft && !oc.pago && (
+              <div
+                className="flex flex-col gap-3 rounded-lg p-4"
+                style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                    Parcelas do boleto
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          setQtdParcelas(n)
+                          const base = new Date().toISOString().slice(0, 10)
+                          const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0
+                          let acumulado = 0
+                          setBoletoParcelas(
+                            Array.from({ length: n }, (_, i) => {
+                              const ult = i === n - 1
+                              const v = ult ? Math.max(0, Number((total - acumulado).toFixed(2))) : vCada
+                              acumulado += v
+                              const d = new Date(base)
+                              d.setMonth(d.getMonth() + i + 1)
+                              return {
+                                numero: i + 1,
+                                vencimento: d.toISOString().slice(0, 10),
+                                valor: v > 0 ? v.toFixed(2) : '',
+                              }
+                            }),
+                          )
+                        }}
+                        className="px-2.5 py-1 rounded text-xs font-medium"
+                        style={{
+                          background: qtdParcelas === n ? 'var(--ac-accent)' : 'var(--ac-card)',
+                          color: qtdParcelas === n ? 'white' : 'var(--ac-text)',
+                          border: '1px solid var(--ac-border)',
+                        }}
+                      >
+                        {n}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg" style={{ border: '1px solid var(--ac-border)' }}>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ background: 'var(--ac-bg)' }}>
+                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
+                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
+                        <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boletoParcelas.map((p, i) => (
+                        <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
+                          <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{p.numero}</td>
+                          <td className="px-3 py-2">
+                            <DateInputBR
+                              value={p.vencimento}
+                              onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? { ...l, vencimento: iso } : l))}
+                              className="rounded px-2 py-1 text-sm outline-none w-full"
+                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={p.valor}
+                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? { ...l, valor: e.target.value } : l))}
+                              className="rounded px-2 py-1 text-sm outline-none w-full text-right"
+                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            </>
           ) : (
-            <div className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-              Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'não'}</strong>
+            <div className="text-sm flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--ac-muted)' }}>
+              <span>Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'não'}</strong></span>
+              {oc.forma_pagamento && (
+                <span>Forma: <strong style={{ color: 'var(--ac-text)' }}>{FORMAS_PAGAMENTO_OC[oc.forma_pagamento]?.label ?? oc.forma_pagamento}</strong></span>
+              )}
             </div>
           )}
 
