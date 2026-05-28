@@ -141,7 +141,6 @@ export function BoletoModal({
     setErro('')
   }, [open, editando, tipoInicial])
 
-  // Quando muda tipo, limpa vínculos do outro lado e reseta parcelas
   function trocarTipo(novo: BoletoTipo) {
     setTipo(novo)
     if (novo === 'entrada') {
@@ -149,12 +148,6 @@ export function BoletoModal({
     } else {
       setClienteId('')
       setVendedorId('')
-      setNumeroDocumento('')
-      setUnidades('')
-      // Saída: sempre 1 "parcela" interna (corresponde ao único pagamento)
-      setQtdParcelas(1)
-      const total = Number(valorTotal.replace(',', '.'))
-      setParcelas(linhasVazias(1, emitidoEm || hoje(), Number.isFinite(total) ? total : 0))
     }
   }
 
@@ -222,24 +215,15 @@ export function BoletoModal({
     if (!Number.isFinite(total) || total < 0) { setErro('Valor total inválido.'); return }
     if (parcelas.length === 0) { setErro('Adicione ao menos uma parcela.'); return }
 
-    // Saída: gera 1 "parcela" interna correspondente ao único pagamento
-    const parcelasInput: ParcelaInput[] = tipo === 'saida'
-      ? [{
-          numero: 1,
-          vencimento: emitidoEm || hoje(),
-          valor: total,
-          pago_em: parcelas[0]?.pago ? (parcelas[0]?.pago_em || hoje()) : null,
-          valor_pago: parcelas[0]?.pago ? total : null,
-        }]
-      : parcelas.map((p) => ({
-          numero: p.numero,
-          vencimento: p.vencimento,
-          valor: Number(p.valor.replace(',', '.')) || 0,
-          pago_em: p.pago ? (p.pago_em || hoje()) : null,
-          valor_pago: p.pago
-            ? (p.valor_pago ? Number(p.valor_pago.replace(',', '.')) : Number(p.valor.replace(',', '.')) || 0)
-            : null,
-        }))
+    const parcelasInput: ParcelaInput[] = parcelas.map((p) => ({
+      numero: p.numero,
+      vencimento: p.vencimento,
+      valor: Number(p.valor.replace(',', '.')) || 0,
+      pago_em: p.pago ? (p.pago_em || hoje()) : null,
+      valor_pago: p.pago
+        ? (p.valor_pago ? Number(p.valor_pago.replace(',', '.')) : Number(p.valor.replace(',', '.')) || 0)
+        : null,
+    }))
 
     const input: BoletoInput = {
       tipo,
@@ -365,78 +349,36 @@ export function BoletoModal({
           placeholder="Preenchido ao selecionar o cadastro"
         />
 
-        {/* Campos extras de entrada */}
-        {isEntrada && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              id="b-numero"
-              label="Número(s) NF / pedido"
-              value={numeroDocumento}
-              onChange={(e) => setNumeroDocumento(e.target.value)}
-              placeholder="Ex.: 469/470/471"
-            />
-            <Input
-              id="b-un"
-              label="UN (unidades)"
-              type="number"
-              min="1"
-              step="1"
-              value={unidades}
-              onChange={(e) => setUnidades(e.target.value)}
-            />
-            <DateInputBR
-              id="b-emitido"
-              label="Emitido em"
-              value={emitidoEm}
-              onChange={setEmitidoEm}
-            />
-          </div>
-        )}
+        {/* Campos extras */}
+        <div className={`grid grid-cols-1 gap-3 ${isEntrada ? 'sm:grid-cols-3' : 'sm:grid-cols-1'}`}>
+          {isEntrada && (
+            <>
+              <Input
+                id="b-numero"
+                label="Número(s) NF / pedido"
+                value={numeroDocumento}
+                onChange={(e) => setNumeroDocumento(e.target.value)}
+                placeholder="Ex.: 469/470/471"
+              />
+              <Input
+                id="b-un"
+                label="UN (unidades)"
+                type="number"
+                min="1"
+                step="1"
+                value={unidades}
+                onChange={(e) => setUnidades(e.target.value)}
+              />
+            </>
+          )}
+          <DateInputBR
+            id="b-emitido"
+            label={isEntrada ? 'Emitido em' : 'Data'}
+            value={emitidoEm}
+            onChange={setEmitidoEm}
+          />
+        </div>
 
-        {!isEntrada && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <DateInputBR
-              id="b-emitido-s"
-              label="Data *"
-              value={emitidoEm}
-              onChange={setEmitidoEm}
-            />
-            <Input
-              id="b-total-s"
-              label="Valor (R$) *"
-              type="number"
-              step="0.01"
-              min="0"
-              value={valorTotal}
-              onChange={(e) => distribuirValor(e.target.value)}
-              placeholder="0,00"
-            />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Pago?</label>
-              <label
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer"
-                style={inputStyle}
-              >
-                <input
-                  type="checkbox"
-                  checked={parcelas[0]?.pago ?? false}
-                  onChange={(e) => atualizarLinha(0, {
-                    pago: e.target.checked,
-                    pago_em: e.target.checked ? (parcelas[0]?.pago_em || hoje()) : '',
-                  })}
-                  className="size-4"
-                />
-                <span className="text-sm">
-                  {parcelas[0]?.pago
-                    ? `Pago em ${parcelas[0]?.pago_em ? new Date(parcelas[0].pago_em + 'T00:00').toLocaleDateString('pt-BR') : ''}`
-                    : 'Marcar como pago'}
-                </span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {isEntrada && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             id="b-total"
@@ -469,10 +411,8 @@ export function BoletoModal({
             </div>
           </div>
         </div>
-        )}
 
-        {/* Tabela de parcelas — só para boletos de entrada */}
-        {isEntrada && (
+        {/* Tabela de parcelas */}
         <div
           className="shrink-0 rounded-lg"
           style={{ border: '1px solid var(--ac-border)' }}
@@ -550,7 +490,6 @@ export function BoletoModal({
             </tfoot>
           </table>
         </div>
-        )}
 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Observação</label>
