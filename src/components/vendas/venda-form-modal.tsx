@@ -608,6 +608,150 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             })}
           </div>
 
+          {/* Forma de pagamento + boleto inline */}
+          <div className="flex flex-col gap-2 pt-2 mt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-sm font-semibold uppercase tracking-wide shrink-0" style={{ color: 'var(--ac-muted)' }}>
+                Forma de pagamento
+              </label>
+              <select
+                value={formaPagamento}
+                onChange={(e) => setFormaPagamento(e.target.value as FormaPagamentoOC | '')}
+                className="px-3 py-2 rounded-lg text-sm outline-none appearance-none"
+                style={{ ...selectStyle, minWidth: 180 }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
+                onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--ac-border)')}
+              >
+                <option value="">— Selecione —</option>
+                {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Parcelas do boleto — aparece quando forma = boleto */}
+            {formaPagamento === 'boleto' && (
+              <div
+                className="flex flex-col gap-3 rounded-lg p-3"
+                style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    Parcelas
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          setQtdParcelas(n)
+                          const base = new Date().toISOString().slice(0, 10)
+                          const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0
+                          let acumulado = 0
+                          setBoletoParcelas(
+                            Array.from({ length: n }, (_, i) => {
+                              const ult = i === n - 1
+                              const v = ult ? Math.max(0, Number((total - acumulado).toFixed(2))) : vCada
+                              acumulado += v
+                              const d = new Date(base)
+                              d.setMonth(d.getMonth() + i + 1)
+                              return {
+                                numero: i + 1,
+                                vencimento: d.toISOString().slice(0, 10),
+                                valor: v > 0 ? v.toFixed(2) : '',
+                                pago: false,
+                                pago_em: '',
+                              }
+                            }),
+                          )
+                        }}
+                        className="px-2.5 py-1 rounded text-xs font-medium"
+                        style={{
+                          background: qtdParcelas === n ? 'var(--ac-accent)' : 'var(--ac-card)',
+                          color: qtdParcelas === n ? 'white' : 'var(--ac-text)',
+                          border: '1px solid var(--ac-border)',
+                        }}
+                      >
+                        {n}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {boletoParcelas.length > 0 && (
+                  <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ background: 'var(--ac-bg)' }}>
+                          <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
+                          <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
+                          <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
+                          <th className="px-3 py-2 text-center text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Pago</th>
+                          <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Data pago</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {boletoParcelas.map((p, i) => (
+                          <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
+                            <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{p.numero}</td>
+                            <td className="px-3 py-2">
+                              <DateInputBR
+                                value={p.vencimento}
+                                onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, vencimento: iso } : l)))}
+                                className="rounded px-2 py-1 text-sm outline-none w-full"
+                                style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={p.valor}
+                                onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, valor: e.target.value } : l)))}
+                                className="rounded px-2 py-1 text-sm outline-none w-full text-right tabular-nums"
+                                style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={p.pago}
+                                onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? {
+                                  ...l,
+                                  pago: e.target.checked,
+                                  pago_em: e.target.checked && !l.pago_em ? new Date().toISOString().slice(0, 10) : l.pago_em,
+                                } : l))}
+                                className="w-4 h-4 rounded"
+                                style={{ accentColor: 'var(--ac-accent)' }}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              {p.pago && (
+                                <DateInputBR
+                                  value={p.pago_em}
+                                  onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, pago_em: iso } : l)))}
+                                  className="rounded px-2 py-1 text-sm outline-none w-full"
+                                  style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {editando && (
+                  <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                    O boleto só é criado se a venda ainda não tiver um vinculado.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Frete + Total */}
           <div className="flex flex-col gap-2 pt-2 mt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
             {/* Linha de frete */}
@@ -710,146 +854,6 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Pagamento — fica depois dos itens/total */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Forma de pagamento</label>
-          <select
-            value={formaPagamento}
-            onChange={(e) => setFormaPagamento(e.target.value as FormaPagamentoOC | '')}
-            className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
-            style={{ ...selectStyle, maxWidth: 260 }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
-            onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--ac-border)')}
-          >
-            <option value="">— Selecione —</option>
-            {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
-              <option key={k} value={k}>{v.label}</option>
-            ))}
-          </select>
-
-          {/* Inline boleto (a receber) — aparece quando forma = boleto */}
-          {formaPagamento === 'boleto' && (
-            <div
-              className="flex flex-col gap-3 rounded-lg p-4 mt-1"
-              style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
-            >
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                  Parcelas do boleto (a receber)
-                </span>
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5, 6].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => {
-                        setQtdParcelas(n)
-                        const base = new Date().toISOString().slice(0, 10)
-                        const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0
-                        let acumulado = 0
-                        setBoletoParcelas(
-                          Array.from({ length: n }, (_, i) => {
-                            const ult = i === n - 1
-                            const v = ult ? Math.max(0, Number((total - acumulado).toFixed(2))) : vCada
-                            acumulado += v
-                            const d = new Date(base)
-                            d.setMonth(d.getMonth() + i + 1)
-                            return {
-                              numero: i + 1,
-                              vencimento: d.toISOString().slice(0, 10),
-                              valor: v > 0 ? v.toFixed(2) : '',
-                              pago: false,
-                              pago_em: '',
-                            }
-                          }),
-                        )
-                      }}
-                      className="px-2.5 py-1 rounded text-xs font-medium"
-                      style={{
-                        background: qtdParcelas === n ? 'var(--ac-accent)' : 'var(--ac-card)',
-                        color: qtdParcelas === n ? 'white' : 'var(--ac-text)',
-                        border: '1px solid var(--ac-border)',
-                      }}
-                    >
-                      {n}x
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {boletoParcelas.length > 0 && (
-                <div className="rounded-lg" style={{ border: '1px solid var(--ac-border)' }}>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ background: 'var(--ac-bg)' }}>
-                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
-                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
-                        <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
-                        <th className="px-3 py-2 text-center text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Pago</th>
-                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Data pago</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {boletoParcelas.map((p, i) => (
-                        <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
-                          <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{p.numero}</td>
-                          <td className="px-3 py-2">
-                            <DateInputBR
-                              value={p.vencimento}
-                              onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, vencimento: iso } : l)))}
-                              className="rounded px-2 py-1 text-sm outline-none w-full"
-                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={p.valor}
-                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, valor: e.target.value } : l)))}
-                              className="rounded px-2 py-1 text-sm outline-none w-full text-right tabular-nums"
-                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={p.pago}
-                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? {
-                                ...l,
-                                pago: e.target.checked,
-                                pago_em: e.target.checked && !l.pago_em ? new Date().toISOString().slice(0, 10) : l.pago_em,
-                              } : l))}
-                              className="w-4 h-4 rounded"
-                              style={{ accentColor: 'var(--ac-accent)' }}
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            {p.pago && (
-                              <DateInputBR
-                                value={p.pago_em}
-                                onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, pago_em: iso } : l)))}
-                                className="rounded px-2 py-1 text-sm outline-none w-full"
-                                style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-                              />
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {editando && (
-                <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                  O boleto só é criado se a venda ainda não tiver um vinculado.
-                </p>
-              )}
-            </div>
-          )}
         </div>
 
         {erro && <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>}
