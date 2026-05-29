@@ -25,6 +25,7 @@ export type BoletoInput = {
   emitido_em?: string | null
   observacao?: string | null
   ordem_compra_id?: string | null
+  pedido_id?: string | null
   parcelas: ParcelaInput[]
 }
 
@@ -68,6 +69,7 @@ function normalizar(input: BoletoInput) {
       emitido_em: input.emitido_em || null,
       observacao: (input.observacao ?? '').toString().trim() || null,
       ordem_compra_id: input.ordem_compra_id ?? null,
+      pedido_id: input.pedido_id ?? null,
     },
     parcelas: parcelas
       .sort((a, b) => a.numero - b.numero)

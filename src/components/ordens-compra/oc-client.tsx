@@ -509,7 +509,10 @@ function OcDetalheModal({
       }
     }
 
-    if (pagoDraft && formaPagamentoDraft === 'boleto' && pagoAlterado) {
+    // Se a forma escolhida é boleto e ainda não havia boleto (forma mudou),
+    // exige ao menos uma parcela válida para gerar o boleto de saída.
+    const vaiCriarBoleto = formaPagamentoDraft === 'boleto' && formaAlterada
+    if (vaiCriarBoleto) {
       const temParcela = boletoParcelas.some((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
       if (!temParcela) {
         setErro('Preencha ao menos uma parcela do boleto.')
@@ -530,7 +533,7 @@ function OcDetalheModal({
         usuarioRegistroId: usuarioRegistroId || null,
       })
 
-      if (pagoDraft && formaPagamentoDraft === 'boleto' && pagoAlterado) {
+      if (vaiCriarBoleto) {
         const fornecedorNome = oc.fornecedor?.nome ?? ''
         const fornecedorId = oc.fornecedor_id ?? undefined
         const valorBoleto = boletoParcelas.reduce(
@@ -922,8 +925,8 @@ function OcDetalheModal({
               </div>
             </div>
 
-            {/* Inline boleto form — aparece quando forma=boleto e pago=true */}
-            {formaPagamentoDraft === 'boleto' && pagoDraft && !oc.pago && (
+            {/* Inline boleto form — aparece assim que a forma "boleto" é escolhida */}
+            {formaPagamentoDraft === 'boleto' && !oc.pago && (
               <div
                 className="flex flex-col gap-3 rounded-lg p-4"
                 style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}

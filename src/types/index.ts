@@ -336,6 +336,8 @@ export type Pedido = {
   desconto_total?: number
   /** Natureza da operação para NF-e (default "VENDA DE MERCADORIA"). */
   natureza_operacao?: string | null
+  /** Forma de pagamento escolhida na venda (pix, dinheiro, crédito ou boleto). */
+  forma_pagamento?: FormaPagamentoOC | null
   entregue_at: string | null
   created_at: string
   cliente?: PedidoClienteJoin | null
@@ -665,6 +667,7 @@ export type Boleto = {
   valor_total: number
   emitido_em: string | null
   ordem_compra_id: string | null
+  pedido_id: string | null
   observacao: string | null
   criado_por: string | null
   created_at: string

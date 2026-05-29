@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { alterarStatus } from '@/lib/actions/vendas'
-import { STATUS_PEDIDO } from '@/types'
+import { STATUS_PEDIDO, FORMAS_PAGAMENTO_OC } from '@/types'
 import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
 
 const STATUS_OPTIONS: StatusPedido[] = ['em_espera', 'em_producao', 'entregue']
@@ -251,6 +251,9 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
           <DetailMeta label="Registrado em" value={fmtDataHora(pedido.created_at)} />
           {pedido.natureza_operacao?.trim() ? (
             <DetailMeta label="Natureza da operação" value={pedido.natureza_operacao.trim()} />
+          ) : null}
+          {pedido.forma_pagamento ? (
+            <DetailMeta label="Forma de pagamento" value={FORMAS_PAGAMENTO_OC[pedido.forma_pagamento].label} />
           ) : null}
         </div>
 

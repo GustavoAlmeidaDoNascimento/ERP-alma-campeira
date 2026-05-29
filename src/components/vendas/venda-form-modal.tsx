@@ -5,9 +5,11 @@ import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select'
+import { DateInputBR } from '@/components/ui/date-input-br'
 import { criarVenda, atualizarVenda } from '@/lib/actions/vendas'
-import { STATUS_PEDIDO } from '@/types'
-import type { Pedido, Cliente, Faca, StatusPedido } from '@/types'
+import type { ParcelaInput } from '@/lib/actions/boletos'
+import { STATUS_PEDIDO, FORMAS_PAGAMENTO_OC } from '@/types'
+import type { Pedido, Cliente, Faca, StatusPedido, FormaPagamentoOC } from '@/types'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 
 type Props = {
@@ -66,6 +68,9 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [frete, setFrete] = useState(0)
   const [descontoTotalVal, setDescontoTotalVal] = useState(0)
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamentoOC | ''>('')
+  const [qtdParcelas, setQtdParcelas] = useState(0)
+  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -98,6 +103,9 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setObservacao(editando.observacao ?? '')
       setNaturezaOperacao(editando.natureza_operacao ?? 'VENDA DE MERCADORIA')
       setFrete(editando.frete ?? 0)
+      setFormaPagamento(editando.forma_pagamento ?? '')
+      setQtdParcelas(0)
+      setBoletoParcelas([])
       {
         const subLinhas = editando.itens?.reduce((s, i) => s + i.subtotal, 0) ?? 0
         const base = subLinhas + (editando.frete ?? 0)
@@ -126,6 +134,9 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setFrete(0)
       setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
+      setFormaPagamento('')
+      setQtdParcelas(0)
+      setBoletoParcelas([])
     }
   }, [open, editando, usuarioLogadoId, usuarios])
 
@@ -244,6 +255,19 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       return
     }
 
+    const parcelasBoleto: ParcelaInput[] = boletoParcelas
+      .filter((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
+      .map((p) => ({
+        numero: p.numero,
+        vencimento: p.vencimento,
+        valor: Number(p.valor.replace(',', '.')) || 0,
+      }))
+
+    if (!editando && formaPagamento === 'boleto' && parcelasBoleto.length === 0) {
+      setErro('Preencha ao menos uma parcela do boleto.')
+      return
+    }
+
     setErro(''); setLoading(true)
     try {
       const input = {
@@ -255,6 +279,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         natureza_operacao: naturezaOperacao,
         frete: frete || 0,
         desconto_total: descontoTotalAplicado,
+        forma_pagamento: formaPagamento || null,
+        boletoParcelas: formaPagamento === 'boleto' ? parcelasBoleto : undefined,
         itens: itensValidos.map((i) => ({
           faca_id: i.faca_id,
           quantidade: i.quantidade,
@@ -411,6 +437,119 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
             onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
           />
+        </div>
+
+        {/* Pagamento */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Forma de pagamento</label>
+          <select
+            value={formaPagamento}
+            onChange={(e) => setFormaPagamento(e.target.value as FormaPagamentoOC | '')}
+            className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
+            style={{ ...selectStyle, maxWidth: 260 }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--ac-border)')}
+          >
+            <option value="">— Selecione —</option>
+            {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+
+          {/* Inline boleto (a receber) — aparece quando forma = boleto */}
+          {formaPagamento === 'boleto' && (
+            <div
+              className="flex flex-col gap-3 rounded-lg p-4 mt-1"
+              style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
+            >
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
+                  Parcelas do boleto (a receber)
+                </span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => {
+                        setQtdParcelas(n)
+                        const base = new Date().toISOString().slice(0, 10)
+                        const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0
+                        let acumulado = 0
+                        setBoletoParcelas(
+                          Array.from({ length: n }, (_, i) => {
+                            const ult = i === n - 1
+                            const v = ult ? Math.max(0, Number((total - acumulado).toFixed(2))) : vCada
+                            acumulado += v
+                            const d = new Date(base)
+                            d.setMonth(d.getMonth() + i + 1)
+                            return {
+                              numero: i + 1,
+                              vencimento: d.toISOString().slice(0, 10),
+                              valor: v > 0 ? v.toFixed(2) : '',
+                            }
+                          }),
+                        )
+                      }}
+                      className="px-2.5 py-1 rounded text-xs font-medium"
+                      style={{
+                        background: qtdParcelas === n ? 'var(--ac-accent)' : 'var(--ac-card)',
+                        color: qtdParcelas === n ? 'white' : 'var(--ac-text)',
+                        border: '1px solid var(--ac-border)',
+                      }}
+                    >
+                      {n}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {boletoParcelas.length > 0 && (
+                <div className="rounded-lg" style={{ border: '1px solid var(--ac-border)' }}>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ background: 'var(--ac-bg)' }}>
+                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
+                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
+                        <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boletoParcelas.map((p, i) => (
+                        <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
+                          <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{p.numero}</td>
+                          <td className="px-3 py-2">
+                            <DateInputBR
+                              value={p.vencimento}
+                              onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, vencimento: iso } : l)))}
+                              className="rounded px-2 py-1 text-sm outline-none w-full"
+                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={p.valor}
+                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, valor: e.target.value } : l)))}
+                              className="rounded px-2 py-1 text-sm outline-none w-full text-right tabular-nums"
+                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {editando && (
+                <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                  O boleto só é criado se a venda ainda não tiver um vinculado.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Itens */}

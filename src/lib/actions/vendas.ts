@@ -3,8 +3,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
 import { analisarReposicaoParaPedido } from '@/lib/ordens-compra/analisar-reposicao'
-import type { Pedido, StatusPedido } from '@/types'
+import type { FormaPagamentoOC, Pedido, StatusPedido } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
+import { criarBoleto, type ParcelaInput } from '@/lib/actions/boletos'
 
 function normalizeStatusPedido(status: string): StatusPedido {
   if (status === 'em_espera' || status === 'em_producao' || status === 'entregue') return status
@@ -105,7 +106,62 @@ export type VendaInput = {
   frete: number
   desconto_total: number
   natureza_operacao?: string
+  /** Forma de pagamento da venda (pix, dinheiro, crédito ou boleto). */
+  forma_pagamento?: FormaPagamentoOC | null
+  /** Parcelas do boleto de entrada (a receber), quando forma_pagamento === 'boleto'. */
+  boletoParcelas?: ParcelaInput[]
   itens: VendaItemInput[]
+}
+
+function normalizarFormaPagamento(forma?: FormaPagamentoOC | null): FormaPagamentoOC | null {
+  if (forma === 'pix' || forma === 'dinheiro' || forma === 'cartao_credito' || forma === 'boleto') {
+    return forma
+  }
+  return null
+}
+
+/**
+ * Cria um boleto de ENTRADA (a receber) vinculado à venda, usando o cliente
+ * como contraparte. Só cria se ainda não houver boleto ligado a este pedido.
+ */
+async function criarBoletoDaVenda(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pedidoId: string,
+  clienteId: string,
+  vendedorId: string | null,
+  codigo: string,
+  parcelas: ParcelaInput[],
+) {
+  const parcelasValidas = (parcelas ?? []).filter((p) => p.vencimento && Number(p.valor) > 0)
+  if (parcelasValidas.length === 0) return
+
+  const { data: existente } = await supabase
+    .from('boletos')
+    .select('id')
+    .eq('pedido_id', pedidoId)
+    .limit(1)
+    .maybeSingle()
+  if (existente) return
+
+  const { data: cliente } = await supabase
+    .from('clientes')
+    .select('nome')
+    .eq('id', clienteId)
+    .single()
+
+  const valorTotal = parcelasValidas.reduce((s, p) => s + Number(p.valor), 0)
+
+  await criarBoleto({
+    tipo: 'entrada',
+    contraparte_nome: cliente?.nome ?? 'Cliente',
+    cliente_id: clienteId,
+    vendedor_id: vendedorId ?? null,
+    valor_total: valorTotal,
+    emitido_em: new Date().toISOString().slice(0, 10),
+    observacao: `Boleto gerado da venda ${codigo}`,
+    pedido_id: pedidoId,
+    parcelas: parcelasValidas,
+  })
 }
 
 async function inserirItensPedido(
@@ -200,6 +256,7 @@ export async function criarVenda(input: VendaInput) {
   const statusInsert = input.status === 'entregue' ? 'em_producao' : input.status
 
   const natureza = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
+  const formaPagamento = normalizarFormaPagamento(input.forma_pagamento)
 
   const { data: pedido, error } = await supabase
     .from('pedidos')
@@ -214,6 +271,7 @@ export async function criarVenda(input: VendaInput) {
       desconto_total,
       valor_total,
       natureza_operacao: natureza,
+      forma_pagamento: formaPagamento,
     })
     .select('id')
     .single()
@@ -228,6 +286,17 @@ export async function criarVenda(input: VendaInput) {
     await supabase.from('pedido_itens').delete().eq('pedido_id', pedido.id)
     await supabase.from('pedidos').delete().eq('id', pedido.id)
     throw e
+  }
+
+  if (formaPagamento === 'boleto' && (input.boletoParcelas?.length ?? 0) > 0) {
+    await criarBoletoDaVenda(
+      supabase,
+      pedido.id,
+      input.cliente_id!.trim(),
+      input.vendedor_id?.trim() ?? null,
+      codigo,
+      input.boletoParcelas!,
+    )
   }
 
   if (input.status === 'entregue') {
@@ -247,7 +316,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
 
   const { data: pedidoAtual } = await supabase
     .from('pedidos')
-    .select('status')
+    .select('status, codigo')
     .eq('id', id)
     .single()
   if (!pedidoAtual || normalizeStatusPedido(String(pedidoAtual.status)) === 'entregue') {
@@ -311,6 +380,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   const statusUpdate = input.status === 'entregue' ? 'em_producao' : input.status
 
   const naturezaUpd = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
+  const formaPagamento = normalizarFormaPagamento(input.forma_pagamento)
 
   const { error } = await supabase
     .from('pedidos')
@@ -324,9 +394,21 @@ export async function atualizarVenda(id: string, input: VendaInput) {
       desconto_total,
       valor_total,
       natureza_operacao: naturezaUpd,
+      forma_pagamento: formaPagamento,
     })
     .eq('id', id)
   if (error) throw new Error(error.message)
+
+  if (formaPagamento === 'boleto' && (input.boletoParcelas?.length ?? 0) > 0) {
+    await criarBoletoDaVenda(
+      supabase,
+      id,
+      input.cliente_id!.trim(),
+      input.vendedor_id?.trim() ?? null,
+      String(pedidoAtual.codigo ?? ''),
+      input.boletoParcelas!,
+    )
+  }
 
   await supabase.from('pedido_itens').delete().eq('pedido_id', id)
 
