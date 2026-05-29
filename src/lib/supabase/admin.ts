@@ -1,15 +1,34 @@
-import { createClient } from '@supabase/supabase-js'
+/**
+ * Cliente admin para uso exclusivo em Server Actions.
+ *
+ * Conecta ao PostgREST local usando o JWT de service_role (que bypassa RLS),
+ * exatamente como o service_role key do Supabase fazia.
+ *
+ * A propriedade `.storage` é sobrescrita com a implementação local
+ * (sistema de arquivos em /var/www/erp-uploads) para substituir o
+ * Supabase Storage sem alterar o código consumidor.
+ */
 
-// Só usar em Server Actions — nunca expor no cliente
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createLocalStorage } from '@/lib/storage'
+
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const postgrestUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!url || !serviceKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY não configurada. Adicione ao .env.local')
+  if (!postgrestUrl || !serviceKey) {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configurados. Adicione ao .env.local'
+    )
   }
 
-  return createClient(url, serviceKey, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = createSupabaseClient(postgrestUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-  })
+  }) as any
+
+  // Substitui o storage do Supabase por armazenamento local em filesystem
+  client.storage = createLocalStorage()
+
+  return client
 }

@@ -1,9 +1,11 @@
 'use server'
 
 import { revalidateTag } from 'next/cache'
+import { hash } from 'bcryptjs'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { db } from '@/lib/db'
 import type { Usuario, PerfilUsuario } from '@/types'
 import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
@@ -22,13 +24,12 @@ export async function getUsuariosPerfisList(): Promise<{ id: string; nome: strin
 export async function getUsuarios(limit = 100): Promise<Usuario[]> {
   await assertPermissao('usuarios', 'ver')
   const supabase = await createClient()
+  const sql = db()
 
-  const admin = createAdminClient()
-  const { data: authData, error: authError } = await admin.auth.admin.listUsers({
-    page: 1,
-    perPage: limit,
-  })
-  if (authError) throw new Error(authError.message)
+  // Busca usuários diretamente da tabela public.users (substituiu auth.admin.listUsers)
+  const authUsers = await sql<{ id: string; email: string; created_at: Date }[]>`
+    SELECT id, email, created_at FROM public.users ORDER BY created_at LIMIT ${limit}
+  `
 
   const [{ data: perfis }, { data: userPerms }] = await Promise.all([
     supabase.from('usuarios_perfis').select('*, cargo:cargos(id, nome, cor, permissoes:cargo_permissoes(*))'),
@@ -38,7 +39,7 @@ export async function getUsuarios(limit = 100): Promise<Usuario[]> {
   const perfisMap = new Map((perfis ?? []).map((p) => [p.id, p]))
   const customIds = new Set((userPerms ?? []).map((p) => p.usuario_id))
 
-  return authData.users.map((u) => {
+  return authUsers.map((u) => {
     const perfil = perfisMap.get(u.id)
     return {
       id: u.id,
@@ -49,7 +50,7 @@ export async function getUsuarios(limit = 100): Promise<Usuario[]> {
       cargo_id: perfil?.cargo_id ?? null,
       cargo: perfil?.cargo ?? null,
       permissoes_customizadas: customIds.has(u.id),
-      created_at: u.created_at,
+      created_at: u.created_at instanceof Date ? u.created_at.toISOString() : String(u.created_at),
     }
   }) as Usuario[]
 }
@@ -81,18 +82,31 @@ export async function criarUsuario({
   cargo_id: string | null
 }) {
   await assertPermissao('usuarios', 'criar')
-  const admin = createAdminClient()
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: senha,
-    email_confirm: true,
-  })
-  if (error) throw new Error(error.message)
-  if (!data.user) throw new Error('Usuário não criado.')
+
+  const sql = db()
+
+  // Verifica se email já existe
+  const existing = await sql<{ id: string }[]>`
+    SELECT id FROM public.users WHERE email = ${email.toLowerCase().trim()} LIMIT 1
+  `
+  if (existing.length > 0) {
+    throw new Error('Já existe um usuário com este email.')
+  }
+
+  const passwordHash = await hash(senha, 12)
+
+  // Insere o novo usuário na tabela public.users
+  const [newUser] = await sql<{ id: string }[]>`
+    INSERT INTO public.users (email, password_hash)
+    VALUES (${email.toLowerCase().trim()}, ${passwordHash})
+    RETURNING id
+  `
+
+  if (!newUser) throw new Error('Usuário não criado.')
 
   const supabase = await createClient()
   const { error: perfilError } = await supabase.from('usuarios_perfis').insert({
-    id: data.user.id,
+    id: newUser.id,
     nome: nome.trim(),
     perfil: 'vendas',
     ativo: true,
@@ -138,8 +152,6 @@ export async function atualizarPerfil(
   }
 
   // Invalida o cache global de permissões (todos os usuários).
-  // A tag específica por id não existe no unstable_cache atual; usar a tag global
-  // garante que o usuário afetado vai recarregar suas permissões na próxima requisição.
   revalidateTag('user-permissions', 'max')
 }
 
@@ -151,8 +163,9 @@ export async function deletarUsuario(id: string) {
   }
 
   const admin = createAdminClient()
+  const sql = db()
 
-  // Referências em `public` impedem a remoção em auth.users; limpa na ordem correta.
+  // Referências em `public` impedem a remoção; limpa na ordem correta.
   const { error: pedidosErr } = await admin
     .from('pedidos')
     .update({ vendedor_id: null })
@@ -171,7 +184,6 @@ export async function deletarUsuario(id: string) {
   const { error: perfilErr } = await admin.from('usuarios_perfis').delete().eq('id', id)
   if (perfilErr) throw new Error(perfilErr.message)
 
-  const { error } = await admin.auth.admin.deleteUser(id)
-  if (error) throw new Error(error.message)
-
+  // Remove da tabela public.users (substituiu auth.admin.deleteUser)
+  await sql`DELETE FROM public.users WHERE id = ${id}`
 }

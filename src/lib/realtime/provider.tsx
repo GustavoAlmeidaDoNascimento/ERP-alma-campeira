@@ -1,81 +1,70 @@
 'use client'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
-
-import { createClient } from '@/lib/supabase/client'
-import { REALTIME_TABLES, TABLE_TO_KEYS } from '@/lib/realtime/table-to-keys'
+import { useEffect } from 'react'
 
 const LOG = process.env.NODE_ENV === 'development'
-const BROADCAST_NAME = 'erp-sync'
-
-type BroadcastMsg = { table: string }
 
 /**
- * Subscreve a um único canal Supabase Realtime que escuta `postgres_changes`
- * em todas as tabelas relevantes e invalida queries do TanStack Query
- * conforme `TABLE_TO_KEYS`.
+ * Mantém os dados do app atualizados por polling a cada 30 segundos.
  *
- * Cross-tab no mesmo navegador: quando este provider recebe um evento, ele
- * também faz `BroadcastChannel.postMessage(table)`, então outras abas
- * invalidam suas queries sem precisar duplicar o WebSocket.
+ * Substitui o Supabase Realtime (WebSocket postgres_changes) por um modelo
+ * mais simples: invalida todas as queries ativas do TanStack Query
+ * periodicamente. O intervalo de 30s é suficiente para um ERP interno onde
+ * atualizações em tempo real não são críticas ao milissegundo.
+ *
+ * Cross-tab: BroadcastChannel garante que quando uma aba faz uma mutação,
+ * as outras abas invalidam suas queries imediatamente (sem esperar o próximo tick).
  */
+
+const POLL_INTERVAL_MS = 30_000
+const BROADCAST_NAME = 'erp-sync'
+
+type BroadcastMsg = { type: 'invalidate-all' }
+
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
-  const bcRef = useRef<BroadcastChannel | null>(null)
 
   useEffect(() => {
-    const supabase = createClient()
-
-    // BroadcastChannel para sync entre abas do mesmo navegador.
+    // BroadcastChannel para sync entre abas do mesmo navegador
     let bc: BroadcastChannel | null = null
     try {
       bc = new BroadcastChannel(BROADCAST_NAME)
-      bcRef.current = bc
       bc.onmessage = (ev: MessageEvent<BroadcastMsg>) => {
-        const table = ev.data?.table
-        if (!table) return
-        invalidateForTable(table)
+        if (ev.data?.type === 'invalidate-all') {
+          if (LOG) console.log('[REALTIME] cross-tab invalidate')
+          queryClient.invalidateQueries({ type: 'active' })
+        }
       }
     } catch {
-      // navegador sem BroadcastChannel — sem problema, apenas sem cross-tab sync
+      // navegador sem BroadcastChannel — ok, apenas sem cross-tab sync
     }
 
-    function invalidateForTable(table: string) {
-      const keys = TABLE_TO_KEYS[table]
-      if (!keys) return
-      if (LOG) console.log('[REALTIME] invalidate', { table, keys })
-      for (const key of keys) {
-        queryClient.invalidateQueries({ queryKey: key as unknown[] })
-      }
-    }
-
-    const channel = supabase.channel('erp-global', {
-      config: { broadcast: { self: false } },
-    })
-
-    for (const table of REALTIME_TABLES) {
-      channel.on(
-        'postgres_changes' as never,
-        { event: '*', schema: 'public', table },
-        (payload: { table: string; eventType: string }) => {
-          if (LOG) console.log('[REALTIME] event', payload.eventType, payload.table)
-          invalidateForTable(payload.table)
-          bcRef.current?.postMessage({ table: payload.table } satisfies BroadcastMsg)
-        },
-      )
-    }
-
-    channel.subscribe((status) => {
-      if (LOG) console.log('[REALTIME] channel status', status)
-    })
+    // Polling periódico
+    const interval = setInterval(() => {
+      if (LOG) console.log('[REALTIME] poll invalidate')
+      queryClient.invalidateQueries({ type: 'active' })
+    }, POLL_INTERVAL_MS)
 
     return () => {
-      supabase.removeChannel(channel)
-      bcRef.current?.close()
-      bcRef.current = null
+      clearInterval(interval)
+      bc?.close()
     }
   }, [queryClient])
 
   return <>{children}</>
+}
+
+/**
+ * Notifica outras abas para invalidar queries imediatamente.
+ * Chame após mutações no cliente para sincronizar outras abas.
+ */
+export function broadcastInvalidate() {
+  try {
+    const bc = new BroadcastChannel(BROADCAST_NAME)
+    bc.postMessage({ type: 'invalidate-all' } satisfies BroadcastMsg)
+    bc.close()
+  } catch {
+    // sem suporte a BroadcastChannel — ignora
+  }
 }

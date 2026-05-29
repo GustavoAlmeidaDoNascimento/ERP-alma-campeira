@@ -50,14 +50,13 @@ function normalizarStatusEPago(row: { status?: unknown; pago?: unknown }): { sta
 }
 
 async function resolverUsuarioRegistroOC(usuarioRegistroId: string | null | undefined): Promise<string> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { getAuthenticatedUser } = await import('@/lib/auth')
+  const user = await getAuthenticatedUser()
   if (!user?.id) throw new Error('Não autenticado.')
   const escolha = typeof usuarioRegistroId === 'string' ? usuarioRegistroId.trim() : ''
   const alvo = escolha || user.id
   if (alvo === user.id) return user.id
+  const supabase = await createClient()
   const { data: perfil, error } = await supabase
     .from('usuarios_perfis')
     .select('id')

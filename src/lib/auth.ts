@@ -7,15 +7,16 @@ import { withTiming } from '@/lib/perf/timing'
 import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 import type { ModuloKey } from '@/types'
-import type { User } from '@supabase/supabase-js'
+import { getSessionUser } from '@/lib/session'
 
 type Acao = 'ver' | 'criar' | 'editar' | 'deletar'
 
-export const getAuthenticatedUser = cache(async (): Promise<User | null> => {
+// Tipo compatível com o uso anterior de User do Supabase
+export type AuthUser = { id: string; email: string }
+
+export const getAuthenticatedUser = cache(async (): Promise<AuthUser | null> => {
   return withTiming('auth.getUser', async () => {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    return user
+    return getSessionUser()
   })
 })
 
