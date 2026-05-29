@@ -3,6 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:pull": "powershell -ExecutionPolicy Bypass -File scripts/db-pull.ps1",
     "build": "next build",
     "preview": "next build && next start",
     "start": "next start",

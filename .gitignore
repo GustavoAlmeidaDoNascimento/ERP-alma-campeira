@@ -16,6 +16,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# uploads locais (storage em filesystem no dev)
+.uploads-local
+
 # env files (keep examples versioned)
 .env
 .env.local
