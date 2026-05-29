@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { compare } from 'bcryptjs'
 import { db } from '@/lib/db'
-import { createSessionToken, SESSION_COOKIE_NAME, SESSION_TTL } from '@/lib/session'
+import { createSessionToken, SESSION_COOKIE_NAME, SESSION_TTL, COOKIE_SECURE } from '@/lib/session'
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     response.cookies.set(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: COOKIE_SECURE,
       sameSite: 'lax',
       maxAge: SESSION_TTL,
       path: '/',

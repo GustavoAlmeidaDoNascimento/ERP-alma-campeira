@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
-import { SESSION_COOKIE_NAME, SESSION_TTL } from '@/lib/session'
+import { SESSION_COOKIE_NAME, SESSION_TTL, COOKIE_SECURE } from '@/lib/session'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout', '/uploads']
 
@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
   response.cookies.set(MW_FRESH_COOKIE, '1', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: COOKIE_SECURE,
     sameSite: 'lax',
     maxAge: MW_FRESH_TTL,
     path: '/',

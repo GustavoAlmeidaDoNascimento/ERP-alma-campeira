@@ -4,6 +4,19 @@ import { cookies } from 'next/headers'
 export const SESSION_COOKIE_NAME = 'erp-session'
 export const SESSION_TTL = 7 * 24 * 60 * 60 // 7 dias em segundos
 
+/**
+ * Flag `secure` dos cookies de sessão.
+ *
+ * Um cookie `secure` só é armazenado/enviado pelo navegador via HTTPS. Se a app
+ * roda em HTTP puro (ex.: produção em http://IP sem TLS), `secure: true` faz o
+ * navegador DESCARTAR o cookie de sessão — o login "funciona" (200) mas a sessão
+ * nunca persiste, gerando loop de redirect /login (tela piscando).
+ *
+ * Por isso o default é `false` (compatível com HTTP). Quando a produção tiver
+ * HTTPS, defina `COOKIE_SECURE=true` no ambiente.
+ */
+export const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true'
+
 export interface SessionUser {
   id: string
   email: string
