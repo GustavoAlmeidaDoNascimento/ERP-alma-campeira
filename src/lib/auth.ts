@@ -41,7 +41,8 @@ const systemHasAnyProfile = unstable_cache(
 
 const getPermissoesEfetivasCached = unstable_cache(
   async (userId: string): Promise<PermMap> => {
-    const supabase = await createClient()
+    // Usa admin (service_role) para bypasear RLS — permissões são lógica interna do servidor
+    const supabase = createAdminClient()
 
     // Permissões customizadas têm prioridade
     const { data: customPerms } = await supabase
