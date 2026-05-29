@@ -354,8 +354,8 @@ function OcDetalheModal({
   const [formaPagamentoDraft, setFormaPagamentoDraft] = useState<FormaPagamentoOC | ''>(oc.forma_pagamento ?? '')
   const [statusDraft, setStatusDraft] = useState<StatusOC>(oc.status)
   const [qtdParcelas, setQtdParcelas] = useState(1)
-  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string }[]>(() => [
-    { numero: 1, vencimento: '', valor: '' },
+  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]>(() => [
+    { numero: 1, vencimento: '', valor: '', pago: false, pago_em: '' },
   ])
   const [salvandoTudo, setSalvandoTudo] = useState(false)
   const [erro, setErro] = useState('')
@@ -545,6 +545,8 @@ function OcDetalheModal({
             numero: p.numero,
             vencimento: p.vencimento,
             valor: Number(p.valor.replace(',', '.')) || 0,
+            pago_em: p.pago && p.pago_em ? p.pago_em : null,
+            valor_pago: p.pago ? Number(p.valor.replace(',', '.')) || 0 : null,
           }))
         await criarBoleto({
           tipo: 'saida',
@@ -956,6 +958,8 @@ function OcDetalheModal({
                                 numero: i + 1,
                                 vencimento: d.toISOString().slice(0, 10),
                                 valor: v > 0 ? v.toFixed(2) : '',
+                                pago: false,
+                                pago_em: '',
                               }
                             }),
                           )
@@ -980,6 +984,8 @@ function OcDetalheModal({
                         <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
                         <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
                         <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
+                        <th className="px-3 py-2 text-center text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Pago</th>
+                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Data pago</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1004,6 +1010,29 @@ function OcDetalheModal({
                               className="rounded px-2 py-1 text-sm outline-none w-full text-right"
                               style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                             />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={p.pago}
+                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? {
+                                ...l,
+                                pago: e.target.checked,
+                                pago_em: e.target.checked && !l.pago_em ? new Date().toISOString().slice(0, 10) : l.pago_em,
+                              } : l))}
+                              className="w-4 h-4 rounded"
+                              style={{ accentColor: 'var(--ac-accent)' }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            {p.pago && (
+                              <DateInputBR
+                                value={p.pago_em}
+                                onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? { ...l, pago_em: iso } : l))}
+                                className="rounded px-2 py-1 text-sm outline-none w-full"
+                                style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                              />
+                            )}
                           </td>
                         </tr>
                       ))}

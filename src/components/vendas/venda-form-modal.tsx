@@ -70,7 +70,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamentoOC | ''>('')
   const [qtdParcelas, setQtdParcelas] = useState(0)
-  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string }[]>([])
+  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -261,6 +261,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         numero: p.numero,
         vencimento: p.vencimento,
         valor: Number(p.valor.replace(',', '.')) || 0,
+        pago_em: p.pago && p.pago_em ? p.pago_em : null,
+        valor_pago: p.pago ? Number(p.valor.replace(',', '.')) || 0 : null,
       }))
 
     if (!editando && formaPagamento === 'boleto' && parcelasBoleto.length === 0) {
@@ -487,6 +489,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                               numero: i + 1,
                               vencimento: d.toISOString().slice(0, 10),
                               valor: v > 0 ? v.toFixed(2) : '',
+                              pago: false,
+                              pago_em: '',
                             }
                           }),
                         )
@@ -512,6 +516,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                         <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
                         <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
                         <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
+                        <th className="px-3 py-2 text-center text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Pago</th>
+                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Data pago</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -536,6 +542,29 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                               className="rounded px-2 py-1 text-sm outline-none w-full text-right tabular-nums"
                               style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                             />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={p.pago}
+                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? {
+                                ...l,
+                                pago: e.target.checked,
+                                pago_em: e.target.checked && !l.pago_em ? new Date().toISOString().slice(0, 10) : l.pago_em,
+                              } : l))}
+                              className="w-4 h-4 rounded"
+                              style={{ accentColor: 'var(--ac-accent)' }}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            {p.pago && (
+                              <DateInputBR
+                                value={p.pago_em}
+                                onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => (j === i ? { ...l, pago_em: iso } : l)))}
+                                className="rounded px-2 py-1 text-sm outline-none w-full"
+                                style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+                              />
+                            )}
                           </td>
                         </tr>
                       ))}
