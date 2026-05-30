@@ -154,15 +154,68 @@ export async function atualizarOrcamento(id: string, input: OrcamentoInput) {
     .eq('id', id)
   if (error) throw new Error(error.message)
 
-  await supabase.from('orcamento_itens').delete().eq('orcamento_id', id)
+  await sincronizarItensOrcamento(supabase, id, input.itens)
 
-  try {
-    await inserirItensOrcamento(supabase, id, input.itens)
-  } catch (e) {
-    await supabase.from('orcamento_itens').delete().eq('orcamento_id', id)
-    throw e
+}
+
+/**
+ * Sincroniza orcamento_itens fazendo diff por posição (ordenado por created_at).
+ * Em vez de apagar tudo e reinserir — que gerava 1 INSERT + 1 DELETE por item no
+ * log de auditoria —, só atualiza linhas que de fato mudaram, insere extras
+ * novos e deleta os que sobraram. Tipicamente: editar a quantidade de 1 item
+ * gera 1 UPDATE no log, e mais nada.
+ */
+async function sincronizarItensOrcamento(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orcamentoId: string,
+  novos: OrcamentoItemInput[],
+) {
+  const { data: atuais, error: errFetch } = await supabase
+    .from('orcamento_itens')
+    .select('id, faca_id, quantidade, preco_unitario')
+    .eq('orcamento_id', orcamentoId)
+    .order('created_at', { ascending: true })
+  if (errFetch) throw new Error(errFetch.message)
+
+  const atuaisArr = atuais ?? []
+  const max = Math.max(atuaisArr.length, novos.length)
+
+  for (let i = 0; i < max; i++) {
+    const atual = atuaisArr[i]
+    const novo = novos[i]
+
+    if (atual && novo) {
+      const mudou =
+        atual.faca_id !== novo.faca_id ||
+        Number(atual.quantidade) !== Number(novo.quantidade) ||
+        Number(atual.preco_unitario) !== Number(novo.preco_unitario)
+      if (mudou) {
+        const { error } = await supabase
+          .from('orcamento_itens')
+          .update({
+            faca_id: novo.faca_id,
+            quantidade: novo.quantidade,
+            preco_unitario: novo.preco_unitario,
+          })
+          .eq('id', atual.id)
+        if (error) throw new Error(error.message)
+      }
+    } else if (novo) {
+      const { error } = await supabase.from('orcamento_itens').insert({
+        orcamento_id: orcamentoId,
+        faca_id: novo.faca_id,
+        quantidade: novo.quantidade,
+        preco_unitario: novo.preco_unitario,
+      })
+      if (error) throw new Error(error.message)
+    } else if (atual) {
+      const { error } = await supabase
+        .from('orcamento_itens')
+        .delete()
+        .eq('id', atual.id)
+      if (error) throw new Error(error.message)
+    }
   }
-
 }
 
 export async function deletarOrcamento(id: string) {
