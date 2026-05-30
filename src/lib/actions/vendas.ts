@@ -203,6 +203,100 @@ async function inserirItensPedido(
   }
 }
 
+/**
+ * Sincroniza pedido_itens fazendo diff por posição (ordenado por created_at).
+ * Em vez de apagar tudo e reinserir — que gerava 1 INSERT + 1 DELETE por item
+ * no log de auditoria —, só atualiza o que realmente mudou, insere novos e
+ * deleta os que sobraram. O snapshot fiscal (ncm/cfop) só é renovado quando
+ * faca_id muda.
+ */
+async function sincronizarItensPedido(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pedidoId: string,
+  novos: VendaItemInput[],
+) {
+  const { data: atuais, error: errFetch } = await supabase
+    .from('pedido_itens')
+    .select('id, faca_id, quantidade, preco_unitario, ncm, cfop')
+    .eq('pedido_id', pedidoId)
+    .order('created_at', { ascending: true })
+  if (errFetch) throw new Error(errFetch.message)
+
+  const atuaisArr = atuais ?? []
+  const max = Math.max(atuaisArr.length, novos.length)
+
+  // Pré-carrega NCM/CFOP só pras facas que vamos precisar (faca_id novo ou
+  // diferente do existente naquela posição).
+  const facasParaFiscal = new Set<string>()
+  for (let i = 0; i < max; i++) {
+    const atual = atuaisArr[i]
+    const novo = novos[i]
+    if (novo && (!atual || atual.faca_id !== novo.faca_id)) {
+      facasParaFiscal.add(novo.faca_id)
+    }
+  }
+  const fiscalByFaca = new Map<string, { ncm: string | null; cfop: string | null }>()
+  if (facasParaFiscal.size > 0) {
+    const { data: fiscais } = await supabase
+      .from('facas')
+      .select('id, ncm, cfop_padrao')
+      .in('id', [...facasParaFiscal])
+    for (const f of fiscais ?? []) {
+      fiscalByFaca.set(f.id, {
+        ncm: (f as { ncm: string | null }).ncm ?? null,
+        cfop: (f as { cfop_padrao: string | null }).cfop_padrao ?? null,
+      })
+    }
+  }
+
+  for (let i = 0; i < max; i++) {
+    const atual = atuaisArr[i]
+    const novo = novos[i]
+
+    if (atual && novo) {
+      const facaMudou = atual.faca_id !== novo.faca_id
+      const mudou =
+        facaMudou ||
+        Number(atual.quantidade) !== Number(novo.quantidade) ||
+        Number(atual.preco_unitario) !== Number(novo.preco_unitario)
+      if (mudou) {
+        const patch: Record<string, unknown> = {
+          faca_id: novo.faca_id,
+          quantidade: novo.quantidade,
+          preco_unitario: novo.preco_unitario,
+        }
+        if (facaMudou) {
+          const fiscal = fiscalByFaca.get(novo.faca_id) ?? { ncm: null, cfop: null }
+          patch.ncm = fiscal.ncm
+          patch.cfop = fiscal.cfop
+        }
+        const { error } = await supabase
+          .from('pedido_itens')
+          .update(patch)
+          .eq('id', atual.id)
+        if (error) throw new Error(error.message)
+      }
+    } else if (novo) {
+      const fiscal = fiscalByFaca.get(novo.faca_id) ?? { ncm: null, cfop: null }
+      const { error } = await supabase.from('pedido_itens').insert({
+        pedido_id: pedidoId,
+        faca_id: novo.faca_id,
+        quantidade: novo.quantidade,
+        preco_unitario: novo.preco_unitario,
+        ncm: fiscal.ncm,
+        cfop: fiscal.cfop,
+      })
+      if (error) throw new Error(error.message)
+    } else if (atual) {
+      const { error } = await supabase
+        .from('pedido_itens')
+        .delete()
+        .eq('id', atual.id)
+      if (error) throw new Error(error.message)
+    }
+  }
+}
+
 function assertClienteEVendedorObrigatorios(input: VendaInput) {
   if (!input.cliente_id?.trim()) {
     throw new Error('Selecione um cliente.')
@@ -410,15 +504,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     )
   }
 
-  await supabase.from('pedido_itens').delete().eq('pedido_id', id)
-
-  try {
-    await inserirItensPedido(supabase, id, input.itens)
-  } catch (e) {
-    // Não deixa itens parcialmente gravados.
-    await supabase.from('pedido_itens').delete().eq('pedido_id', id)
-    throw e
-  }
+  await sincronizarItensPedido(supabase, id, input.itens)
 
   if (input.status === 'entregue') {
     const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
