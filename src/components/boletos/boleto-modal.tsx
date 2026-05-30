@@ -390,26 +390,18 @@ export function BoletoModal({
             onChange={(e) => distribuirValor(e.target.value)}
             placeholder="0,00"
           />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Parcelar em</label>
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => aplicarParcelar(n)}
-                  className="px-3 py-2 rounded-lg text-sm font-medium"
-                  style={{
-                    background: qtdParcelas === n ? 'var(--ac-accent)' : 'var(--ac-card)',
-                    color: qtdParcelas === n ? 'white' : 'var(--ac-text)',
-                    border: '1px solid var(--ac-border)',
-                  }}
-                >
-                  {n}x
-                </button>
-              ))}
-            </div>
-          </div>
+          <Input
+            id="b-parcelas"
+            label="Parcelar em (x)"
+            type="number"
+            min="1"
+            step="1"
+            value={String(qtdParcelas)}
+            onChange={(e) => {
+              const n = Math.max(1, Math.floor(Number(e.target.value) || 1))
+              aplicarParcelar(n)
+            }}
+          />
         </div>
 
         {/* Tabela de parcelas */}
