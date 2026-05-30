@@ -43,12 +43,11 @@ function normalizar(input: BoletoInput) {
 
   const parcelas = (input.parcelas ?? []).filter((p) => p.valor > 0 && p.vencimento)
   if (parcelas.length === 0) throw new Error('Adicione pelo menos uma parcela.')
-  if (parcelas.length > 6) throw new Error('Máximo de 6 parcelas.')
 
   const numeros = new Set<number>()
   for (const p of parcelas) {
-    if (!Number.isInteger(p.numero) || p.numero < 1 || p.numero > 6) {
-      throw new Error('Número de parcela inválido (1 a 6).')
+    if (!Number.isInteger(p.numero) || p.numero < 1) {
+      throw new Error('Número de parcela inválido.')
     }
     if (numeros.has(p.numero)) throw new Error('Parcelas duplicadas.')
     numeros.add(p.numero)
