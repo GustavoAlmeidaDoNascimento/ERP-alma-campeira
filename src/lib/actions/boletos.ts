@@ -142,13 +142,57 @@ export async function atualizarBoleto(id: string, input: BoletoInput) {
   const { error } = await supabase.from('boletos').update(head).eq('id', id)
   if (error) throw new Error(error.message)
 
-  // Estratégia simples: apaga parcelas e reinsere. Há cascade em boleto_id.
-  const { error: errDel } = await supabase.from('boleto_parcelas').delete().eq('boleto_id', id)
-  if (errDel) throw new Error(errDel.message)
+  // Diff por `numero` (chave natural única por boleto). Evita gerar um par
+  // INSERT+DELETE no log de auditoria pra cada parcela quando, na prática,
+  // só um campo mudou.
+  const { data: atuais, error: errFetch } = await supabase
+    .from('boleto_parcelas')
+    .select('id, numero, vencimento, valor, pago_em, valor_pago')
+    .eq('boleto_id', id)
+  if (errFetch) throw new Error(errFetch.message)
 
-  const rows = parcelas.map((p) => ({ ...p, boleto_id: id }))
-  const { error: errIns } = await supabase.from('boleto_parcelas').insert(rows)
-  if (errIns) throw new Error(errIns.message)
+  const atuaisPorNumero = new Map(
+    (atuais ?? []).map((p) => [Number(p.numero), p]),
+  )
+
+  const numerosNovos = new Set<number>()
+  for (const p of parcelas) {
+    numerosNovos.add(p.numero)
+    const atual = atuaisPorNumero.get(p.numero)
+    if (!atual) {
+      const { error: errIns } = await supabase
+        .from('boleto_parcelas')
+        .insert({ ...p, boleto_id: id })
+      if (errIns) throw new Error(errIns.message)
+      continue
+    }
+    const mudou =
+      String(atual.vencimento) !== String(p.vencimento) ||
+      Number(atual.valor) !== Number(p.valor) ||
+      (atual.pago_em ?? null) !== (p.pago_em ?? null) ||
+      Number(atual.valor_pago ?? 0) !== Number(p.valor_pago ?? 0)
+    if (mudou) {
+      const { error: errUpd } = await supabase
+        .from('boleto_parcelas')
+        .update({
+          vencimento: p.vencimento,
+          valor: p.valor,
+          pago_em: p.pago_em,
+          valor_pago: p.valor_pago,
+        })
+        .eq('id', atual.id)
+      if (errUpd) throw new Error(errUpd.message)
+    }
+  }
+
+  const removidos = (atuais ?? []).filter((p) => !numerosNovos.has(Number(p.numero)))
+  if (removidos.length > 0) {
+    const { error: errDel } = await supabase
+      .from('boleto_parcelas')
+      .delete()
+      .in('id', removidos.map((p) => p.id))
+    if (errDel) throw new Error(errDel.message)
+  }
 }
 
 export async function deletarBoleto(id: string) {
