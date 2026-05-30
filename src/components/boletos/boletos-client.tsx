@@ -237,7 +237,7 @@ export function BoletosClient({
         <div>
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Boletos</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-            Controle de boletos a pagar e a receber, com parcelas de 1 a 6 vencimentos.
+            Controle de boletos a pagar e a receber, com parcelas em múltiplos vencimentos.
           </p>
         </div>
         {perm.criar && (
