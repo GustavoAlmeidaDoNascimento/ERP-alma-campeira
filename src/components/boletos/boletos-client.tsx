@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/modal'
 import { BoletoModal } from './boleto-modal'
 import { deletarBoleto, marcarParcela } from '@/lib/actions/boletos'
 import {
+  codigoBoleto,
   statusBoleto,
   totalAbertoBoleto,
   totalPagoBoleto,
@@ -147,6 +148,7 @@ export function BoletosClient({
         if (dataAte && (!emitido || emitido > dataAte)) return false
         if (!q) return true
         return (
+          codigoBoleto(b).toLowerCase().includes(q) ||
           b.contraparte_nome.toLowerCase().includes(q) ||
           (b.numero_documento ?? '').toLowerCase().includes(q) ||
           (b.cnpj_cpf ?? '').toLowerCase().includes(q) ||
@@ -382,6 +384,7 @@ export function BoletosClient({
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
+                <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
                 {tipoAtivo === 'entrada' && (
                   <>
                     <th className="text-left px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Vendedor</th>
@@ -416,7 +419,7 @@ export function BoletosClient({
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={tipoAtivo === 'entrada' ? 15 : 12} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={tipoAtivo === 'entrada' ? 16 : 13} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     Nenhum boleto registrado neste filtro.
                   </td>
                 </tr>
@@ -444,6 +447,11 @@ export function BoletosClient({
                     onMouseEnter={perm.editar ? (e) => { e.currentTarget.style.background = 'var(--ac-bg)' } : undefined}
                     onMouseLeave={perm.editar ? (e) => { e.currentTarget.style.background = bgLinha } : undefined}
                   >
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="font-mono text-xs font-semibold" style={{ color: 'var(--ac-accent)' }}>
+                        {codigoBoleto(b)}
+                      </span>
+                    </td>
                     {tipoAtivo === 'entrada' && (
                       <>
                         <td className="px-3 py-2 whitespace-nowrap text-xs" style={{ color: 'var(--ac-muted)' }}>
