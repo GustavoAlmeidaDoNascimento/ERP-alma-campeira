@@ -657,6 +657,7 @@ export type BoletoParcela = {
 export type Boleto = {
   id: string
   tipo: BoletoTipo
+  sequencial: number
   contraparte_nome: string
   cnpj_cpf: string | null
   cliente_id: string | null
@@ -677,6 +678,12 @@ export type Boleto = {
   fornecedor?: Pick<Fornecedor, 'id' | 'nome'> | null
   vendedor?: { id: string; nome: string } | null
   criador?: { id: string; nome: string } | null
+}
+
+/** Código humano do boleto: "BS-x" (saída) ou "BE-x" (entrada). */
+export function codigoBoleto(b: Pick<Boleto, 'tipo' | 'sequencial'>): string {
+  const prefixo = b.tipo === 'saida' ? 'BS' : 'BE'
+  return `${prefixo}-${b.sequencial}`
 }
 
 export type BoletoStatus = 'pago' | 'vencido' | 'aberto'
