@@ -406,11 +406,17 @@ export function BoletosClient({
                 <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
                   {tipoAtivo === 'entrada' ? 'Total' : 'Valor'}
                 </th>
-                {[1, 2, 3, 4, 5, 6].map((n) => (
-                  <th key={n} className="text-center px-2 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                    {n}° venc.
+                {tipoAtivo === 'entrada' ? (
+                  [1, 2, 3, 4, 5, 6].map((n) => (
+                    <th key={n} className="text-center px-2 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                      {n}° venc.
+                    </th>
+                  ))
+                ) : (
+                  <th className="text-center px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                    Parcelas pagas
                   </th>
-                ))}
+                )}
                 <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pago</th>
                 <th className="text-right px-3 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Aberto</th>
                 <th className="px-3 py-3"></th>
@@ -419,7 +425,7 @@ export function BoletosClient({
             <tbody>
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={tipoAtivo === 'entrada' ? 16 : 13} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
+                  <td colSpan={tipoAtivo === 'entrada' ? 16 : 8} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
                     Nenhum boleto registrado neste filtro.
                   </td>
                 </tr>
@@ -430,6 +436,9 @@ export function BoletosClient({
                 const aberto = totalAbertoBoleto(b)
                 const pago = totalPagoBoleto(b)
                 const parcelasPorNumero = new Map(b.parcelas.map((p) => [p.numero, p]))
+                const totalParcelas = b.parcelas.length
+                const parcelasPagas = b.parcelas.filter((p) => !!p.pago_em).length
+                const todasPagas = totalParcelas > 0 && parcelasPagas === totalParcelas
                 const bgLinha = 'var(--ac-card)'
                 return (
                   <tr key={b.id}
@@ -487,7 +496,7 @@ export function BoletosClient({
                     <td className="px-3 py-2 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--ac-text)' }}>
                       {moedaBR.format(Number(b.valor_total))}
                     </td>
-                    {[1, 2, 3, 4, 5, 6].map((n) => {
+                    {tipoAtivo === 'entrada' && [1, 2, 3, 4, 5, 6].map((n) => {
                       const p = parcelasPorNumero.get(n)
                       if (!p) return <td key={n} className="px-2 py-2 text-center text-xs" style={{ color: 'var(--ac-muted)' }}>—</td>
                       const pPago = !!p.pago_em
@@ -531,6 +540,21 @@ export function BoletosClient({
                         </td>
                       )
                     })}
+                    {tipoAtivo === 'saida' && (
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <span
+                          className="inline-flex items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold font-mono"
+                          title={`${parcelasPagas} de ${totalParcelas} parcelas pagas`}
+                          style={{
+                            background: todasPagas ? '#dcfce7' : 'var(--ac-bg)',
+                            color: todasPagas ? '#15803d' : 'var(--ac-text)',
+                            border: `1px solid ${todasPagas ? '#86efac' : 'var(--ac-border)'}`,
+                          }}
+                        >
+                          {parcelasPagas}/{totalParcelas}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-right whitespace-nowrap" style={{ color: '#15803d' }}>
                       {moedaBR.format(pago)}
                     </td>
