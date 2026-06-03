@@ -15,7 +15,10 @@ function normalizeStatusPedido(status: string): StatusPedido {
 }
 
 function normalizePedido(pedido: Pedido): Pedido {
-  return { ...pedido, status: normalizeStatusPedido(String(pedido.status)) }
+  const itens = pedido.itens
+    ? [...pedido.itens].sort((a, b) => a.id.localeCompare(b.id))
+    : pedido.itens
+  return { ...pedido, status: normalizeStatusPedido(String(pedido.status)), itens }
 }
 
 export async function getVendas(limit = 80): Promise<Pedido[]> {
@@ -110,6 +113,8 @@ export type VendaInput = {
   forma_pagamento?: FormaPagamentoOC | null
   /** Parcelas do boleto de entrada (a receber), quando forma_pagamento === 'boleto'. */
   boletoParcelas?: ParcelaInput[]
+  /** Usuário confirmou venda com estoque abaixo do solicitado (venda antes da produção). */
+  confirmarEstoqueInsuficiente?: boolean
   itens: VendaItemInput[]
 }
 
@@ -204,7 +209,7 @@ async function inserirItensPedido(
 }
 
 /**
- * Sincroniza pedido_itens fazendo diff por posição (ordenado por created_at).
+ * Sincroniza pedido_itens fazendo diff por posição (ordenado por id).
  * Em vez de apagar tudo e reinserir — que gerava 1 INSERT + 1 DELETE por item
  * no log de auditoria —, só atualiza o que realmente mudou, insere novos e
  * deleta os que sobraram. O snapshot fiscal (ncm/cfop) só é renovado quando
@@ -219,7 +224,7 @@ async function sincronizarItensPedido(
     .from('pedido_itens')
     .select('id, faca_id, quantidade, preco_unitario, ncm, cfop')
     .eq('pedido_id', pedidoId)
-    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
   if (errFetch) throw new Error(errFetch.message)
 
   const atuaisArr = atuais ?? []
@@ -314,27 +319,32 @@ export async function criarVenda(input: VendaInput) {
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
 
-  // Validar estoque disponível para cada faca
-  const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
-  const { data: facas } = await supabase
-    .from('facas')
-    .select('id, nome, estoque_atual')
-    .in('id', facaIds)
+  if (!input.confirmarEstoqueInsuficiente) {
+    const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
+    const { data: facas } = await supabase
+      .from('facas')
+      .select('id, nome, estoque_atual')
+      .in('id', facaIds)
 
-  if (facas) {
-    const facaMap = new Map(facas.map((f) => [f.id, f]))
-    const insuficientes = input.itens.filter((item) => {
-      const faca = facaMap.get(item.faca_id)
-      return faca && faca.estoque_atual < item.quantidade
-    })
-    if (insuficientes.length > 0) {
-      const detalhes = insuficientes
-        .map((item) => {
-          const f = facaMap.get(item.faca_id)
-          return `${f?.nome ?? 'Desconhecida'} (solicitado: ${item.quantidade}, disponível: ${f?.estoque_atual ?? 0})`
-        })
-        .join('; ')
-      throw new Error(`Estoque insuficiente: ${detalhes}`)
+    if (facas) {
+      const facaMap = new Map(facas.map((f) => [f.id, f]))
+      const qtdPorFaca = new Map<string, number>()
+      for (const item of input.itens) {
+        qtdPorFaca.set(item.faca_id, (qtdPorFaca.get(item.faca_id) ?? 0) + item.quantidade)
+      }
+      const insuficientes = [...qtdPorFaca.entries()].filter(([facaId, qtd]) => {
+        const faca = facaMap.get(facaId)
+        return faca && faca.estoque_atual < qtd
+      })
+      if (insuficientes.length > 0) {
+        const detalhes = insuficientes
+          .map(([facaId, qtd]) => {
+            const f = facaMap.get(facaId)
+            return `${f?.nome ?? 'Desconhecida'} (solicitado: ${qtd}, disponível: ${f?.estoque_atual ?? 0})`
+          })
+          .join('; ')
+        throw new Error(`Estoque insuficiente: ${detalhes}`)
+      }
     }
   }
 
@@ -438,7 +448,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     if (delta > 0) deltaMap.set(item.faca_id, (deltaMap.get(item.faca_id) ?? 0) + delta)
   }
 
-  if (deltaMap.size > 0) {
+  if (!input.confirmarEstoqueInsuficiente && deltaMap.size > 0) {
     const facaIds = [...deltaMap.keys()]
     const { data: facas } = await supabase
       .from('facas')
