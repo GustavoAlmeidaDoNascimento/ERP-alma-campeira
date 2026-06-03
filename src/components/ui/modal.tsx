@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 type ModalProps = {
   open: boolean
@@ -11,6 +11,9 @@ type ModalProps = {
 }
 
 export function Modal({ open, onClose, title, children, width = '520px' }: ModalProps) {
+  /** Evita fechar ao soltar o mouse no backdrop após seleção de texto iniciada dentro do modal. */
+  const pointerDownOnBackdrop = useRef(false)
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -24,7 +27,15 @@ export function Modal({ open, onClose, title, children, width = '520px' }: Modal
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
+      onMouseDown={(e) => {
+        pointerDownOnBackdrop.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        if (pointerDownOnBackdrop.current && e.target === e.currentTarget) {
+          onClose()
+        }
+        pointerDownOnBackdrop.current = false
+      }}
     >
       <div
         className="relative flex max-h-[min(90vh,calc(100vh-2rem))] w-full flex-col overflow-hidden rounded-xl shadow-xl"
