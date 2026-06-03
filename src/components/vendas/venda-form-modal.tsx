@@ -41,6 +41,28 @@ function moeda2(n: number) {
 }
 
 /** Setas ↑/↓: passo inteiro (1); step=0.01 no HTML continua válido para digitação decimal. */
+/** Linhas com quantidade total por faca acima do estoque_atual do cadastro. */
+function listarEstoqueInsuficiente(
+  itens: { faca_id: string; quantidade: number }[],
+  facas: Faca[],
+): string[] {
+  const quantidadePorFaca = new Map<string, number>()
+  for (const item of itens) {
+    if (!item.faca_id) continue
+    const qtd = Number(item.quantidade) || 0
+    quantidadePorFaca.set(item.faca_id, (quantidadePorFaca.get(item.faca_id) ?? 0) + qtd)
+  }
+  const insuficientes: string[] = []
+  for (const [facaId, qtdTotal] of quantidadePorFaca.entries()) {
+    const faca = facas.find((f) => f.id === facaId)
+    const estoqueAtual = Number(faca?.estoque_atual ?? 0)
+    if (!faca || qtdTotal > estoqueAtual) {
+      insuficientes.push(`${faca?.codigo ?? 'Faca'} — solicitado: ${qtdTotal}, disponível: ${estoqueAtual}`)
+    }
+  }
+  return insuficientes
+}
+
 function applyArrowStep(
   e: KeyboardEvent<HTMLInputElement>,
   current: number,
@@ -73,6 +95,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+  /** Detalhes do aviso de estoque; quando preenchido, exige confirmação na UI antes de salvar. */
+  const [avisoEstoqueInsuficiente, setAvisoEstoqueInsuficiente] = useState<string[] | null>(null)
 
   const opcoesFaca = useMemo<SearchableSelectOption[]>(
     () =>
@@ -95,6 +119,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   useEffect(() => {
     if (!open) return
     setErro('')
+    setAvisoEstoqueInsuficiente(null)
     if (editando) {
       setClienteId(editando.cliente_id ?? '')
       setVendedorId(editando.vendedor_id ?? '')
@@ -237,7 +262,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
     })
   }
 
-  async function salvar() {
+  function salvar() {
     if (!clienteId.trim()) {
       setErro('Selecione um cliente.')
       return
@@ -248,28 +273,25 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
     }
 
     const itensValidos = itens.filter((i) => i.faca_id)
-    if (itensValidos.length === 0) { setErro('Adicione ao menos um item com faca selecionada.'); return }
-
-    // Validação local de estoque para evitar erro genérico de Server Action em produção.
-    const quantidadePorFaca = new Map<string, number>()
-    for (const item of itensValidos) {
-      const qtd = Number(item.quantidade) || 0
-      quantidadePorFaca.set(item.faca_id, (quantidadePorFaca.get(item.faca_id) ?? 0) + qtd)
-    }
-
-    const insuficientes: string[] = []
-    for (const [facaId, qtdTotal] of quantidadePorFaca.entries()) {
-      const faca = facas.find((f) => f.id === facaId)
-      const estoqueAtual = Number(faca?.estoque_atual ?? 0)
-      if (!faca || qtdTotal > estoqueAtual) {
-        insuficientes.push(`${faca?.codigo ?? 'Faca'} — solicitado: ${qtdTotal}, disponível: ${estoqueAtual}`)
-      }
-    }
-
-    if (insuficientes.length > 0) {
-      setErro(`Estoque insuficiente: ${insuficientes.join('; ')}`)
+    if (itensValidos.length === 0) {
+      setErro('Adicione ao menos um item com faca selecionada.')
       return
     }
+
+    const insuficientes = listarEstoqueInsuficiente(itensValidos, facas)
+    if (insuficientes.length > 0) {
+      setErro('')
+      setAvisoEstoqueInsuficiente(insuficientes)
+      return
+    }
+
+    void executarSalvar(false)
+  }
+
+  async function executarSalvar(confirmarEstoqueInsuficiente: boolean) {
+    setAvisoEstoqueInsuficiente(null)
+
+    const itensValidos = itens.filter((i) => i.faca_id)
 
     const parcelasBoleto: ParcelaInput[] = boletoParcelas
       .filter((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
@@ -304,6 +326,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
           quantidade: i.quantidade,
           preco_unitario: parseFloat(Math.max(0, (i.preco_unitario || 0) - (i.desconto_val || 0)).toFixed(2)),
         })),
+        confirmarEstoqueInsuficiente,
       }
       if (editando) await atualizarVenda(editando.id, input)
       else await criarVenda(input)
@@ -491,8 +514,17 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               const precoLiquido = Math.max(0, (item.preco_unitario || 0) - (item.desconto_val || 0))
               const subtotal = (item.quantidade || 0) * precoLiquido
               const temDesconto = (item.desconto_val || 0) > 0
+              const faca = item.faca_id ? facas.find((f) => f.id === item.faca_id) : undefined
+              const estoqueAtual = faca != null ? Number(faca.estoque_atual ?? 0) : null
+              const qtdTotalFacaNoPedido = item.faca_id
+                ? itens
+                    .filter((i) => i.faca_id === item.faca_id)
+                    .reduce((s, i) => s + (Number(i.quantidade) || 0), 0)
+                : 0
+              const acimaDoEstoque = estoqueAtual != null && qtdTotalFacaNoPedido > estoqueAtual
               return (
-                <div key={idx} className="grid gap-2 items-center"
+                <div key={idx} className="flex flex-col gap-0.5">
+                <div className="grid gap-2 items-center"
                   style={{ gridTemplateColumns: '1fr 70px 110px 180px 90px 32px' }}>
                   {/* Faca */}
                   <SearchableSelect
@@ -603,6 +635,18 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                   </button>
+                </div>
+                {estoqueAtual != null && (
+                  <p className="text-xs px-1 tabular-nums" style={{ color: acimaDoEstoque ? '#b45309' : 'var(--ac-muted)' }}>
+                    Em estoque: {estoqueAtual}
+                    {acimaDoEstoque && (
+                      <span>
+                        {' '}
+                        · total neste pedido: {qtdTotalFacaNoPedido}
+                      </span>
+                    )}
+                  </p>
+                )}
                 </div>
               )
             })}
@@ -856,11 +900,46 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
           </div>
         </div>
 
+        {avisoEstoqueInsuficiente && avisoEstoqueInsuficiente.length > 0 && (
+          <div
+            className="rounded-xl p-4 flex flex-col gap-3"
+            style={{ background: '#fffbeb', border: '1px solid #fde68a' }}
+          >
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
+                Estoque insuficiente
+              </p>
+              <p className="text-xs mt-1" style={{ color: '#b45309' }}>
+                A venda pode ser registrada mesmo assim — a produção pode ocorrer depois do pedido.
+              </p>
+              <ul className="mt-2 text-xs list-disc pl-4 space-y-0.5" style={{ color: '#92400e' }}>
+                {avisoEstoqueInsuficiente.map((linha) => (
+                  <li key={linha}>{linha}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setAvisoEstoqueInsuficiente(null)} disabled={loading}>
+                Voltar e ajustar
+              </Button>
+              <Button loading={loading} onClick={() => void executarSalvar(true)}>
+                {editando ? 'Salvar mesmo assim' : 'Criar venda mesmo assim'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {erro && <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>}
 
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button loading={loading} onClick={salvar}>{editando ? 'Salvar' : 'Criar venda'}</Button>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            Cancelar
+          </Button>
+          {!avisoEstoqueInsuficiente && (
+            <Button loading={loading} onClick={salvar}>
+              {editando ? 'Salvar' : 'Criar venda'}
+            </Button>
+          )}
         </div>
       </div>
     </Modal>
