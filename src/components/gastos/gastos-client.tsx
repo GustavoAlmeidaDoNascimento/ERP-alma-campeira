@@ -82,7 +82,7 @@ export function GastosClient({
   )
 
   const totalPorTipo = useMemo(() => {
-    const acc = new Map<TipoGasto, number>()
+    const acc = new Map<string, number>()
     for (const g of filtrados) {
       acc.set(g.tipo, (acc.get(g.tipo) ?? 0) + Number(g.valor ?? 0))
     }
@@ -137,10 +137,12 @@ export function GastosClient({
             {filtrados.length} {filtrados.length === 1 ? 'lançamento' : 'lançamentos'}
           </p>
         </div>
-        {totalPorTipo.map(([t, v]) => (
+        {totalPorTipo.map(([t, v]) => {
+          const meta = metaTipoGasto(t)
+          return (
           <div key={t} className="rounded-xl p-4" style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)' }}>
-            <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: TIPOS_GASTO[t].color }}>
-              {TIPOS_GASTO[t].label}
+            <p className="text-xs uppercase tracking-wide font-semibold" style={{ color: meta.color }}>
+              {meta.label}
             </p>
             <p className="text-2xl font-bold mt-1" style={{ color: 'var(--ac-text)' }}>{moedaBR.format(v)}</p>
             <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>
