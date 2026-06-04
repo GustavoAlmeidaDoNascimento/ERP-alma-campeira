@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { GastoModal } from './gasto-modal'
 import { deletarGasto } from '@/lib/actions/gastos'
-import { TIPOS_GASTO, FORMAS_PAGAMENTO } from '@/types'
-import type { Gasto, TipoGasto, FormaPagamento } from '@/types'
+import { FORMAS_PAGAMENTO, metaTipoGasto } from '@/types'
+import type { Gasto, TipoGasto, FormaPagamento, TipoGastoDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
-import { useGastos } from '@/lib/query/hooks'
+import { useGastos, useTiposGasto } from '@/lib/query/hooks'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
