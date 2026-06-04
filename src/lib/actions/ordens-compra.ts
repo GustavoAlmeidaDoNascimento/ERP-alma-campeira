@@ -940,6 +940,9 @@ export async function definirPagoOrdemCompra(
       const forma = formaPagamento === 'cartao_credito' ? 'cartao_credito'
         : formaPagamento === 'dinheiro' ? 'dinheiro'
         : formaPagamento === 'pix' ? 'pix'
+        : formaPagamento === 'cheque' ? 'cheque'
+        : formaPagamento === 'link' ? 'link'
+        : formaPagamento === 'boleto' ? 'boleto'
         : 'transferencia'
       const { error: gastoErr } = await supabase.from('gastos').insert({
         tipo: 'pagamento_oc',
