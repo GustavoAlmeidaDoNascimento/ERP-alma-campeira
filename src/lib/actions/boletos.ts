@@ -124,11 +124,24 @@ export async function criarBoleto(input: BoletoInput): Promise<string> {
   if (error || !boleto) throw new Error(error?.message ?? 'Erro ao criar boleto.')
 
   const rows = parcelas.map((p) => ({ ...p, boleto_id: boleto.id }))
-  const { error: errPar } = await supabase.from('boleto_parcelas').insert(rows)
+  const { data: parcelasInseridas, error: errPar } = await supabase
+    .from('boleto_parcelas')
+    .insert(rows)
+    .select('id, pago_em, valor_pago, valor')
   if (errPar) {
     // rollback manual
     await supabase.from('boletos').delete().eq('id', boleto.id)
     throw new Error(errPar.message)
+  }
+  for (const p of parcelasInseridas ?? []) {
+    if (p.pago_em) {
+      await criarGastoDaParcela(
+        supabase,
+        p.id,
+        p.pago_em,
+        Number(p.valor_pago ?? p.valor ?? 0),
+      )
+    }
   }
   return boleto.id
 }
@@ -159,16 +172,28 @@ export async function atualizarBoleto(id: string, input: BoletoInput) {
     numerosNovos.add(p.numero)
     const atual = atuaisPorNumero.get(p.numero)
     if (!atual) {
-      const { error: errIns } = await supabase
+      const { data: nova, error: errIns } = await supabase
         .from('boleto_parcelas')
         .insert({ ...p, boleto_id: id })
+        .select('id')
+        .single()
       if (errIns) throw new Error(errIns.message)
+      if (p.pago_em && nova) {
+        await criarGastoDaParcela(
+          supabase,
+          nova.id,
+          p.pago_em,
+          Number(p.valor_pago ?? p.valor),
+        )
+      }
       continue
     }
+    const estavaPago = !!(atual.pago_em ?? null)
+    const ficouPago = !!(p.pago_em ?? null)
     const mudou =
       String(atual.vencimento) !== String(p.vencimento) ||
       Number(atual.valor) !== Number(p.valor) ||
-      (atual.pago_em ?? null) !== (p.pago_em ?? null) ||
+      estavaPago !== ficouPago ||
       Number(atual.valor_pago ?? 0) !== Number(p.valor_pago ?? 0)
     if (mudou) {
       const { error: errUpd } = await supabase
@@ -181,11 +206,15 @@ export async function atualizarBoleto(id: string, input: BoletoInput) {
         })
         .eq('id', atual.id)
       if (errUpd) throw new Error(errUpd.message)
+      await sincronizarGastoParcela(supabase, atual.id, estavaPago, ficouPago, p)
     }
   }
 
   const removidos = (atuais ?? []).filter((p) => !numerosNovos.has(Number(p.numero)))
   if (removidos.length > 0) {
+    for (const p of removidos) {
+      await removerGastoDaParcela(supabase, p.id)
+    }
     const { error: errDel } = await supabase
       .from('boleto_parcelas')
       .delete()
@@ -239,10 +268,65 @@ export async function marcarParcela(
       .eq('id', parcela_id)
     if (error) throw new Error(error.message)
 
-    await supabase
+    await removerGastoDaParcela(supabase, parcela_id)
+  }
+}
+
+type ParcelaGastoSync = {
+  pago_em: string | null
+  valor_pago: number | null
+  valor: number
+}
+
+async function removerGastoDaParcela(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parcelaId: string,
+) {
+  const { error } = await supabase
+    .from('gastos')
+    .delete()
+    .eq('boleto_parcela_id', parcelaId)
+  if (error) throw new Error(error.message)
+}
+
+/** Mantém gastos alinhados ao estado de pagamento da parcela (modal de boleto / edição). */
+async function sincronizarGastoParcela(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parcelaId: string,
+  estavaPago: boolean,
+  ficouPago: boolean,
+  parcela: ParcelaGastoSync,
+) {
+  if (!estavaPago && ficouPago && parcela.pago_em) {
+    await criarGastoDaParcela(
+      supabase,
+      parcelaId,
+      parcela.pago_em,
+      Number(parcela.valor_pago ?? parcela.valor),
+    )
+    return
+  }
+  if (estavaPago && !ficouPago) {
+    await removerGastoDaParcela(supabase, parcelaId)
+    return
+  }
+  if (estavaPago && ficouPago && parcela.pago_em) {
+    const valor = Number(parcela.valor_pago ?? parcela.valor)
+    const { data: gastoExistente } = await supabase
       .from('gastos')
-      .delete()
-      .eq('boleto_parcela_id', parcela_id)
+      .select('id')
+      .eq('boleto_parcela_id', parcelaId)
+      .limit(1)
+      .maybeSingle()
+    if (!gastoExistente) {
+      await criarGastoDaParcela(supabase, parcelaId, parcela.pago_em, valor)
+      return
+    }
+    const { error } = await supabase
+      .from('gastos')
+      .update({ valor, data_gasto: parcela.pago_em })
+      .eq('boleto_parcela_id', parcelaId)
+    if (error) throw new Error(error.message)
   }
 }
 
@@ -291,7 +375,7 @@ async function criarGastoDaParcela(
     }
   }
 
-  await supabase.from('gastos').insert({
+  const { error: insertErr } = await supabase.from('gastos').insert({
     tipo,
     descricao,
     valor: valorPago,
@@ -301,4 +385,5 @@ async function criarGastoDaParcela(
     boleto_parcela_id: parcelaId,
     usuario_id: uid,
   })
+  if (insertErr) throw new Error(insertErr.message)
 }
