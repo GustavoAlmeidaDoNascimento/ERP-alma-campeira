@@ -2,16 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import type { FormaPagamento, Gasto, TipoGasto } from '@/types'
-
-const TIPOS_VALIDOS: TipoGasto[] = [
-  'beneficios',
-  'investimento',
-  'material_consumo',
-  'administrativo',
-  'pagamento_oc',
-  'outros',
-]
+import { capitalizarTipoGasto, type FormaPagamento, type Gasto, type TipoGasto } from '@/types'
 
 const FORMAS_VALIDAS: FormaPagamento[] = [
   'pix',
@@ -37,7 +28,8 @@ export type GastoInput = {
 }
 
 function normalizarGastoPayload(input: GastoInput) {
-  if (!TIPOS_VALIDOS.includes(input.tipo)) throw new Error('Tipo de gasto inválido.')
+  const tipo = capitalizarTipoGasto(input.tipo)
+  if (!tipo) throw new Error('Selecione o tipo de gasto.')
   if (!FORMAS_VALIDAS.includes(input.forma_pagamento)) throw new Error('Forma de pagamento inválida.')
   const descricao = (input.descricao ?? '').trim()
   if (!descricao) throw new Error('Descrição é obrigatória.')
@@ -46,7 +38,7 @@ function normalizarGastoPayload(input: GastoInput) {
   if (!input.data_gasto) throw new Error('Data do gasto é obrigatória.')
 
   return {
-    tipo: input.tipo,
+    tipo,
     descricao,
     valor,
     forma_pagamento: input.forma_pagamento,
@@ -54,6 +46,19 @@ function normalizarGastoPayload(input: GastoInput) {
     observacao: (input.observacao ?? '').toString().trim() || null,
     ordem_compra_id: input.ordem_compra_id ?? null,
   }
+}
+
+/**
+ * Garante que a tag de tipo exista em `tipos_gasto` (idempotente). Mantém o
+ * catálogo de tags coerente mesmo se um gasto for salvo com um tipo recém-criado.
+ */
+async function garantirTipoGasto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  nome: string
+) {
+  const { data } = await supabase.from('tipos_gasto').select('id').eq('nome', nome).limit(1)
+  if (data && data.length > 0) return
+  await supabase.from('tipos_gasto').insert({ nome, sistema: false })
 }
 
 export async function listarGastos(): Promise<Gasto[]> {
