@@ -10,6 +10,7 @@ import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
 import { buscarEmpresaPorCnpj } from '@/lib/br/cnpj'
 import { SIGLAS_UF } from '@/lib/br/constants'
+import { validarCamposObrigatoriosParceiro } from '@/lib/br/validar-cadastro-parceiro'
 
 type Props = {
   open: boolean
@@ -56,7 +57,7 @@ const formVazio: Form = {
   complemento: '',
   bairro: '',
   cidade: '',
-  uf: '',
+  uf: 'RS',
   razao_social: '',
   ie: '',
   codigo_municipio_ibge: '',
@@ -89,7 +90,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         complemento: editando.complemento ?? '',
         bairro: editando.bairro ?? '',
         cidade: editando.cidade ?? '',
-        uf: editando.uf ?? '',
+        uf: editando.uf || 'RS',
         razao_social: editando.razao_social ?? '',
         ie: editando.ie ?? '',
         codigo_municipio_ibge: editando.codigo_municipio_ibge ?? '',
@@ -198,9 +199,10 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
-    if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
-    if (form.telefone.trim() && !/^[\d\s()\-+]+$/.test(form.telefone)) {
-      setErro('Telefone inválido. Use apenas números, espaços e os caracteres ( ) - +')
+    try {
+      validarCamposObrigatoriosParceiro(form)
+    } catch (err: unknown) {
+      setErro(err instanceof Error ? err.message : 'Preencha todos os campos obrigatórios.')
       return
     }
 
@@ -243,6 +245,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         <Input
           id="nome"
           label="Nome *"
+          required
           placeholder="Ex: Sergio Rodrigues"
           value={form.nome}
           onChange={(e) => set('nome', e.target.value)}
@@ -250,8 +253,9 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento</label>
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento *</label>
             <select
+              required
               value={form.tipo_documento}
               onChange={(e) => onTipoDocumentoChange(e.target.value as TipoDocumento)}
               className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
@@ -270,7 +274,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           <div className="sm:col-span-2">
             <Input
               id="documento"
-              label={form.tipo_documento === 'cpf' ? 'CPF' : 'CNPJ'}
+              label={form.tipo_documento === 'cpf' ? 'CPF *' : 'CNPJ *'}
+              required
               placeholder={form.tipo_documento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
               value={form.documento}
               onChange={(e) => onDocumentoInput(e.target.value)}
@@ -290,7 +295,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         {form.tipo_documento === 'cnpj' && (
           <Input
             id="forn-razao-social"
-            label="Razão Social"
+            label="Razão Social *"
+            required
             placeholder="Nome jurídico (se diferente do nome fantasia acima)"
             value={form.razao_social}
             onChange={(e) => set('razao_social', e.target.value)}
@@ -299,7 +305,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
 
         <Input
           id="forn-ie"
-          label="Inscrição Estadual"
+          label="Inscrição Estadual *"
+          required
           placeholder="ISENTO ou número"
           value={form.ie}
           onChange={(e) => set('ie', e.target.value)}
@@ -308,7 +315,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
         <div className="grid grid-cols-2 gap-3">
           <Input
             id="telefone"
-            label="Telefone"
+            label="Telefone *"
+            required
             type="tel"
             placeholder="(51) 99999-0000"
             value={form.telefone}
@@ -319,7 +327,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           />
           <Input
             id="email"
-            label="E-mail"
+            label="E-mail *"
+            required
             type="email"
             placeholder="contato@fornecedor.com"
             value={form.email}
@@ -336,7 +345,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
             <div className="flex-1 min-w-0">
               <Input
                 id="cep"
-                label="CEP"
+                label="CEP *"
+                required
                 placeholder="00000-000"
                 value={form.cep}
                 onChange={(e) => onCepInput(e.target.value)}
@@ -349,7 +359,8 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           </div>
           <Input
             id="logradouro"
-            label="Logradouro (rua)"
+            label="Logradouro (rua) *"
+            required
             placeholder="Rua, avenida..."
             value={form.logradouro}
             onChange={(e) => set('logradouro', e.target.value)}
@@ -357,14 +368,16 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <Input
               id="numero"
-              label="Número"
+              label="Número *"
+              required
               placeholder="123"
               value={form.numero}
               onChange={(e) => set('numero', e.target.value)}
             />
             <Input
               id="complemento"
-              label="Complemento"
+              label="Complemento *"
+              required
               placeholder="Sala, bloco..."
               value={form.complemento}
               onChange={(e) => set('complemento', e.target.value)}
@@ -372,21 +385,24 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           </div>
           <Input
             id="bairro"
-            label="Bairro"
+            label="Bairro *"
+            required
             value={form.bairro}
             onChange={(e) => set('bairro', e.target.value)}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               id="cidade"
-              label="Cidade"
+              label="Cidade *"
+              required
               value={form.cidade}
               onChange={(e) => set('cidade', e.target.value)}
             />
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="uf" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>UF</label>
+              <label htmlFor="uf" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>UF *</label>
               <select
                 id="uf"
+                required
                 value={form.uf}
                 onChange={(e) => set('uf', e.target.value)}
                 className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
@@ -398,13 +414,21 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
               >
-                <option value="">—</option>
                 {ESTADOS_BR.map((uf) => (
                   <option key={uf} value={uf}>{uf}</option>
                 ))}
               </select>
             </div>
           </div>
+          <Input
+            id="codigo_municipio_ibge"
+            label="Código IBGE do município *"
+            placeholder="7 dígitos (preenchido ao buscar CEP)"
+            value={form.codigo_municipio_ibge}
+            onChange={(e) => set('codigo_municipio_ibge', e.target.value.replace(/\D/g, '').slice(0, 7))}
+            inputMode="numeric"
+            required
+          />
         </div>
 
         {erro && (
