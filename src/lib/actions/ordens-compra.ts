@@ -13,6 +13,7 @@ import {
   gerarCodigoOC,
   gerarOCsDeFilaItens,
 } from '@/lib/ordens-compra/gerar-oc-fila'
+import { TIPO_GASTO_PAGAMENTO_OC } from '@/types'
 import type {
   OrdemCompra,
   FilaReposicao,
@@ -930,7 +931,7 @@ export async function definirPagoOrdemCompra(
       .from('gastos')
       .select('id')
       .eq('ordem_compra_id', id)
-      .eq('tipo', 'pagamento_oc')
+      .eq('tipo', TIPO_GASTO_PAGAMENTO_OC)
       .is('boleto_parcela_id', null)
       .limit(1)
       .maybeSingle()
@@ -945,7 +946,7 @@ export async function definirPagoOrdemCompra(
         : formaPagamento === 'boleto' ? 'boleto'
         : 'transferencia'
       const { error: gastoErr } = await supabase.from('gastos').insert({
-        tipo: 'pagamento_oc',
+        tipo: TIPO_GASTO_PAGAMENTO_OC,
         descricao,
         valor: valorTotal,
         forma_pagamento: forma,
@@ -960,7 +961,7 @@ export async function definirPagoOrdemCompra(
       .from('gastos')
       .delete()
       .eq('ordem_compra_id', id)
-      .eq('tipo', 'pagamento_oc')
+      .eq('tipo', TIPO_GASTO_PAGAMENTO_OC)
       .is('boleto_parcela_id', null)
     if (delErr) throw new Error(delErr.message)
   }
