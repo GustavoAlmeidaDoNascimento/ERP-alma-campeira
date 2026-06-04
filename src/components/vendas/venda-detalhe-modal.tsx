@@ -8,8 +8,7 @@ import { STATUS_PEDIDO, FORMAS_PAGAMENTO_OC } from '@/types'
 import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
 
 const STATUS_OPTIONS: StatusPedido[] = ['em_espera', 'em_producao', 'entregue']
-import { gerarPdfVendaSemValor } from '@/components/vendas/venda-sem-valor-pdf'
-import { gerarPdfPedido } from '@/components/vendas/venda-pedido-pdf'
+import { abrirImpressaoPedido, abrirImpressaoVendaSemValor } from '@/components/vendas/venda-impressao'
 import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
 import { formatarDocumento } from '@/lib/br/documento'
 
@@ -77,7 +76,6 @@ type Props = {
 
 export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Props) {
   const [loadingStatus, setLoadingStatus] = useState(false)
-  const [loadingPdf, setLoadingPdf] = useState(false)
   const [imprimirOpen, setImprimirOpen] = useState(false)
   const [erro, setErro] = useState('')
   const imprimirRef = useRef<HTMLDivElement | null>(null)
@@ -104,34 +102,20 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
   const status = STATUS_PEDIDO[pedido.status]
   const pedidoId = pedido.id
 
-  async function exportarVendaSemValor() {
+  function exportarVendaSemValor() {
     const p = pedido
     if (!p) return
     setErro('')
     setImprimirOpen(false)
-    setLoadingPdf(true)
-    try {
-      await gerarPdfVendaSemValor(p)
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o PDF.')
-    } finally {
-      setLoadingPdf(false)
-    }
+    abrirImpressaoVendaSemValor(p)
   }
 
-  async function exportarPedido() {
+  function exportarPedido() {
     const p = pedido
     if (!p) return
     setErro('')
     setImprimirOpen(false)
-    setLoadingPdf(true)
-    try {
-      await gerarPdfPedido(p)
-    } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o PDF.')
-    } finally {
-      setLoadingPdf(false)
-    }
+    abrirImpressaoPedido(p)
   }
 
   async function handleAlterarStatus(novoStatus: StatusPedido) {
@@ -436,7 +420,6 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             <div ref={imprimirRef} style={{ position: 'relative' }}>
               <Button
                 variant="secondary"
-                loading={loadingPdf}
                 onClick={() => setImprimirOpen((v) => !v)}
                 aria-haspopup="menu"
                 aria-expanded={imprimirOpen}
@@ -461,7 +444,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => void exportarVendaSemValor()}
+                    onClick={exportarVendaSemValor}
                     className="w-full text-left px-3 py-2 text-sm hover:opacity-80"
                     style={{ color: 'var(--ac-text)', background: 'transparent' }}
                   >
@@ -470,7 +453,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => void exportarPedido()}
+                    onClick={exportarPedido}
                     className="w-full text-left px-3 py-2 text-sm hover:opacity-80"
                     style={{ color: 'var(--ac-text)', background: 'transparent', borderTop: '1px solid var(--ac-border)' }}
                   >
