@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { TIPO_GASTO_OUTROS, TIPO_GASTO_PAGAMENTO_OC } from '@/types'
 import type { Boleto, BoletoTipo } from '@/types'
 
 export type ParcelaInput = {
@@ -361,7 +362,7 @@ async function criarGastoDaParcela(
   const uid = await requireAuthenticatedUserId().catch(() => null)
 
   let descricao = `Boleto parcela ${parcela.numero} — ${boleto.contraparte_nome}`
-  let tipo: string = 'outros'
+  let tipo: string = TIPO_GASTO_OUTROS
 
   if (boleto.ordem_compra_id) {
     const { data: oc } = await supabase
