@@ -345,6 +345,17 @@ export type Pedido = {
   itens?: PedidoItem[]
 }
 
+/** Resumo de venda exibido no histórico da ficha do cliente. */
+export type PedidoHistoricoResumo = {
+  id: string
+  codigo: string
+  sequencial: number | null
+  data_pedido: string
+  status: StatusPedido
+  valor_total: number | null
+  vendedor_nome: string | null
+}
+
 // ============================================================
 // Orçamentos (não impactam estoque, fila de reposição ou métricas
 // de vendas; podem ser convertidos em Pedido a qualquer momento)
@@ -439,6 +450,20 @@ export type OrdemCompra = {
   pedido_sequencial?: number | null
   cliente_nome?: string | null
   itens?: OrdemCompraItem[]
+}
+
+/** Resumo de OC exibido no histórico da ficha do fornecedor. */
+export type OrdemCompraHistoricoResumo = {
+  id: string
+  codigo: string
+  sequencial_fornecedor: number | null
+  data_geracao: string
+  status: StatusOC
+  pago: boolean
+  valor_total: number
+  pedido_codigo: string | null
+  pedido_sequencial: number | null
+  cliente_nome: string | null
 }
 
 export type FilaReposicao = {
