@@ -372,7 +372,7 @@ async function criarGastoDaParcela(
       .single()
     if (oc) {
       descricao = `Pagamento OC ${oc.codigo} — parcela ${parcela.numero} — ${boleto.contraparte_nome}`
-      tipo = 'pagamento_oc'
+      tipo = TIPO_GASTO_PAGAMENTO_OC
     }
   }
 
