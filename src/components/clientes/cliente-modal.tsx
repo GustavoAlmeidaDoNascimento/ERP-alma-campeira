@@ -9,6 +9,7 @@ import { TIPOS_CLIENTE } from '@/types'
 import type { Cliente, TipoDocumento } from '@/types'
 import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
+import { buscarEmpresaPorCnpj } from '@/lib/br/cnpj'
 import { SIGLAS_UF, INDICADORES_IE } from '@/lib/br/constants'
 
 type Props = {
@@ -50,6 +51,7 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
   const [codigoIbge, setCodigoIbge] = useState('')
   const [loading, setLoading] = useState(false)
   const [buscandoCep, setBuscandoCep] = useState(false)
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false)
   const [erro, setErro] = useState('')
 
   useEffect(() => {
@@ -135,6 +137,43 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
       setErro('Não foi possível consultar o CEP. Tente novamente.')
     } finally {
       setBuscandoCep(false)
+    }
+  }
+
+  async function handleBuscarCnpj() {
+    setErro('')
+    if (tipoDocumento !== 'cnpj') {
+      setErro('Selecione o tipo CNPJ para usar a busca.')
+      return
+    }
+    const limpo = apenasDigitos(documento)
+    if (limpo.length !== 14) {
+      setErro('Informe um CNPJ com 14 dígitos.')
+      return
+    }
+    setBuscandoCnpj(true)
+    try {
+      const emp = await buscarEmpresaPorCnpj(limpo)
+      if (!emp) {
+        setErro('CNPJ não encontrado na BrasilAPI. Verifique o número ou preencha manualmente.')
+        return
+      }
+      setNome((prev) => prev || emp.nome_fantasia || emp.razao_social)
+      setRazaoSocial((prev) => emp.razao_social || prev)
+      setTelefone((prev) => prev || emp.telefone)
+      setEmail((prev) => prev || emp.email)
+      if (emp.cep) setCep(formatarCep(emp.cep))
+      setLogradouro((prev) => emp.logradouro || prev)
+      setNumero((prev) => emp.numero || prev)
+      setComplemento((prev) => emp.complemento || prev)
+      setBairro((prev) => emp.bairro || prev)
+      setCidade((prev) => emp.cidade || prev)
+      setEstado((prev) => emp.uf || prev)
+      if (emp.ibge) setCodigoIbge(emp.ibge)
+    } catch {
+      setErro('Não foi possível consultar o CNPJ. Tente novamente.')
+    } finally {
+      setBuscandoCnpj(false)
     }
   }
 
@@ -234,6 +273,14 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
             />
           </div>
         </div>
+
+        {tipoDocumento === 'cnpj' && (
+          <div className="flex justify-end -mt-2">
+            <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={handleBuscarCnpj}>
+              Buscar pelo CNPJ
+            </Button>
+          </div>
+        )}
 
         {tipoDocumento === 'cnpj' && (
           <div className="grid grid-cols-1 gap-3">

@@ -8,6 +8,7 @@ import { criarFornecedor, atualizarFornecedor } from '@/lib/actions/fornecedores
 import type { Fornecedor, TipoDocumento } from '@/types'
 import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/documento'
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
+import { buscarEmpresaPorCnpj } from '@/lib/br/cnpj'
 import { SIGLAS_UF } from '@/lib/br/constants'
 
 type Props = {
@@ -70,6 +71,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
   const [buscandoCep, setBuscandoCep] = useState(false)
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false)
 
   useEffect(() => {
     if (editando) {
@@ -150,6 +152,46 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
       setErro('Não foi possível consultar o CEP. Tente novamente.')
     } finally {
       setBuscandoCep(false)
+    }
+  }
+
+  async function handleBuscarCnpj() {
+    setErro('')
+    if (form.tipo_documento !== 'cnpj') {
+      setErro('Selecione o tipo CNPJ para usar a busca.')
+      return
+    }
+    const limpo = apenasDigitos(form.documento)
+    if (limpo.length !== 14) {
+      setErro('Informe um CNPJ com 14 dígitos.')
+      return
+    }
+    setBuscandoCnpj(true)
+    try {
+      const emp = await buscarEmpresaPorCnpj(limpo)
+      if (!emp) {
+        setErro('CNPJ não encontrado na BrasilAPI. Verifique o número ou preencha manualmente.')
+        return
+      }
+      setForm((f) => ({
+        ...f,
+        nome: f.nome || emp.nome_fantasia || emp.razao_social,
+        razao_social: emp.razao_social || f.razao_social,
+        telefone: f.telefone || emp.telefone,
+        email: f.email || emp.email,
+        cep: emp.cep ? formatarCep(emp.cep) : f.cep,
+        logradouro: emp.logradouro || f.logradouro,
+        numero: emp.numero || f.numero,
+        complemento: emp.complemento || f.complemento,
+        bairro: emp.bairro || f.bairro,
+        cidade: emp.cidade || f.cidade,
+        uf: emp.uf || f.uf,
+        codigo_municipio_ibge: emp.ibge || f.codigo_municipio_ibge,
+      }))
+    } catch {
+      setErro('Não foi possível consultar o CNPJ. Tente novamente.')
+    } finally {
+      setBuscandoCnpj(false)
     }
   }
 
@@ -236,6 +278,14 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
             />
           </div>
         </div>
+
+        {form.tipo_documento === 'cnpj' && (
+          <div className="flex justify-end -mt-2">
+            <Button type="button" variant="secondary" loading={buscandoCnpj} onClick={handleBuscarCnpj}>
+              Buscar pelo CNPJ
+            </Button>
+          </div>
+        )}
 
         {form.tipo_documento === 'cnpj' && (
           <Input
