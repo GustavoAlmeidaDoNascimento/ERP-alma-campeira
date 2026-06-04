@@ -211,9 +211,8 @@ export function BoletosClient({
     setMarcandoIds((prev) => new Set(prev).add(parcelaId))
     try {
       await marcarParcela(parcelaId, novoPago, novoPago ? { valor_pago: valor } : undefined)
-      // Realtime do Supabase invalida a query automaticamente quando
-      // boleto_parcelas muda — NÃO precisamos chamar refreshActiveTab()
-      // (era ele que dobrava a latência visível).
+      // Realtime invalida boletos e gastos; invalidação explícita cobre polling lento.
+      void queryClient.invalidateQueries({ queryKey: qk.gastos.all })
     } catch (e: unknown) {
       // Rollback se falhar
       if (snapshot) queryClient.setQueryData(queryKey, snapshot)
