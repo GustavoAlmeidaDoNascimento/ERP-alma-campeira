@@ -11,6 +11,17 @@ import { getSessionUser } from '@/lib/session'
 
 type Acao = 'ver' | 'criar' | 'editar' | 'deletar'
 
+function isErroConexaoPostgrest(error: { message?: string } | null | undefined): boolean {
+  const msg = (error?.message ?? '').toLowerCase()
+  return msg.includes('fetch failed') || msg.includes('econnrefused') || msg.includes('enotfound')
+}
+
+function erroPostgrestIndisponivel(): Error {
+  return new Error(
+    'Banco indisponível (PostgREST). Inicie o Docker Desktop e rode `npm run db:up` antes de usar o ERP local.',
+  )
+}
+
 // Tipo compatível com o uso anterior de User do Supabase
 export type AuthUser = { id: string; email: string }
 
@@ -45,10 +56,14 @@ const getPermissoesEfetivasCached = unstable_cache(
     const supabase = createAdminClient()
 
     // Permissões customizadas têm prioridade
-    const { data: customPerms } = await supabase
+    const { data: customPerms, error: customError } = await supabase
       .from('usuario_permissoes')
       .select('*')
       .eq('usuario_id', userId)
+
+    if (customError) {
+      if (isErroConexaoPostgrest(customError)) throw erroPostgrestIndisponivel()
+    }
 
     if (customPerms && customPerms.length > 0) {
       return permissoesFromArray(customPerms as Parameters<typeof permissoesFromArray>[0])
@@ -65,6 +80,7 @@ const getPermissoesEfetivasCached = unstable_cache(
     // bloqueamos o acesso em vez de conceder acesso total.
     // PGRST116 = "The result contains 0 rows" (sem perfil = pode ser bootstrap).
     if (perfilError && perfilError.code !== 'PGRST116') {
+      if (isErroConexaoPostgrest(perfilError)) throw erroPostgrestIndisponivel()
       return permissoesVazias()
     }
 
