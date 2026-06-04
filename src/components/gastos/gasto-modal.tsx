@@ -1,11 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { criarGasto, atualizarGasto } from '@/lib/actions/gastos'
-import { TIPOS_GASTO, FORMAS_PAGAMENTO } from '@/types'
+import { TipoGastoInput } from './tipo-gasto-input'
+import { useTiposGasto } from '@/lib/query/hooks'
+import { qk } from '@/lib/query/keys'
+import { FORMAS_PAGAMENTO } from '@/types'
 import type { FormaPagamento, Gasto, TipoGasto } from '@/types'
 
 type Props = {
@@ -14,6 +18,7 @@ type Props = {
   editando: Gasto | null
   usuarios: { id: string; nome: string }[]
   usuarioLogadoId: string | null
+  perm: { criar: boolean; deletar: boolean }
   onSaved?: () => void
 }
 
@@ -39,8 +44,10 @@ function hoje() {
   return `${yyyy}-${mm}-${dd}`
 }
 
-export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId, onSaved }: Props) {
-  const [tipo, setTipo] = useState<TipoGasto>('material_consumo')
+export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId, perm, onSaved }: Props) {
+  const queryClient = useQueryClient()
+  const { data: tipos = [] } = useTiposGasto()
+  const [tipo, setTipo] = useState<TipoGasto>('')
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState<string>('')
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('pix')
@@ -63,7 +70,7 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
       setObservacao(editando.observacao ?? '')
       setUsuarioId(editando.usuario_id ?? '')
     } else {
-      setTipo('material_consumo')
+      setTipo('')
       setDescricao('')
       setValor('')
       setFormaPagamento('pix')
@@ -78,7 +85,13 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
     setErro('')
   }, [open, editando, usuarioLogadoId, usuarios])
 
+  function refreshTipos() {
+    queryClient.invalidateQueries({ queryKey: qk.tiposGasto.all })
+    queryClient.invalidateQueries({ queryKey: qk.gastos.all })
+  }
+
   async function salvar() {
+    if (!tipo.trim()) { setErro('Selecione o tipo de gasto.'); return }
     if (!descricao.trim()) { setErro('Descrição é obrigatória.'); return }
     const v = Number(valor.replace(',', '.'))
     if (!Number.isFinite(v) || v <= 0) { setErro('Informe um valor maior que zero.'); return }
@@ -126,17 +139,15 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Tipo *</label>
-            <select
+            <TipoGastoInput
               value={tipo}
-              onChange={(e) => setTipo(e.target.value as TipoGasto)}
+              onChange={setTipo}
+              tipos={tipos}
               disabled={vinculadoOC}
-              className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none disabled:opacity-60"
-              style={{ ...inputStyle, ...selectChevron }}
-            >
-              {(Object.keys(TIPOS_GASTO) as TipoGasto[]).map((t) => (
-                <option key={t} value={t}>{TIPOS_GASTO[t].label}</option>
-              ))}
-            </select>
+              podeCriar={perm.criar}
+              podeRemover={perm.deletar}
+              onTagsChanged={refreshTipos}
+            />
           </div>
 
           <Input
