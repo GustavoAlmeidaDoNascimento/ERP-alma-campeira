@@ -19,6 +19,8 @@ const FORMAS_VALIDAS: FormaPagamento[] = [
   'cartao_credito',
   'cartao_debito',
   'boleto',
+  'cheque',
+  'link',
   'transferencia',
   'outro',
 ]
