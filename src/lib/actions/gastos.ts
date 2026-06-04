@@ -48,17 +48,30 @@ function normalizarGastoPayload(input: GastoInput) {
   }
 }
 
+/** Normaliza para comparar tags sem caixa/acento (evita duplicatas). */
+function normalizarNome(s: string): string {
+  return (s ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .trim()
+    .toLowerCase()
+}
+
 /**
- * Garante que a tag de tipo exista em `tipos_gasto` (idempotente). Mantém o
- * catálogo de tags coerente mesmo se um gasto for salvo com um tipo recém-criado.
+ * Resolve o tipo do gasto para o nome canônico da tag: se já existir uma tag
+ * equivalente (ignorando caixa/acentos), reutiliza o nome dela; senão, cria a
+ * tag. Mantém o catálogo coerente e evita duplicatas por diferença de grafia.
  */
-async function garantirTipoGasto(
+async function resolverTipoGasto(
   supabase: Awaited<ReturnType<typeof createClient>>,
   nome: string
-) {
-  const { data } = await supabase.from('tipos_gasto').select('id').eq('nome', nome).limit(1)
-  if (data && data.length > 0) return
+): Promise<string> {
+  const { data } = await supabase.from('tipos_gasto').select('nome')
+  const alvo = normalizarNome(nome)
+  const existente = (data ?? []).find((t) => normalizarNome(t.nome) === alvo)
+  if (existente) return existente.nome
   await supabase.from('tipos_gasto').insert({ nome, sistema: false })
+  return nome
 }
 
 export async function listarGastos(): Promise<Gasto[]> {
@@ -80,8 +93,9 @@ export async function criarGasto(input: GastoInput) {
   // usuario_id vem do select "Quem está registrando" do modal; cai pro autenticado se não vier.
   const usuario_id =
     input.usuario_id ?? (await requireAuthenticatedUserId().catch(() => null))
-  const row = { ...normalizarGastoPayload(input), usuario_id }
-  await garantirTipoGasto(supabase, row.tipo)
+  const payload = normalizarGastoPayload(input)
+  const tipo = await resolverTipoGasto(supabase, payload.tipo)
+  const row = { ...payload, tipo, usuario_id }
   const { error } = await supabase.from('gastos').insert(row)
   if (error) throw new Error(error.message)
 }
@@ -89,11 +103,13 @@ export async function criarGasto(input: GastoInput) {
 export async function atualizarGasto(id: string, input: GastoInput) {
   await assertPermissao('gastos', 'editar')
   const supabase = await createClient()
+  const payload = normalizarGastoPayload(input)
+  const tipo = await resolverTipoGasto(supabase, payload.tipo)
   const row = {
-    ...normalizarGastoPayload(input),
+    ...payload,
+    tipo,
     ...(input.usuario_id !== undefined ? { usuario_id: input.usuario_id } : {}),
   }
-  await garantirTipoGasto(supabase, row.tipo)
   const { error } = await supabase.from('gastos').update(row).eq('id', id)
   if (error) throw new Error(error.message)
 }

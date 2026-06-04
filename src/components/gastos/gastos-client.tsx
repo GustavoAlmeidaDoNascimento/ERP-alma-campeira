@@ -149,7 +149,8 @@ export function GastosClient({
               {totalPeriodo > 0 ? `${((v / totalPeriodo) * 100).toFixed(1)}% do total` : '—'}
             </p>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Filtros */}
@@ -174,8 +175,8 @@ export function GastosClient({
             style={{ ...inputStyle, ...selectChevron }}
           >
             <option value="">Todos</option>
-            {(Object.keys(TIPOS_GASTO) as TipoGasto[]).map((t) => (
-              <option key={t} value={t}>{TIPOS_GASTO[t].label}</option>
+            {tipos.map((t) => (
+              <option key={t.id} value={t.nome}>{t.nome}</option>
             ))}
           </select>
         </div>
@@ -222,7 +223,7 @@ export function GastosClient({
                 </tr>
               )}
               {filtrados.map((g, i) => {
-                const meta = TIPOS_GASTO[g.tipo]
+                const meta = metaTipoGasto(g.tipo)
                 return (
                   <tr key={g.id}
                     style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
@@ -304,6 +305,7 @@ export function GastosClient({
         editando={editando}
         usuarios={usuarios}
         usuarioLogadoId={usuarioLogadoId}
+        perm={{ criar: perm.criar, deletar: perm.deletar }}
         onSaved={refreshActiveTab}
       />
 

@@ -1,7 +1,7 @@
 'use client'
 
 import type { MetricasFinanceiroData } from '@/lib/actions/metricas'
-import { TIPOS_GASTO, FORMAS_PAGAMENTO } from '@/types'
+import { FORMAS_PAGAMENTO, metaTipoGasto } from '@/types'
 
 const moedaBR = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const moedaCompacta = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
@@ -49,7 +49,7 @@ export function FinanceiroMetricsView({ data }: { data: MetricasFinanceiroData }
         ) : (
           <div className="flex flex-col gap-2">
             {despesasPorTipo.map((d) => {
-              const meta = TIPOS_GASTO[d.tipo]
+              const meta = metaTipoGasto(d.tipo)
               return (
                 <div key={d.tipo}>
                   <div className="flex items-center justify-between text-sm mb-1">
@@ -139,7 +139,7 @@ export function FinanceiroMetricsView({ data }: { data: MetricasFinanceiroData }
               </thead>
               <tbody>
                 {topGastos.map((g) => {
-                  const meta = TIPOS_GASTO[g.tipo]
+                  const meta = metaTipoGasto(g.tipo)
                   return (
                     <tr key={g.id} style={{ borderTop: '1px solid var(--ac-border)' }}>
                       <td className="px-2 py-2 whitespace-nowrap" style={{ color: 'var(--ac-muted)' }}>{formatarData(g.data)}</td>

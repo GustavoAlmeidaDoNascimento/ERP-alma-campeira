@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { listarGastos } from '@/lib/actions/gastos'
+import { listarTiposGasto } from '@/lib/actions/tipos-gasto'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getPermissoesEfetivas, getAuthenticatedUser } from '@/lib/auth'
 import { GastosClient } from '@/components/gastos/gastos-client'
@@ -19,8 +20,9 @@ export default async function GastosPage() {
 async function GastosPageData() {
   const perms = await getPermissoesEfetivas()
   if (!perms.gastos.ver) redirect('/')
-  const [gastos, usuarios, authUser] = await Promise.all([
+  const [gastos, tiposGasto, usuarios, authUser] = await Promise.all([
     listarGastos(),
+    listarTiposGasto(),
     getUsuariosPerfisList(),
     getAuthenticatedUser(),
   ])
@@ -28,6 +30,7 @@ async function GastosPageData() {
     <div data-nav-content-ready="Gastos">
       <GastosClient
         gastos={gastos}
+        tiposGasto={tiposGasto}
         usuarios={usuarios}
         usuarioLogadoId={authUser?.id ?? null}
         perm={perms.gastos}
