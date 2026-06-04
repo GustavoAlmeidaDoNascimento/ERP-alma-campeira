@@ -336,7 +336,7 @@ export type Pedido = {
   desconto_total?: number
   /** Natureza da operação para NF-e (default "VENDA DE MERCADORIA"). */
   natureza_operacao?: string | null
-  /** Forma de pagamento escolhida na venda (pix, dinheiro, crédito ou boleto). */
+  /** Forma de pagamento escolhida na venda (ver FORMAS_PAGAMENTO_OC). */
   forma_pagamento?: FormaPagamentoOC | null
   entregue_at: string | null
   created_at: string
@@ -600,6 +600,8 @@ export type FormaPagamento =
   | 'cartao_credito'
   | 'cartao_debito'
   | 'boleto'
+  | 'cheque'
+  | 'link'
   | 'transferencia'
   | 'outro'
 
@@ -609,17 +611,27 @@ export const FORMAS_PAGAMENTO: Record<FormaPagamento, { label: string }> = {
   cartao_credito: { label: 'Cartão de crédito' },
   cartao_debito:  { label: 'Cartão de débito' },
   boleto:         { label: 'Boleto' },
+  cheque:         { label: 'Cheque' },
+  link:           { label: 'Link' },
   transferencia:  { label: 'Transferência' },
   outro:          { label: 'Outro' },
 }
 
-export type FormaPagamentoOC = 'pix' | 'dinheiro' | 'cartao_credito' | 'boleto'
+export type FormaPagamentoOC =
+  | 'pix'
+  | 'dinheiro'
+  | 'cartao_credito'
+  | 'boleto'
+  | 'cheque'
+  | 'link'
 
 export const FORMAS_PAGAMENTO_OC: Record<FormaPagamentoOC, { label: string }> = {
   pix:            { label: 'PIX' },
   dinheiro:       { label: 'Dinheiro' },
   cartao_credito: { label: 'Cartão de crédito' },
   boleto:         { label: 'Boleto' },
+  cheque:         { label: 'Cheque' },
+  link:           { label: 'Link' },
 }
 
 export type Gasto = {
