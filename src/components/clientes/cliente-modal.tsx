@@ -11,6 +11,7 @@ import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
 import { buscarEmpresaPorCnpj } from '@/lib/br/cnpj'
 import { SIGLAS_UF, INDICADORES_IE } from '@/lib/br/constants'
+import { validarCamposObrigatoriosCliente } from '@/lib/br/validar-cadastro-parceiro'
 
 type Props = {
   open: boolean
@@ -71,7 +72,7 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
       setComplemento(editando.complemento ?? '')
       setBairro(editando.bairro ?? '')
       setCidade(editando.cidade ?? '')
-      setEstado(editando.estado ?? '')
+      setEstado(editando.estado || 'RS')
       setRazaoSocial(editando.razao_social ?? '')
       setIe(editando.ie ?? '')
       setIndicadorIe(editando.indicador_ie ?? 9)
@@ -177,9 +178,33 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
     }
   }
 
-  async function salvar() {
-    if (!nome.trim()) { setErro('Nome é obrigatório.'); return }
+  async function salvar(e?: React.FormEvent) {
+    e?.preventDefault()
     setErro('')
+    try {
+      validarCamposObrigatoriosCliente({
+        nome,
+        tipo,
+        indicador_ie: indicadorIe,
+        telefone,
+        email,
+        tipo_documento: tipoDocumento,
+        documento,
+        cep,
+        logradouro,
+        numero,
+        complemento,
+        bairro,
+        cidade,
+        uf: estado,
+        razao_social: razaoSocial,
+        ie,
+        codigo_municipio_ibge: codigoIbge,
+      })
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Preencha todos os campos obrigatórios.')
+      return
+    }
     setLoading(true)
     try {
       const input = {
@@ -214,18 +239,23 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
 
   return (
     <Modal open={open} onClose={onClose} title={editando ? 'Editar cliente' : 'Novo cliente'} width="640px">
-      <div className="flex flex-col gap-4 max-h-[min(72vh,560px)] overflow-y-auto">
+      <form
+        onSubmit={(e) => void salvar(e)}
+        className="flex flex-col gap-4 max-h-[min(72vh,560px)] overflow-y-auto"
+      >
         <Input
           id="cli-nome"
           label="Nome *"
+          required
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           placeholder="Razão social ou nome completo"
         />
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Tipo de cliente</label>
+          <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Tipo de cliente *</label>
           <select
+            required
             value={tipo}
             onChange={(e) => setTipo(e.target.value)}
             className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
@@ -245,8 +275,9 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento</label>
+            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Documento *</label>
             <select
+              required
               value={tipoDocumento}
               onChange={(e) => onTipoDocumentoChange(e.target.value as TipoDocumento)}
               className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
@@ -265,7 +296,8 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
           <div className="sm:col-span-2">
             <Input
               id="cli-documento"
-              label={tipoDocumento === 'cpf' ? 'CPF' : 'CNPJ'}
+              label={tipoDocumento === 'cpf' ? 'CPF *' : 'CNPJ *'}
+              required
               placeholder={tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
               value={documento}
               onChange={(e) => onDocumentoInput(e.target.value)}
@@ -286,7 +318,8 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
           <div className="grid grid-cols-1 gap-3">
             <Input
               id="cli-razao-social"
-              label="Razão Social"
+              label="Razão Social *"
+              required
               placeholder="Nome jurídico (se diferente do nome fantasia acima)"
               value={razaoSocial}
               onChange={(e) => setRazaoSocial(e.target.value)}
@@ -297,15 +330,17 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             id="cli-ie"
-            label="Inscrição Estadual"
+            label="Inscrição Estadual *"
+            required
             placeholder="ISENTO ou número"
             value={ie}
             onChange={(e) => setIe(e.target.value)}
           />
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="cli-ind-ie" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Indicador IE</label>
+            <label htmlFor="cli-ind-ie" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>Indicador IE *</label>
             <select
               id="cli-ind-ie"
+              required
               value={indicadorIe}
               onChange={(e) => setIndicadorIe(Number(e.target.value))}
               className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
@@ -325,7 +360,8 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
         <div className="grid grid-cols-2 gap-3">
           <Input
             id="cli-tel"
-            label="Telefone"
+            label="Telefone *"
+            required
             type="tel"
             value={telefone}
             onChange={(e) => setTelefone(e.target.value.replace(/[^\d\s()\-+]/g, ''))}
@@ -333,7 +369,8 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
           />
           <Input
             id="cli-email"
-            label="E-mail"
+            label="E-mail *"
+            required
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -350,7 +387,8 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
             <div className="flex-1 min-w-0">
               <Input
                 id="cli-cep"
-                label="CEP"
+                label="CEP *"
+                required
                 placeholder="00000-000"
                 value={cep}
                 onChange={(e) => onCepInput(e.target.value)}
@@ -363,7 +401,8 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
           </div>
           <Input
             id="cli-logradouro"
-            label="Logradouro (rua)"
+            label="Logradouro (rua) *"
+            required
             placeholder="Rua, avenida..."
             value={logradouro}
             onChange={(e) => setLogradouro(e.target.value)}
@@ -371,14 +410,16 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <Input
               id="cli-numero"
-              label="Número"
+              label="Número *"
+              required
               value={numero}
               onChange={(e) => setNumero(e.target.value)}
               placeholder="123"
             />
             <Input
               id="cli-complemento"
-              label="Complemento"
+              label="Complemento *"
+              required
               value={complemento}
               onChange={(e) => setComplemento(e.target.value)}
               placeholder="Sala, bloco..."
@@ -386,22 +427,25 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
           </div>
           <Input
             id="cli-bairro"
-            label="Bairro"
+            label="Bairro *"
+            required
             value={bairro}
             onChange={(e) => setBairro(e.target.value)}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               id="cli-cidade"
-              label="Cidade"
+              label="Cidade *"
+              required
               value={cidade}
               onChange={(e) => setCidade(e.target.value)}
               placeholder="Porto Alegre"
             />
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="cli-uf" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>UF</label>
+              <label htmlFor="cli-uf" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>UF *</label>
               <select
                 id="cli-uf"
+                required
                 value={estado}
                 onChange={(e) => setEstado(e.target.value)}
                 className="px-3 py-2.5 rounded-lg text-sm outline-none appearance-none"
@@ -413,13 +457,21 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
               >
-                <option value="">—</option>
                 {ESTADOS_BR.map((uf) => (
                   <option key={uf} value={uf}>{uf}</option>
                 ))}
               </select>
             </div>
           </div>
+          <Input
+            id="cli-ibge"
+            label="Código IBGE do município *"
+            placeholder="7 dígitos (preenchido ao buscar CEP)"
+            value={codigoIbge}
+            onChange={(e) => setCodigoIbge(e.target.value.replace(/\D/g, '').slice(0, 7))}
+            inputMode="numeric"
+            required
+          />
         </div>
 
         {erro && (
@@ -427,10 +479,10 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
         )}
 
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button loading={loading} onClick={salvar}>{editando ? 'Salvar' : 'Criar cliente'}</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" loading={loading}>{editando ? 'Salvar' : 'Criar cliente'}</Button>
         </div>
-      </div>
+      </form>
     </Modal>
   )
 }
