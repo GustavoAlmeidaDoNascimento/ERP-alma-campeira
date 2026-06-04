@@ -181,6 +181,14 @@ export function useGastos(opts: Opts<Gasto[]> = {}) {
   })
 }
 
+export function useTiposGasto(opts: Opts<TipoGastoDB[]> = {}) {
+  return useQuery({
+    queryKey: qk.tiposGasto.list(),
+    queryFn: () => listarTiposGasto(),
+    initialData: opts.initialData,
+  })
+}
+
 export function useBoletos(tipo?: BoletoTipo, opts: Opts<Boleto[]> = {}) {
   return useQuery({
     queryKey: qk.boletos.list(tipo),
