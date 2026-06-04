@@ -21,7 +21,11 @@ async function FornecedoresPageData() {
   const fornecedores = await getFornecedores(120)
   return (
     <div data-nav-content-ready="Fornecedores">
-      <FornecedoresClient fornecedores={fornecedores} perm={perms.fornecedores} />
+      <FornecedoresClient
+        fornecedores={fornecedores}
+        perm={perms.fornecedores}
+        podeVerOrdensCompra={perms.ordens_compra.ver}
+      />
     </div>
   )
 }
