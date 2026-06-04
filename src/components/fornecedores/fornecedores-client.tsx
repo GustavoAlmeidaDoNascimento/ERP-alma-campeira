@@ -9,13 +9,23 @@ import type { Fornecedor } from '@/types'
 import { apenasDigitos, formatarDocumento } from '@/lib/br/documento'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useFornecedores } from '@/lib/query/hooks'
+import { HistoricoOCFornecedor } from '@/components/parceiros/parceiro-historico'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
-export function FornecedoresClient({ fornecedores: initialFornecedores, perm }: { fornecedores: Fornecedor[]; perm: Perm }) {
+export function FornecedoresClient({
+  fornecedores: initialFornecedores,
+  perm,
+  podeVerOrdensCompra,
+}: {
+  fornecedores: Fornecedor[]
+  perm: Perm
+  podeVerOrdensCompra: boolean
+}) {
   const { refreshActiveTab } = useErpTabs()
   const { data: fornecedores = initialFornecedores } = useFornecedores({ initialData: initialFornecedores })
   const [modalAberto, setModalAberto] = useState(false)
+  const [detalheAberto, setDetalheAberto] = useState<Fornecedor | null>(null)
   const [editando, setEditando] = useState<Fornecedor | null>(null)
   const [deletando, setDeletando] = useState<Fornecedor | null>(null)
   const [erroDelete, setErroDelete] = useState('')
@@ -127,6 +137,8 @@ export function FornecedoresClient({ fornecedores: initialFornecedores, perm }: 
                   style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
+                  onClick={() => setDetalheAberto(f)}
+                  className="cursor-pointer"
                 >
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>{f.nome}</td>
                   <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
@@ -145,7 +157,7 @@ export function FornecedoresClient({ fornecedores: initialFornecedores, perm }: 
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       {perm.editar && (
-                        <button onClick={() => abrirEditar(f)} className="p-1.5 rounded-lg transition-colors"
+                        <button onClick={(e) => { e.stopPropagation(); abrirEditar(f) }} className="p-1.5 rounded-lg transition-colors"
                           style={{ color: 'var(--ac-muted)' }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ac-border)'; e.currentTarget.style.color = 'var(--ac-text)' }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
@@ -158,7 +170,7 @@ export function FornecedoresClient({ fornecedores: initialFornecedores, perm }: 
                         </button>
                       )}
                       {perm.deletar && (
-                        <button onClick={() => { setDeletando(f); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
+                        <button onClick={(e) => { e.stopPropagation(); setDeletando(f); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
                           style={{ color: 'var(--ac-muted)' }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626' }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
@@ -187,6 +199,69 @@ export function FornecedoresClient({ fornecedores: initialFornecedores, perm }: 
         editando={editando}
         onSaved={refreshActiveTab}
       />
+
+      <Modal
+        open={!!detalheAberto}
+        onClose={() => setDetalheAberto(null)}
+        title={detalheAberto ? `Fornecedor — ${detalheAberto.nome}` : 'Detalhes do fornecedor'}
+        width="920px"
+      >
+        {detalheAberto && (
+          <div className="flex flex-col gap-5 max-h-[75vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="rounded-lg p-3" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ac-muted)' }}>Dados principais</p>
+                <div className="space-y-1.5 text-sm">
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Nome:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.nome}</span></p>
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Documento:</strong> <span style={{ color: 'var(--ac-muted)' }}>
+                    {detalheAberto.documento
+                      ? formatarDocumento(detalheAberto.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', detalheAberto.documento)
+                      : '—'}
+                  </span></p>
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Cadastrado em:</strong> <span style={{ color: 'var(--ac-muted)' }}>
+                    {new Date(detalheAberto.created_at).toLocaleDateString('pt-BR')}
+                  </span></p>
+                </div>
+              </div>
+
+              <div className="rounded-lg p-3" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ac-muted)' }}>Contato</p>
+                <div className="space-y-1.5 text-sm">
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Telefone:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.telefone || '—'}</span></p>
+                  <p><strong style={{ color: 'var(--ac-text)' }}>E-mail:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.email || '—'}</span></p>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 rounded-lg p-3" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ac-muted)' }}>Endereço</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  <p><strong style={{ color: 'var(--ac-text)' }}>CEP:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.cep || '—'}</span></p>
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Cidade/UF:</strong> <span style={{ color: 'var(--ac-muted)' }}>
+                    {detalheAberto.cidade || detalheAberto.uf
+                      ? `${detalheAberto.cidade ?? ''}${detalheAberto.cidade && detalheAberto.uf ? ', ' : ''}${detalheAberto.uf ?? ''}`
+                      : '—'}
+                  </span></p>
+                  <p className="sm:col-span-2"><strong style={{ color: 'var(--ac-text)' }}>Logradouro:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.logradouro || '—'}</span></p>
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Número:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.numero || '—'}</span></p>
+                  <p><strong style={{ color: 'var(--ac-text)' }}>Complemento:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.complemento || '—'}</span></p>
+                  <p className="sm:col-span-2"><strong style={{ color: 'var(--ac-text)' }}>Bairro:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.bairro || '—'}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--ac-muted)' }}>
+                Histórico de ordens de compra
+              </p>
+              <HistoricoOCFornecedor
+                fornecedorId={detalheAberto.id}
+                ativo={!!detalheAberto}
+                podeVer={podeVerOrdensCompra}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir fornecedor">
         <div className="flex flex-col gap-4">
