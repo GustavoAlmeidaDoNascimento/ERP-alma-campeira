@@ -602,21 +602,81 @@ export function statusEstoqueConsumivel(c: Consumivel): StatusEstoque {
 // Financeiro — Gastos
 // ============================================================
 
-export type TipoGasto =
-  | 'beneficios'
-  | 'investimento'
-  | 'material_consumo'
-  | 'administrativo'
-  | 'pagamento_oc'
-  | 'outros'
+/**
+ * O tipo de gasto agora é uma tag dinâmica gerida pelos usuários: o valor
+ * guardado em `gastos.tipo` é o próprio nome legível da tag (ex.: "Material de
+ * consumo"). As tags vivem na tabela `tipos_gasto`.
+ */
+export type TipoGasto = string
 
-export const TIPOS_GASTO: Record<TipoGasto, { label: string; color: string; bg: string; border: string }> = {
-  beneficios:       { label: 'Benefícios',           color: '#0e7490', bg: '#cffafe', border: '#a5f3fc' },
-  investimento:     { label: 'Investimento',         color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
-  material_consumo: { label: 'Material de consumo',  color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
-  administrativo:   { label: 'Administrativo',       color: '#4338ca', bg: '#e0e7ff', border: '#c7d2fe' },
-  pagamento_oc:     { label: 'Pagamento de OC',      color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' },
-  outros:           { label: 'Outros',               color: '#475569', bg: '#f1f5f9', border: '#e2e8f0' },
+export type TipoGastoDB = {
+  id: string
+  nome: string
+  /** Tags de sistema não podem ser removidas (geradas/usadas automaticamente). */
+  sistema: boolean
+  created_at: string
+}
+
+/** Tag de sistema gerada ao pagar OCs/boletos. Não pode ser removida. */
+export const TIPO_GASTO_PAGAMENTO_OC = 'Pagamento de OC'
+/** Tag de sistema usada como destino dos gastos cujo tipo foi removido. */
+export const TIPO_GASTO_OUTROS = 'Outros'
+
+export type TipoGastoMeta = { label: string; color: string; bg: string; border: string }
+
+/** Cores fixas das tags conhecidas (preservam a identidade visual original). */
+const TIPOS_GASTO_CORES: Record<string, Omit<TipoGastoMeta, 'label'>> = {
+  'Benefícios':          { color: '#0e7490', bg: '#cffafe', border: '#a5f3fc' },
+  'Investimento':        { color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
+  'Material de consumo': { color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+  'Administrativo':      { color: '#4338ca', bg: '#e0e7ff', border: '#c7d2fe' },
+  'Pagamento de OC':     { color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' },
+  'Outros':              { color: '#475569', bg: '#f1f5f9', border: '#e2e8f0' },
+}
+
+/** Paleta usada para colorir tags novas de forma determinística pelo nome. */
+const PALETA_TIPO_GASTO: Omit<TipoGastoMeta, 'label'>[] = [
+  { color: '#0e7490', bg: '#cffafe', border: '#a5f3fc' },
+  { color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
+  { color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+  { color: '#4338ca', bg: '#e0e7ff', border: '#c7d2fe' },
+  { color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' },
+  { color: '#be123c', bg: '#ffe4e6', border: '#fecdd3' },
+  { color: '#0f766e', bg: '#ccfbf1', border: '#99f6e4' },
+  { color: '#a16207', bg: '#fef9c3', border: '#fde68a' },
+  { color: '#7c3aed', bg: '#f3e8ff', border: '#e9d5ff' },
+  { color: '#475569', bg: '#f1f5f9', border: '#e2e8f0' },
+]
+
+function hashString(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i)
+    h |= 0
+  }
+  return Math.abs(h)
+}
+
+/** Resolve o rótulo/cores de uma tag a partir do seu nome. */
+export function metaTipoGasto(nome: string): TipoGastoMeta {
+  const label = nome?.trim() || TIPO_GASTO_OUTROS
+  const fixa = TIPOS_GASTO_CORES[label]
+  if (fixa) return { label, ...fixa }
+  const cor = PALETA_TIPO_GASTO[hashString(label) % PALETA_TIPO_GASTO.length]
+  return { label, ...cor }
+}
+
+/**
+ * Padroniza o nome de uma tag: remove espaços extras e deixa a primeira letra
+ * de cada palavra em maiúscula. Mantém um padrão e evita duplicatas por
+ * diferença de capitalização.
+ */
+export function capitalizarTipoGasto(nome: string): string {
+  return (nome ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/(^|\s)(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('pt-BR'))
 }
 
 export type FormaPagamento =
