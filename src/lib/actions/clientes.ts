@@ -4,8 +4,9 @@ import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { fetchClientesList } from '@/lib/cache/list-data'
-import type { Cliente, TipoDocumento } from '@/types'
-import { apenasDigitos, validarCnpj, validarCpf } from '@/lib/br/documento'
+import type { Cliente, PedidoHistoricoResumo, StatusPedido, TipoDocumento } from '@/types'
+import { apenasDigitos } from '@/lib/br/documento'
+import { validarCamposObrigatoriosCliente } from '@/lib/br/validar-cadastro-parceiro'
 
 async function revalidateClientesList() {
   try {
@@ -19,6 +20,41 @@ export async function getClientes(limit = 50): Promise<Cliente[]> {
   await assertPermissao('clientes', 'ver')
   const rows = await fetchClientesList(userId)
   return rows.slice(0, limit)
+}
+
+function normalizeStatusPedidoHistorico(status: string): StatusPedido {
+  if (status === 'em_espera' || status === 'em_producao' || status === 'entregue') return status
+  if (status === 'orcamento' || status === 'confirmado') return 'em_espera'
+  if (status === 'cancelado') return 'entregue'
+  return 'em_espera'
+}
+
+/** Vendas (pedidos) vinculadas ao cliente — usado no modal de detalhe. */
+export async function getPedidosPorCliente(clienteId: string, limit = 200): Promise<PedidoHistoricoResumo[]> {
+  await assertPermissao('vendas', 'ver')
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('pedidos')
+    .select('id, codigo, sequencial, data_pedido, status, valor_total, vendedor:usuarios_perfis(nome)')
+    .eq('cliente_id', clienteId)
+    .order('data_pedido', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map((row) => {
+    const vendedor = row.vendedor as { nome: string } | { nome: string }[] | null
+    const vendedorNome = Array.isArray(vendedor) ? vendedor[0]?.nome : vendedor?.nome
+    return {
+      id: row.id as string,
+      codigo: row.codigo as string,
+      sequencial: (row.sequencial as number | null) ?? null,
+      data_pedido: row.data_pedido as string,
+      status: normalizeStatusPedidoHistorico(String(row.status)),
+      valor_total: (row.valor_total as number | null) ?? null,
+      vendedor_nome: vendedorNome ?? null,
+    }
+  })
 }
 
 type ClienteInput = {
@@ -35,7 +71,6 @@ type ClienteInput = {
   bairro: string
   cidade: string
   estado: string
-  // Campos fiscais opcionais (preparação NF-e)
   razao_social?: string
   ie?: string
   indicador_ie?: number
@@ -43,46 +78,50 @@ type ClienteInput = {
 }
 
 function normalizarClientePayload(input: ClienteInput) {
+  validarCamposObrigatoriosCliente({
+    nome: input.nome,
+    tipo: input.tipo,
+    indicador_ie: input.indicador_ie,
+    telefone: input.telefone,
+    email: input.email,
+    tipo_documento: input.tipo_documento,
+    documento: input.documento,
+    cep: input.cep,
+    logradouro: input.logradouro,
+    numero: input.numero,
+    complemento: input.complemento,
+    bairro: input.bairro,
+    cidade: input.cidade,
+    uf: input.estado,
+    razao_social: input.razao_social,
+    ie: input.ie,
+    codigo_municipio_ibge: input.codigo_municipio_ibge,
+  })
+
   const doc = apenasDigitos(input.documento)
-  if (doc) {
-    if (input.tipo_documento === 'cpf') {
-      if (!validarCpf(doc)) throw new Error('CPF inválido.')
-    } else if (!validarCnpj(doc)) {
-      throw new Error('CNPJ inválido.')
-    }
-  }
   const cep = apenasDigitos(input.cep)
-  if (cep && cep.length !== 8) throw new Error('CEP deve ter 8 dígitos.')
   const estado = input.estado.trim().toUpperCase()
-  if (estado && estado.length !== 2) throw new Error('Estado (UF) deve ter 2 letras.')
-
   const ibge = apenasDigitos(input.codigo_municipio_ibge ?? '')
-  if (ibge && ibge.length !== 7) throw new Error('Código IBGE do município deve ter 7 dígitos.')
-
-  let indIE: number | null = null
-  if (input.indicador_ie != null) {
-    const n = Number(input.indicador_ie)
-    if (n === 1 || n === 2 || n === 9) indIE = n
-  }
+  const indIE = Number(input.indicador_ie) as 1 | 2 | 9
 
   return {
     nome: input.nome.trim(),
-    tipo: input.tipo,
-    telefone: input.telefone.trim() || null,
-    email: input.email.trim() || null,
+    tipo: input.tipo.trim(),
+    telefone: input.telefone.trim(),
+    email: input.email.trim(),
     tipo_documento: input.tipo_documento,
-    documento: doc || null,
-    cep: cep || null,
-    logradouro: input.logradouro.trim() || null,
-    numero: input.numero.trim() || null,
-    complemento: input.complemento.trim() || null,
-    bairro: input.bairro.trim() || null,
-    cidade: input.cidade.trim() || null,
-    estado: estado || null,
+    documento: doc,
+    cep,
+    logradouro: input.logradouro.trim(),
+    numero: input.numero.trim(),
+    complemento: input.complemento.trim(),
+    bairro: input.bairro.trim(),
+    cidade: input.cidade.trim(),
+    estado,
     razao_social: (input.razao_social ?? '').trim() || null,
-    ie: (input.ie ?? '').trim() || null,
+    ie: (input.ie ?? '').trim(),
     indicador_ie: indIE,
-    codigo_municipio_ibge: ibge || null,
+    codigo_municipio_ibge: ibge,
   }
 }
 
