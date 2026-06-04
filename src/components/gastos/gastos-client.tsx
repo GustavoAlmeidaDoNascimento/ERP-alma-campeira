@@ -39,17 +39,20 @@ const selectChevron = {
 
 export function GastosClient({
   gastos: initialGastos,
+  tiposGasto: initialTipos,
   usuarios,
   usuarioLogadoId,
   perm,
 }: {
   gastos: Gasto[]
+  tiposGasto: TipoGastoDB[]
   usuarios: { id: string; nome: string }[]
   usuarioLogadoId: string | null
   perm: Perm
 }) {
   const { refreshActiveTab } = useErpTabs()
   const { data: gastos = initialGastos } = useGastos({ initialData: initialGastos })
+  const { data: tipos = initialTipos } = useTiposGasto({ initialData: initialTipos })
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<Gasto | null>(null)
   const [deletando, setDeletando] = useState<Gasto | null>(null)
