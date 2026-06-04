@@ -9,6 +9,7 @@ import type { Cliente } from '@/types'
 import { apenasDigitos, formatarDocumento } from '@/lib/br/documento'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useClientes } from '@/lib/query/hooks'
+import { HistoricoVendasCliente } from '@/components/parceiros/parceiro-historico'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -18,7 +19,15 @@ const TIPO_STYLE: Record<string, React.CSSProperties> = {
   'Pessoa Física':{ color: '#374151', background: '#f3f4f6', border: '1px solid #e5e7eb' },
 }
 
-export function ClientesClient({ clientes: initialClientes, perm }: { clientes: Cliente[]; perm: Perm }) {
+export function ClientesClient({
+  clientes: initialClientes,
+  perm,
+  podeVerVendas,
+}: {
+  clientes: Cliente[]
+  perm: Perm
+  podeVerVendas: boolean
+}) {
   const { refreshActiveTab, refreshTab } = useErpTabs()
   const { data: clientes = initialClientes } = useClientes({ initialData: initialClientes })
   const [modalAberto, setModalAberto] = useState(false)
@@ -207,9 +216,10 @@ export function ClientesClient({ clientes: initialClientes, perm }: { clientes: 
         open={!!detalheAberto}
         onClose={() => setDetalheAberto(null)}
         title={detalheAberto ? `Cliente — ${detalheAberto.nome}` : 'Detalhes do cliente'}
-        width="700px"
+        width="920px"
       >
         {detalheAberto && (
+          <div className="flex flex-col gap-5 max-h-[75vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded-lg p-3" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}>
               <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ac-muted)' }}>Dados principais</p>
@@ -245,6 +255,19 @@ export function ClientesClient({ clientes: initialClientes, perm }: { clientes: 
                 <p className="sm:col-span-2"><strong style={{ color: 'var(--ac-text)' }}>Bairro:</strong> <span style={{ color: 'var(--ac-muted)' }}>{detalheAberto.bairro || '—'}</span></p>
               </div>
             </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--ac-muted)' }}>
+              Histórico de vendas
+            </p>
+            <HistoricoVendasCliente
+              clienteId={detalheAberto.id}
+              clienteNome={detalheAberto.nome}
+              ativo={!!detalheAberto}
+              podeVer={podeVerVendas}
+            />
+          </div>
           </div>
         )}
       </Modal>
