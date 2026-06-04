@@ -20,6 +20,7 @@ import { getOrcamentos } from '@/lib/actions/orcamentos'
 import { getOrdensCompra, getFilaReposicaoList, getUsuariosParaRegistroOC } from '@/lib/actions/ordens-compra'
 import { getConsumiveis } from '@/lib/actions/consumiveis'
 import { listarGastos } from '@/lib/actions/gastos'
+import { listarTiposGasto } from '@/lib/actions/tipos-gasto'
 import { listarBoletos } from '@/lib/actions/boletos'
 import { getUsuarios } from '@/lib/actions/usuarios'
 import { getCargos } from '@/lib/actions/cargos'
@@ -43,6 +44,7 @@ import type {
   CategoriaFacaDB,
   CategoriaMateriaPrimaDB,
   CategoriaConsumivelDB,
+  TipoGastoDB,
 } from '@/types'
 import type { MPDetalheData } from '@/lib/actions/materias-primas'
 import type { FacaDetalheData } from '@/lib/actions/facas'
