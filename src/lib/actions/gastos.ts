@@ -81,6 +81,7 @@ export async function criarGasto(input: GastoInput) {
   const usuario_id =
     input.usuario_id ?? (await requireAuthenticatedUserId().catch(() => null))
   const row = { ...normalizarGastoPayload(input), usuario_id }
+  await garantirTipoGasto(supabase, row.tipo)
   const { error } = await supabase.from('gastos').insert(row)
   if (error) throw new Error(error.message)
 }
@@ -92,6 +93,7 @@ export async function atualizarGasto(id: string, input: GastoInput) {
     ...normalizarGastoPayload(input),
     ...(input.usuario_id !== undefined ? { usuario_id: input.usuario_id } : {}),
   }
+  await garantirTipoGasto(supabase, row.tipo)
   const { error } = await supabase.from('gastos').update(row).eq('id', id)
   if (error) throw new Error(error.message)
 }
