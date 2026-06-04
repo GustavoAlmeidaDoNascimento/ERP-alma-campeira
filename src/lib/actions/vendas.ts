@@ -109,7 +109,7 @@ export type VendaInput = {
   frete: number
   desconto_total: number
   natureza_operacao?: string
-  /** Forma de pagamento da venda (pix, dinheiro, crédito ou boleto). */
+  /** Forma de pagamento da venda (ver FormaPagamentoOC). */
   forma_pagamento?: FormaPagamentoOC | null
   /** Parcelas do boleto de entrada (a receber), quando forma_pagamento === 'boleto'. */
   boletoParcelas?: ParcelaInput[]
@@ -119,7 +119,14 @@ export type VendaInput = {
 }
 
 function normalizarFormaPagamento(forma?: FormaPagamentoOC | null): FormaPagamentoOC | null {
-  if (forma === 'pix' || forma === 'dinheiro' || forma === 'cartao_credito' || forma === 'boleto') {
+  if (
+    forma === 'pix'
+    || forma === 'dinheiro'
+    || forma === 'cartao_credito'
+    || forma === 'boleto'
+    || forma === 'cheque'
+    || forma === 'link'
+  ) {
     return forma
   }
   return null
