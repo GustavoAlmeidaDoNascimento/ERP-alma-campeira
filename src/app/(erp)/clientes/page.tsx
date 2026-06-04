@@ -21,7 +21,11 @@ async function ClientesPageData() {
   const clientes = await getClientes(120)
   return (
     <div data-nav-content-ready="Clientes">
-      <ClientesClient clientes={clientes} perm={perms.clientes} />
+      <ClientesClient
+        clientes={clientes}
+        perm={perms.clientes}
+        podeVerVendas={perms.vendas.ver}
+      />
     </div>
   )
 }
