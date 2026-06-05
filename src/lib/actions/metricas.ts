@@ -494,7 +494,9 @@ export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange
 
     const facas = facasRes.data ?? []
     const mps = mpRes.data ?? []
-    const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, u.nome as string]))
+    const usuariosMap = new Map<string, string>(
+      (usuariosRes.data ?? []).map((u: { id: string; nome: string }) => [u.id, u.nome] as [string, string])
+    )
     const movs = movRes.data ?? []
     const boms = bomRes.data ?? []
     const ocs = ocRes.data ?? []
@@ -544,7 +546,7 @@ export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
 
     // ── Movimentações (já filtradas pelo período na query) ──
-    const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m) => {
+    const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m: any) => {
       const mp = Array.isArray(m.materia_prima) ? m.materia_prima[0] : m.materia_prima
       const faca = Array.isArray(m.faca) ? m.faca[0] : m.faca
       const item = (mp as { nome?: string; codigo?: string } | null) ??
