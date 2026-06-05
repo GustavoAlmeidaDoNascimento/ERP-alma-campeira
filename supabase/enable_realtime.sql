@@ -28,6 +28,7 @@ alter publication supabase_realtime add table public.fila_reposicao_itens;
 -- Financeiro
 alter publication supabase_realtime add table public.gastos;
 alter publication supabase_realtime add table public.tipos_gasto;
+alter publication supabase_realtime add table public.entradas;
 
 -- Pessoas
 alter publication supabase_realtime add table public.usuarios_perfis;
