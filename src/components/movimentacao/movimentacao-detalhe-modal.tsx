@@ -23,14 +23,9 @@ const ORIGEM_LABEL: Record<Movimentacao['origem'], string> = {
   boleto_entrada: 'Recebimento de boleto',
 }
 
-type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
-
 type Props = {
   mov: Movimentacao | null
-  perm: Perm
   onClose: () => void
-  onEditar: (mov: Movimentacao) => void
-  onExcluir: (mov: Movimentacao) => void
 }
 
 function Linha({ label, children }: { label: string; children: React.ReactNode }) {
@@ -42,12 +37,11 @@ function Linha({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function MovimentacaoDetalheModal({ mov, perm, onClose, onEditar, onExcluir }: Props) {
+export function MovimentacaoDetalheModal({ mov, onClose }: Props) {
   if (!mov) return null
 
   const entrada = mov.direcao === 'entrada'
   const cor = entrada ? '#15803d' : '#b91c1c'
-  const editavel = mov.origem === 'gasto' || mov.origem === 'entrada_manual'
 
   return (
     <Modal open={!!mov} onClose={onClose} title="Detalhe da movimentação" width="520px">
@@ -98,15 +92,7 @@ export function MovimentacaoDetalheModal({ mov, perm, onClose, onEditar, onExclu
               <Button variant="secondary">Abrir em Boletos</Button>
             </Link>
           )}
-          {editavel && perm.deletar && (
-            <Button variant="danger" onClick={() => onExcluir(mov)}>Excluir</Button>
-          )}
-          {editavel && perm.editar && (
-            <Button onClick={() => onEditar(mov)}>Editar</Button>
-          )}
-          {!editavel && (
-            <Button variant="secondary" onClick={onClose}>Fechar</Button>
-          )}
+          <Button variant="secondary" onClick={onClose}>Fechar</Button>
         </div>
       </div>
     </Modal>
