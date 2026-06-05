@@ -180,7 +180,7 @@ export const MODULOS = [
   { key: 'orcamentos',      label: 'Orçamentos' },
   { key: 'clientes',        label: 'Clientes' },
   { key: 'ordens_compra',   label: 'Ordens de Compra' },
-  { key: 'gastos',          label: 'Gastos' },
+  { key: 'gastos',          label: 'Movimentação' },
   { key: 'boletos',         label: 'Boletos' },
   { key: 'usuarios',        label: 'Usuários' },
   { key: 'cargos',          label: 'Cargos' },
@@ -733,6 +733,70 @@ export type Gasto = {
   created_at: string
   ordem_compra?: Pick<OrdemCompra, 'id' | 'codigo'> | null
   usuario?: { id: string; nome: string } | null
+}
+
+// ============================================================
+// Entradas manuais (outras receitas lançadas à mão)
+// ============================================================
+
+/** Categorias sugeridas para entradas manuais (campo livre, mas ajuda a padronizar). */
+export const CATEGORIAS_ENTRADA = [
+  'Venda avulsa',
+  'Serviço',
+  'Aporte',
+  'Reembolso',
+  'Rendimento',
+  'Outros',
+] as const
+
+export type Entrada = {
+  id: string
+  descricao: string
+  valor: number
+  forma_pagamento: FormaPagamento
+  data_entrada: string
+  categoria: string | null
+  observacao: string | null
+  usuario_id: string | null
+  created_at: string
+  usuario?: { id: string; nome: string } | null
+}
+
+// ============================================================
+// Movimentação financeira (visão unificada de entradas + saídas)
+// ============================================================
+
+export type MovimentacaoDirecao = 'entrada' | 'saida'
+
+/** Origem do registro que alimenta a movimentação (define o detalhe/navegação). */
+export type MovimentacaoOrigem = 'gasto' | 'entrada_manual' | 'venda' | 'boleto_entrada'
+
+/**
+ * Item unificado exibido na página de Movimentação. É montado em runtime a
+ * partir de várias fontes (ver `listarMovimentacoes`), portanto é somente
+ * leitura — a edição acontece na origem (gasto, entrada manual, venda, boleto).
+ */
+export type Movimentacao = {
+  /** Chave única estável para React (ex.: "gasto:uuid", "venda:uuid"). */
+  key: string
+  origem: MovimentacaoOrigem
+  direcao: MovimentacaoDirecao
+  /** Data do caixa (yyyy-mm-dd): data do gasto, do pagamento da parcela, etc. */
+  data: string
+  descricao: string
+  /** Tipo de gasto, categoria da entrada, ou rótulo da origem ("Venda"/"Boleto"). */
+  categoria: string | null
+  valor: number
+  forma_pagamento: FormaPagamento | null
+  usuario_nome: string | null
+  /** Id do registro de origem (gasto.id, entrada.id, pedido.id, boleto.id). */
+  refId: string
+  /** Payload do gasto quando origem === 'gasto' (permite editar no detalhe). */
+  gasto?: Gasto | null
+  /** Payload da entrada quando origem === 'entrada_manual' (permite editar). */
+  entrada?: Entrada | null
+  /** Código humano para vendas/boletos (ex.: "PD-123", "BE-4"). */
+  codigo?: string | null
 }
 
 // ============================================================
