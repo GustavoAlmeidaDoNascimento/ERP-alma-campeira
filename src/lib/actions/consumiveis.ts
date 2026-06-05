@@ -99,7 +99,7 @@ export async function salvarConsumivelComFoto(formData: FormData) {
     const { data: buckets, error: listErr } = await admin.storage.listBuckets()
     if (listErr) throw new Error(listErr.message)
 
-    const exists = (buckets ?? []).some((b) => b.name === FOTO_BUCKET_CONSUMIVEL)
+    const exists = (buckets ?? []).some((b: { name: string }) => b.name === FOTO_BUCKET_CONSUMIVEL)
     if (!exists) {
       const { error: createErr } = await admin.storage.createBucket(FOTO_BUCKET_CONSUMIVEL, {
         public: true,
