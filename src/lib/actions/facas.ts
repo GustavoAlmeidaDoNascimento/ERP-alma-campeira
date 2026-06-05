@@ -233,7 +233,7 @@ export async function salvarFacaComFoto(formData: FormData) {
     const { data: buckets, error: listErr } = await admin.storage.listBuckets()
     if (listErr) throw new Error(listErr.message)
 
-    const exists = (buckets ?? []).some((b) => b.name === FOTO_BUCKET_FACAS)
+    const exists = (buckets ?? []).some((b: { name: string }) => b.name === FOTO_BUCKET_FACAS)
     if (!exists) {
       const { error: createErr } = await admin.storage.createBucket(FOTO_BUCKET_FACAS, {
         public: true,
@@ -457,7 +457,7 @@ export async function getFacaDetalhe(facaId: string): Promise<FacaDetalheData> {
   if (movRes.error) throw new Error(`Erro ao buscar movimentações da faca: ${movRes.error.message}`)
 
   const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }]))
-  const movimentacoes = (movRes.data ?? []).map((mov) => ({
+  const movimentacoes = (movRes.data ?? []).map((mov: any) => ({
     ...mov,
     usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
   })) as MovimentacaoEstoque[]
