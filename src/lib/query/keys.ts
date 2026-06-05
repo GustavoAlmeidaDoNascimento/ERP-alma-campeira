@@ -46,6 +46,14 @@ export const qk = {
     all: ['gastos'] as const,
     list: () => [...qk.gastos.all, 'list'] as const,
   },
+  entradas: {
+    all: ['entradas'] as const,
+    list: () => [...qk.entradas.all, 'list'] as const,
+  },
+  movimentacao: {
+    all: ['movimentacao'] as const,
+    list: () => [...qk.movimentacao.all, 'list'] as const,
+  },
   tiposGasto: {
     all: ['tipos-gasto'] as const,
     list: () => [...qk.tiposGasto.all, 'list'] as const,
