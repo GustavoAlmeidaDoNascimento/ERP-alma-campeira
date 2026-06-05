@@ -14,7 +14,7 @@ export const TABLE_TO_KEYS: Record<string, ReadonlyArray<readonly unknown[]>> = 
   consumiveis: [qk.consumiveis.all],
 
   // Comercial
-  pedidos: [qk.vendas.all, qk.metricas.all, qk.ordensCompra.all],
+  pedidos: [qk.vendas.all, qk.metricas.all, qk.ordensCompra.all, qk.movimentacao.all],
   pedido_itens: [qk.vendas.all, qk.metricas.all],
   orcamentos: [qk.orcamentos.all],
   orcamento_itens: [qk.orcamentos.all],
@@ -28,10 +28,11 @@ export const TABLE_TO_KEYS: Record<string, ReadonlyArray<readonly unknown[]>> = 
   fila_reposicao_itens: [qk.ordensCompra.all],
 
   // Financeiro
-  gastos: [qk.gastos.all, qk.metricas.all],
+  gastos: [qk.gastos.all, qk.metricas.all, qk.movimentacao.all],
+  entradas: [qk.entradas.all, qk.movimentacao.all],
   tipos_gasto: [qk.tiposGasto.all, qk.gastos.all, qk.metricas.all],
-  boletos: [qk.boletos.all, qk.metricas.all],
-  boleto_parcelas: [qk.boletos.all, qk.gastos.all, qk.metricas.all],
+  boletos: [qk.boletos.all, qk.metricas.all, qk.movimentacao.all],
+  boleto_parcelas: [qk.boletos.all, qk.gastos.all, qk.metricas.all, qk.movimentacao.all],
 
   // Pessoas
   usuarios_perfis: [qk.usuarios.all, qk.vendas.all, qk.orcamentos.all, qk.gastos.all],
