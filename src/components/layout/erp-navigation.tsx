@@ -105,12 +105,12 @@ const iconConsumivel = (
   </svg>
 )
 
-const iconGastos = (
+const iconMovimentacao = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-[18px]">
-    <rect x="2" y="6" width="20" height="13" rx="2" />
-    <path d="M2 10h20" />
-    <path d="M6 15h3" />
-    <circle cx="17" cy="15" r="1.2" fill="currentColor" stroke="none" />
+    <path d="M7 4v16" />
+    <path d="M3 8l4-4 4 4" />
+    <path d="M17 20V4" />
+    <path d="M21 16l-4 4-4-4" />
   </svg>
 )
 
@@ -163,8 +163,8 @@ export const sections: NavSection[] = [
   {
     label: 'Financeiro',
     items: [
-      { href: '/gastos',  label: 'Gastos',  available: true, icon: iconGastos,  moduloKey: 'gastos'  },
-      { href: '/boletos', label: 'Boletos', available: true, icon: iconBoletos, moduloKey: 'boletos' },
+      { href: '/movimentacao', label: 'Movimentação', available: true, icon: iconMovimentacao, moduloKey: 'gastos'  },
+      { href: '/boletos',      label: 'Boletos',      available: true, icon: iconBoletos,      moduloKey: 'boletos' },
     ],
   },
   {
