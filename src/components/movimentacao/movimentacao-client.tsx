@@ -2,14 +2,11 @@
 
 import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { Modal } from '@/components/ui/modal'
 import { GastoModal } from '@/components/gastos/gasto-modal'
 import { EntradaModal } from './entrada-modal'
 import { MovimentacaoDetalheModal } from './movimentacao-detalhe-modal'
-import { deletarGasto } from '@/lib/actions/gastos'
-import { deletarEntrada } from '@/lib/actions/entradas'
 import { FORMAS_PAGAMENTO } from '@/types'
-import type { Movimentacao, MovimentacaoDirecao, TipoGastoDB, Gasto, Entrada } from '@/types'
+import type { Movimentacao, MovimentacaoDirecao, TipoGastoDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useMovimentacoes, useTiposGasto } from '@/lib/query/hooks'
 
@@ -64,11 +61,8 @@ export function MovimentacaoClient({
   const [ate, setAte] = useState('')
 
   const [detalhe, setDetalhe] = useState<Movimentacao | null>(null)
-  const [gastoModal, setGastoModal] = useState<{ open: boolean; editando: Gasto | null }>({ open: false, editando: null })
-  const [entradaModal, setEntradaModal] = useState<{ open: boolean; editando: Entrada | null }>({ open: false, editando: null })
-  const [excluindo, setExcluindo] = useState<Movimentacao | null>(null)
-  const [erroDelete, setErroDelete] = useState('')
-  const [loadingDelete, setLoadingDelete] = useState(false)
+  const [gastoModalOpen, setGastoModalOpen] = useState(false)
+  const [entradaModalOpen, setEntradaModalOpen] = useState(false)
 
   const categorias = useMemo(() => {
     const set = new Set<string>()
@@ -107,34 +101,6 @@ export function MovimentacaoClient({
   // refreshActiveTab() invalida todas as queries (inclui movimentação/gastos/entradas).
   const onSaved = refreshActiveTab
 
-  function abrirEditar(mov: Movimentacao) {
-    setDetalhe(null)
-    if (mov.origem === 'gasto' && mov.gasto) setGastoModal({ open: true, editando: mov.gasto })
-    else if (mov.origem === 'entrada_manual' && mov.entrada) setEntradaModal({ open: true, editando: mov.entrada })
-  }
-
-  function pedirExclusao(mov: Movimentacao) {
-    setDetalhe(null)
-    setErroDelete('')
-    setExcluindo(mov)
-  }
-
-  async function confirmarExclusao() {
-    if (!excluindo) return
-    setErroDelete('')
-    setLoadingDelete(true)
-    try {
-      if (excluindo.origem === 'gasto') await deletarGasto(excluindo.refId)
-      else if (excluindo.origem === 'entrada_manual') await deletarEntrada(excluindo.refId)
-      setExcluindo(null)
-      onSaved()
-    } catch (e: unknown) {
-      setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
-    } finally {
-      setLoadingDelete(false)
-    }
-  }
-
   const temFiltro = !!(busca || filtroDirecao || filtroCategoria || de || ate)
 
   return (
@@ -149,7 +115,7 @@ export function MovimentacaoClient({
         </div>
         <div className="flex items-center gap-2">
           {perm.criar && (
-            <Button variant="secondary" onClick={() => setEntradaModal({ open: true, editando: null })}>
+            <Button variant="secondary" onClick={() => setEntradaModalOpen(true)}>
               <svg viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth={2.5} className="size-4">
                 <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -157,7 +123,7 @@ export function MovimentacaoClient({
             </Button>
           )}
           {perm.criar && (
-            <Button onClick={() => setGastoModal({ open: true, editando: null })}>
+            <Button onClick={() => setGastoModalOpen(true)}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4">
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -310,16 +276,13 @@ export function MovimentacaoClient({
 
       <MovimentacaoDetalheModal
         mov={detalhe}
-        perm={perm}
         onClose={() => setDetalhe(null)}
-        onEditar={abrirEditar}
-        onExcluir={pedirExclusao}
       />
 
       <GastoModal
-        open={gastoModal.open}
-        onClose={() => setGastoModal({ open: false, editando: null })}
-        editando={gastoModal.editando}
+        open={gastoModalOpen}
+        onClose={() => setGastoModalOpen(false)}
+        editando={null}
         usuarios={usuarios}
         usuarioLogadoId={usuarioLogadoId}
         perm={{ criar: perm.criar, deletar: perm.deletar }}
@@ -327,30 +290,13 @@ export function MovimentacaoClient({
       />
 
       <EntradaModal
-        open={entradaModal.open}
-        onClose={() => setEntradaModal({ open: false, editando: null })}
-        editando={entradaModal.editando}
+        open={entradaModalOpen}
+        onClose={() => setEntradaModalOpen(false)}
+        editando={null}
         usuarios={usuarios}
         usuarioLogadoId={usuarioLogadoId}
         onSaved={onSaved}
       />
-
-      <Modal open={!!excluindo} onClose={() => setExcluindo(null)} title="Excluir movimentação">
-        <div className="flex flex-col gap-4">
-          <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
-            Tem certeza que deseja excluir{' '}
-            <strong>{excluindo?.descricao}</strong> ({moedaBR.format(excluindo?.valor ?? 0)})?
-            Esta ação não pode ser desfeita.
-          </p>
-          {erroDelete && (
-            <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroDelete}</p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setExcluindo(null)}>Cancelar</Button>
-            <Button variant="danger" loading={loadingDelete} onClick={confirmarExclusao}>Excluir</Button>
-          </div>
-        </div>
-      </Modal>
     </>
   )
 }
