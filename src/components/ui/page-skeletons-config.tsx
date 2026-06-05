@@ -234,6 +234,27 @@ export function GastosSkeleton() {
   )
 }
 
+export function MovimentacaoSkeleton() {
+  return (
+    <TablePageSkeleton
+      titleWidth={150}
+      buttonWidth={170}
+      searchWidth={384}
+      filters={3}
+      columns={[
+        { width: 100 },
+        { width: 110 },
+        { width: 260 },
+        { width: 130 },
+        { width: 130 },
+        { width: 110, align: 'right' },
+        { width: 80, align: 'right' },
+      ]}
+      rows={8}
+    />
+  )
+}
+
 export function OrdensCompraSkeleton() {
   return <OcPageSkeleton />
 }
