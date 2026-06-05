@@ -158,7 +158,7 @@ export async function salvarMPComFoto(formData: FormData) {
     const { data: buckets, error: listErr } = await admin.storage.listBuckets()
     if (listErr) throw new Error(listErr.message)
 
-    const exists = (buckets ?? []).some((b) => b.name === FOTO_BUCKET_MP)
+    const exists = (buckets ?? []).some((b: { name: string }) => b.name === FOTO_BUCKET_MP)
     if (!exists) {
       const { error: createErr } = await admin.storage.createBucket(FOTO_BUCKET_MP, {
         public: true,
@@ -269,7 +269,7 @@ export async function getMPDetalhe(mpId: string): Promise<MPDetalheData> {
   const usuariosMap = new Map(
     (usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }])
   )
-  const movimentacoes = (movRes.data ?? []).map((mov) => ({
+  const movimentacoes = (movRes.data ?? []).map((mov: any) => ({
     ...mov,
     usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
   })) as MovimentacaoEstoque[]
