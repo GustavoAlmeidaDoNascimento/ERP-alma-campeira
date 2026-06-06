@@ -10,7 +10,7 @@ import { apenasDigitos, formatarCep, formatarCnpj, formatarCpf } from '@/lib/br/
 import { buscarEnderecoPorCep } from '@/lib/br/viacep'
 import { buscarEmpresaPorCnpj } from '@/lib/br/cnpj'
 import { SIGLAS_UF } from '@/lib/br/constants'
-import { validarCamposObrigatoriosParceiro } from '@/lib/br/validar-cadastro-parceiro'
+import { validarCamposObrigatoriosFornecedor } from '@/lib/br/validar-cadastro-parceiro'
 
 type Props = {
   open: boolean
@@ -200,7 +200,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
     e.preventDefault()
     setErro('')
     try {
-      validarCamposObrigatoriosParceiro(form)
+      validarCamposObrigatoriosFornecedor(form)
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Preencha todos os campos obrigatórios.')
       return
@@ -305,8 +305,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
 
         <Input
           id="forn-ie"
-          label="Inscrição Estadual *"
-          required
+          label="Inscrição Estadual"
           placeholder="ISENTO ou número"
           value={form.ie}
           onChange={(e) => set('ie', e.target.value)}
@@ -327,8 +326,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
           />
           <Input
             id="email"
-            label="E-mail *"
-            required
+            label="E-mail"
             type="email"
             placeholder="contato@fornecedor.com"
             value={form.email}
