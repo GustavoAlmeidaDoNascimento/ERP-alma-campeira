@@ -39,7 +39,7 @@ export async function listarMovimentacoes(): Promise<Movimentacao[]> {
       .limit(500),
     supabase
       .from('pedidos')
-      .select('id, codigo, sequencial, data_pedido, status, valor_total, forma_pagamento, cliente:clientes(id, nome), vendedor:usuarios_perfis(id, nome)')
+      .select('id, codigo, sequencial, data_pedido, status, valor_total, forma_pagamento, pago, cliente:clientes(id, nome), vendedor:usuarios_perfis(id, nome)')
       .order('data_pedido', { ascending: false })
       .limit(500),
   ])
@@ -111,6 +111,8 @@ export async function listarMovimentacoes(): Promise<Movimentacao[]> {
     const forma = ped.forma_pagamento as FormaPagamento | null
     if (forma === 'boleto') continue // entra pelas parcelas pagas
     if (STATUS_NAO_RECEBIDO.has(status)) continue
+    // Só conta como recebido depois de marcado "pago" explicitamente.
+    if (!ped.pago) continue
     const cliente = primeiro(ped.cliente) as { nome?: string } | null
     const vendedor = primeiro(ped.vendedor) as { nome?: string } | null
     const codigo = (ped.codigo as string) ?? null
