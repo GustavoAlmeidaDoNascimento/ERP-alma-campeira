@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { alterarStatus } from '@/lib/actions/vendas'
+import { alterarStatus, definirPagoVenda } from '@/lib/actions/vendas'
 import { STATUS_PEDIDO, FORMAS_PAGAMENTO_OC } from '@/types'
 import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
 
@@ -76,8 +76,14 @@ type Props = {
 
 export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Props) {
   const [loadingStatus, setLoadingStatus] = useState(false)
+  const [loadingPago, setLoadingPago] = useState(false)
+  const [pagoLocal, setPagoLocal] = useState<boolean>(!!pedido?.pago)
   const [imprimirOpen, setImprimirOpen] = useState(false)
   const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    setPagoLocal(!!pedido?.pago)
+  }, [pedido?.id, pedido?.pago])
   const imprimirRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -116,6 +122,22 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     setErro('')
     setImprimirOpen(false)
     abrirImpressaoPedido(p)
+  }
+
+  async function handleTogglePago(novo: boolean) {
+    if (!pedido) return
+    setErro('')
+    setLoadingPago(true)
+    const anterior = pagoLocal
+    setPagoLocal(novo)
+    try {
+      await definirPagoVenda(pedidoId, novo)
+    } catch (e: unknown) {
+      setPagoLocal(anterior)
+      setErro(e instanceof Error ? e.message : 'Erro ao atualizar pagamento.')
+    } finally {
+      setLoadingPago(false)
+    }
   }
 
   async function handleAlterarStatus(novoStatus: StatusPedido) {
@@ -239,6 +261,30 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
           {pedido.forma_pagamento ? (
             <DetailMeta label="Forma de pagamento" value={FORMAS_PAGAMENTO_OC[pedido.forma_pagamento].label} />
           ) : null}
+          {pedido.forma_pagamento !== 'boleto' && (
+            <DetailMeta
+              label="Pagamento"
+              value={
+                perm.editar ? (
+                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={pagoLocal}
+                      disabled={loadingPago}
+                      onChange={(e) => void handleTogglePago(e.target.checked)}
+                    />
+                    <span className="text-sm" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
+                      {pagoLocal ? 'Pago — entra em movimentações' : 'Aguardando pagamento'}
+                    </span>
+                  </label>
+                ) : (
+                  <span className="text-sm" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
+                    {pagoLocal ? 'Pago' : 'Aguardando pagamento'}
+                  </span>
+                )
+              }
+            />
+          )}
         </div>
 
         {/* Contato e endereço do cliente */}
