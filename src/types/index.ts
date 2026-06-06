@@ -338,6 +338,12 @@ export type Pedido = {
   natureza_operacao?: string | null
   /** Forma de pagamento escolhida na venda (ver FORMAS_PAGAMENTO_OC). */
   forma_pagamento?: FormaPagamentoOC | null
+  /**
+   * Pagamento registrado. Independe do fluxo em_espera → em_producao → entregue.
+   * Em vendas no boleto este campo é ignorado: o recebimento é controlado pelas
+   * parcelas pagas do boleto associado.
+   */
+  pago?: boolean
   entregue_at: string | null
   created_at: string
   cliente?: PedidoClienteJoin | null
