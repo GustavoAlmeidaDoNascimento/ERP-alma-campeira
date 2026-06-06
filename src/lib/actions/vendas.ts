@@ -706,6 +706,31 @@ export async function marcarEntregue(id: string) {
 
 }
 
+/**
+ * Marca/desmarca o recebimento da venda. Só faz sentido para vendas que NÃO
+ * são no boleto — nessas o recebimento é controlado pelas parcelas pagas.
+ */
+export async function definirPagoVenda(id: string, pago: boolean) {
+  await assertPermissao('vendas', 'editar')
+  const supabase = await createClient()
+
+  const { data: pedido, error: pedidoErr } = await supabase
+    .from('pedidos')
+    .select('forma_pagamento')
+    .eq('id', id)
+    .single()
+  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
+  if (pedido.forma_pagamento === 'boleto') {
+    throw new Error('Vendas no boleto têm o recebimento controlado pelas parcelas.')
+  }
+
+  const { error } = await supabase
+    .from('pedidos')
+    .update({ pago })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 export async function deletarVenda(id: string) {
   await assertPermissao('vendas', 'deletar')
   const supabase = await createClient()
