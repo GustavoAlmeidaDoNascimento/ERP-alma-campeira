@@ -6,7 +6,7 @@ import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { fetchFornecedoresFullList } from '@/lib/cache/list-data'
 import type { Fornecedor, OrdemCompraHistoricoResumo, StatusOC, TipoDocumento } from '@/types'
 import { apenasDigitos } from '@/lib/br/documento'
-import { validarCamposObrigatoriosParceiro } from '@/lib/br/validar-cadastro-parceiro'
+import { validarCamposObrigatoriosFornecedor } from '@/lib/br/validar-cadastro-parceiro'
 
 async function revalidateFornecedoresList() {
   try {
@@ -124,7 +124,7 @@ type FornecedorInput = {
 }
 
 function normalizarFornecedorPayload(input: FornecedorInput) {
-  validarCamposObrigatoriosParceiro(input)
+  validarCamposObrigatoriosFornecedor(input)
 
   const doc = apenasDigitos(input.documento)
   const cep = apenasDigitos(input.cep)
@@ -134,7 +134,7 @@ function normalizarFornecedorPayload(input: FornecedorInput) {
   return {
     nome: input.nome.trim(),
     telefone: input.telefone.trim(),
-    email: input.email.trim(),
+    email: input.email.trim() || null,
     tipo_documento: input.tipo_documento,
     documento: doc,
     cep,
@@ -145,7 +145,7 @@ function normalizarFornecedorPayload(input: FornecedorInput) {
     cidade: input.cidade.trim(),
     uf,
     razao_social: (input.razao_social ?? '').trim() || null,
-    ie: (input.ie ?? '').trim(),
+    ie: (input.ie ?? '').trim() || null,
     codigo_municipio_ibge: ibge,
   }
 }
