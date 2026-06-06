@@ -89,12 +89,13 @@ const PRINT_STYLES = `
   .doc-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
   .doc-subtitle { font-size: 12px; color: #555; margin-bottom: 20px; }
   .meta-box {
-    padding: 14px 16px; background: #f3f4f6; border: 1px solid #e5e7eb;
-    border-radius: 6px; margin-bottom: 20px; line-height: 1.5;
+    padding: 10px 12px; background: #f3f4f6; border: 1px solid #e5e7eb;
+    border-radius: 6px; margin-bottom: 16px; line-height: 1.35;
+    font-size: 11px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px;
   }
-  .meta-box p { margin-bottom: 4px; }
-  .meta-box p:last-child { margin-bottom: 0; }
-  .meta-box strong { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-right: 6px; }
+  .meta-box p { margin-bottom: 2px; break-inside: avoid; }
+  .meta-box strong { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-right: 4px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
   thead tr { background: #f3f4f6; }
   th {
