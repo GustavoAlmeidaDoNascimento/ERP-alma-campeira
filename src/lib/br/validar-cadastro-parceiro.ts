@@ -21,12 +21,30 @@ export type CamposCadastroParceiro = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+type OpcoesValidacaoParceiro = {
+  emailOpcional?: boolean
+  ieOpcional?: boolean
+}
+
 function exigirTexto(valor: string, label: string) {
   if (!valor.trim()) throw new Error(`${label} é obrigatório.`)
 }
 
+function validarEmail(input: CamposCadastroParceiro, opcoes?: OpcoesValidacaoParceiro) {
+  const email = input.email.trim()
+  if (!opcoes?.emailOpcional) {
+    if (!email) throw new Error('E-mail é obrigatório.')
+    if (!EMAIL_RE.test(email)) throw new Error('E-mail inválido.')
+    return
+  }
+  if (email && !EMAIL_RE.test(email)) throw new Error('E-mail inválido.')
+}
+
 /** Valida cadastro completo de cliente ou fornecedor (campos visíveis no formulário). */
-export function validarCamposObrigatoriosParceiro(input: CamposCadastroParceiro) {
+export function validarCamposObrigatoriosParceiro(
+  input: CamposCadastroParceiro,
+  opcoes?: OpcoesValidacaoParceiro,
+) {
   exigirTexto(input.nome, 'Nome')
 
   const doc = apenasDigitos(input.documento)
@@ -45,11 +63,11 @@ export function validarCamposObrigatoriosParceiro(input: CamposCadastroParceiro)
     throw new Error('Telefone inválido. Use apenas números, espaços e os caracteres ( ) - +')
   }
 
-  const email = input.email.trim()
-  if (!email) throw new Error('E-mail é obrigatório.')
-  if (!EMAIL_RE.test(email)) throw new Error('E-mail inválido.')
+  validarEmail(input, opcoes)
 
-  exigirTexto(input.ie ?? '', 'Inscrição estadual')
+  if (!opcoes?.ieOpcional) {
+    exigirTexto(input.ie ?? '', 'Inscrição estadual')
+  }
 
   const cep = apenasDigitos(input.cep)
   if (!cep) throw new Error('CEP é obrigatório.')
@@ -70,6 +88,11 @@ export function validarCamposObrigatoriosParceiro(input: CamposCadastroParceiro)
     throw new Error('Código IBGE do município é obrigatório. Use "Buscar pelo CEP" ou informe o código.')
   }
   if (ibge.length !== 7) throw new Error('Código IBGE do município deve ter 7 dígitos.')
+}
+
+/** Valida cadastro de fornecedor (e-mail e inscrição estadual opcionais). */
+export function validarCamposObrigatoriosFornecedor(input: CamposCadastroParceiro) {
+  validarCamposObrigatoriosParceiro(input, { emailOpcional: true, ieOpcional: true })
 }
 
 const INDICADORES_IE_VALIDOS = [1, 2, 9] as const
