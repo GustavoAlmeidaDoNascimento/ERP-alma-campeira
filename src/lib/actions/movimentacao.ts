@@ -6,8 +6,10 @@ import { codigoBoleto, type FormaPagamento, type Movimentacao } from '@/types'
 import { listarGastos } from '@/lib/actions/gastos'
 import { listarEntradas } from '@/lib/actions/entradas'
 
-/** Status (coluna crua de `pedidos`) que NÃO representam dinheiro recebido. */
-const STATUS_NAO_RECEBIDO = new Set(['em_espera', 'orcamento', 'cancelado'])
+/** Status (coluna crua de `pedidos`) que NÃO representam dinheiro recebido,
+ *  mesmo quando o flag `pago` está marcado. Para vendas à vista, o `pago`
+ *  controla a entrada em movimentações — só descartamos as canceladas. */
+const STATUS_NAO_RECEBIDO = new Set(['cancelado'])
 
 function primeiro<T>(v: T | T[] | null | undefined): T | null {
   if (Array.isArray(v)) return v[0] ?? null
