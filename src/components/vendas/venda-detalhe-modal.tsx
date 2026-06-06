@@ -259,32 +259,41 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             <DetailMeta label="Natureza da operação" value={pedido.natureza_operacao.trim()} />
           ) : null}
           {pedido.forma_pagamento ? (
-            <DetailMeta label="Forma de pagamento" value={FORMAS_PAGAMENTO_OC[pedido.forma_pagamento].label} />
-          ) : null}
-          {pedido.forma_pagamento !== 'boleto' && (
             <DetailMeta
-              label="Pagamento"
+              label="Forma de pagamento"
               value={
-                perm.editar ? (
-                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={pagoLocal}
-                      disabled={loadingPago}
-                      onChange={(e) => void handleTogglePago(e.target.checked)}
-                    />
-                    <span className="text-sm" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
-                      {pagoLocal ? 'Pago — entra em movimentações' : 'Aguardando pagamento'}
-                    </span>
-                  </label>
-                ) : (
-                  <span className="text-sm" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
-                    {pagoLocal ? 'Pago' : 'Aguardando pagamento'}
-                  </span>
-                )
+                <span className="inline-flex items-center gap-3 flex-wrap">
+                  <span>{FORMAS_PAGAMENTO_OC[pedido.forma_pagamento].label}</span>
+                  {pedido.forma_pagamento !== 'boleto' && (
+                    perm.editar ? (
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={pagoLocal}
+                          disabled={loadingPago}
+                          onChange={(e) => void handleTogglePago(e.target.checked)}
+                        />
+                        <span className="text-xs font-semibold" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
+                          {pagoLocal ? 'Pago' : 'Marcar como pago'}
+                        </span>
+                      </label>
+                    ) : (
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold"
+                        style={{
+                          color: pagoLocal ? '#15803d' : '#b45309',
+                          background: pagoLocal ? '#dcfce7' : '#fef3c7',
+                          border: `1px solid ${pagoLocal ? '#bbf7d0' : '#fde68a'}`,
+                        }}
+                      >
+                        {pagoLocal ? 'Pago' : 'Aguardando pagamento'}
+                      </span>
+                    )
+                  )}
+                </span>
               }
             />
-          )}
+          ) : null}
         </div>
 
         {/* Contato e endereço do cliente */}
