@@ -175,7 +175,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
       open={!!pedido}
       onClose={onClose}
       title={`Venda ${pedido.sequencial != null ? `#${pedido.sequencial} · ` : ''}${pedido.codigo}`}
-      width="600px"
+      width="820px"
     >
       <div className="flex flex-col gap-5">
 
@@ -262,34 +262,6 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             <DetailMeta
               label="Forma de pagamento"
               value={FORMAS_PAGAMENTO_OC[pedido.forma_pagamento].label}
-            />
-          ) : null}
-          {pedido.forma_pagamento && pedido.forma_pagamento !== 'boleto' ? (
-            <DetailMeta
-              label="Pago"
-              value={
-                perm.editar ? (
-                  <label className="inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={pagoLocal}
-                      disabled={loadingPago}
-                      onChange={(e) => void handleTogglePago(e.target.checked)}
-                    />
-                  </label>
-                ) : (
-                  <span
-                    className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold"
-                    style={{
-                      color: pagoLocal ? '#15803d' : '#b45309',
-                      background: pagoLocal ? '#dcfce7' : '#fef3c7',
-                      border: `1px solid ${pagoLocal ? '#bbf7d0' : '#fde68a'}`,
-                    }}
-                  >
-                    {pagoLocal ? 'Pago' : 'Aguardando pagamento'}
-                  </span>
-                )
-              }
             />
           ) : null}
         </div>
@@ -469,6 +441,33 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
 
         {/* Botão Imprimir (dropdown) — reutilizado em ambos os modos */}
         {(() => {
+          const pagoToggle = pedido.forma_pagamento && pedido.forma_pagamento !== 'boleto' ? (
+            perm.editar ? (
+              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={pagoLocal}
+                  disabled={loadingPago}
+                  onChange={(e) => void handleTogglePago(e.target.checked)}
+                />
+                <span className="text-xs font-semibold" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
+                  Pago
+                </span>
+              </label>
+            ) : (
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold"
+                style={{
+                  color: pagoLocal ? '#15803d' : '#b45309',
+                  background: pagoLocal ? '#dcfce7' : '#fef3c7',
+                  border: `1px solid ${pagoLocal ? '#bbf7d0' : '#fde68a'}`,
+                }}
+              >
+                {pagoLocal ? 'Pago' : 'Aguardando pagamento'}
+              </span>
+            )
+          ) : null
+
           const imprimirDropdown = (
             <div ref={imprimirRef} style={{ position: 'relative' }}>
               <Button
@@ -520,7 +519,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
           if (perm.editar) {
             return (
               <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
-                <div className="flex gap-2 items-center">{imprimirDropdown}</div>
+                <div className="flex gap-3 items-center">{imprimirDropdown}{pagoToggle}</div>
 
                 <div className="flex gap-2 items-center">
                   <label className="text-xs font-semibold" style={{ color: 'var(--ac-muted)' }}>
@@ -550,7 +549,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
 
           return (
             <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
-              {imprimirDropdown}
+              <div className="flex gap-3 items-center">{imprimirDropdown}{pagoToggle}</div>
               <Button variant="secondary" onClick={onClose}>Fechar</Button>
             </div>
           )
