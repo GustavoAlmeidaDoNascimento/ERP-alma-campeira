@@ -723,6 +723,9 @@ export async function definirPagoVenda(id: string, pago: boolean) {
   if (pedido.forma_pagamento === 'boleto') {
     throw new Error('Vendas no boleto têm o recebimento controlado pelas parcelas.')
   }
+  if (pago && !pedido.forma_pagamento) {
+    throw new Error('Selecione a forma de pagamento antes de marcar a venda como paga.')
+  }
 
   const { error } = await supabase
     .from('pedidos')
