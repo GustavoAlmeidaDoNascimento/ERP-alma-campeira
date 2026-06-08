@@ -91,6 +91,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [descontoTotalVal, setDescontoTotalVal] = useState(0)
   const [itens, setItens] = useState<ItemForm[]>([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamentoOC | ''>('')
+  const [pago, setPago] = useState(false)
   const [qtdParcelas, setQtdParcelas] = useState(0)
   const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]>([])
   const [loading, setLoading] = useState(false)
@@ -129,6 +130,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setNaturezaOperacao(editando.natureza_operacao ?? 'VENDA DE MERCADORIA')
       setFrete(editando.frete ?? 0)
       setFormaPagamento(editando.forma_pagamento ?? '')
+      setPago(!!editando.pago)
       setQtdParcelas(0)
       setBoletoParcelas([])
       {
@@ -160,6 +162,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
       setDescontoTotalVal(0)
       setItens([{ faca_id: '', quantidade: 1, preco_unitario: 0, desconto_pct: 0, desconto_val: 0 }])
       setFormaPagamento('')
+      setPago(false)
       setQtdParcelas(0)
       setBoletoParcelas([])
     }
@@ -320,6 +323,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
         frete: frete || 0,
         desconto_total: descontoTotalAplicado,
         forma_pagamento: formaPagamento || null,
+        pago: formaPagamento && formaPagamento !== 'boleto' ? pago : false,
         boletoParcelas: formaPagamento === 'boleto' ? parcelasBoleto : undefined,
         itens: itensValidos.map((i) => ({
           faca_id: i.faca_id,
@@ -660,7 +664,11 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               </label>
               <select
                 value={formaPagamento}
-                onChange={(e) => setFormaPagamento(e.target.value as FormaPagamentoOC | '')}
+                onChange={(e) => {
+                  const v = e.target.value as FormaPagamentoOC | ''
+                  setFormaPagamento(v)
+                  if (!v || v === 'boleto') setPago(false)
+                }}
                 className="px-3 py-2 rounded-lg text-sm outline-none appearance-none"
                 style={{ ...selectStyle, minWidth: 180 }}
                 onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
@@ -671,6 +679,24 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                   <option key={k} value={k}>{v.label}</option>
                 ))}
               </select>
+              {formaPagamento && formaPagamento !== 'boleto' && (
+                <label
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-all cursor-pointer select-none"
+                  style={{
+                    background: pago ? '#dcfce7' : 'transparent',
+                    color: pago ? '#15803d' : 'var(--ac-text)',
+                    border: `1px solid ${pago ? '#bbf7d0' : 'var(--ac-border)'}`,
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pago}
+                    onChange={(e) => setPago(e.target.checked)}
+                  />
+                  <span>Pago</span>
+                </label>
+              )}
             </div>
 
             {/* Parcelas do boleto — aparece quando forma = boleto */}
