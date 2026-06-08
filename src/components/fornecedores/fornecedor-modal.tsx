@@ -374,8 +374,7 @@ export function FornecedorModal({ open, onClose, editando, onSaved }: Props) {
             />
             <Input
               id="complemento"
-              label="Complemento *"
-              required
+              label="Complemento"
               placeholder="Sala, bloco..."
               value={form.complemento}
               onChange={(e) => set('complemento', e.target.value)}
