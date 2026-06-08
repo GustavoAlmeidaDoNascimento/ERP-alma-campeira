@@ -111,6 +111,8 @@ export type VendaInput = {
   natureza_operacao?: string
   /** Forma de pagamento da venda (ver FormaPagamentoOC). */
   forma_pagamento?: FormaPagamentoOC | null
+  /** Marca a venda como paga (só faz sentido para formas != boleto). */
+  pago?: boolean
   /** Parcelas do boleto de entrada (a receber), quando forma_pagamento === 'boleto'. */
   boletoParcelas?: ParcelaInput[]
   /** Usuário confirmou venda com estoque abaixo do solicitado (venda antes da produção). */
@@ -368,6 +370,10 @@ export async function criarVenda(input: VendaInput) {
 
   const natureza = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
   const formaPagamento = normalizarFormaPagamento(input.forma_pagamento)
+  const pago = !!input.pago && formaPagamento !== null && formaPagamento !== 'boleto'
+  if (input.pago && !pago) {
+    throw new Error('Selecione uma forma de pagamento (diferente de boleto) para marcar a venda como paga.')
+  }
 
   const { data: pedido, error } = await supabase
     .from('pedidos')
@@ -383,6 +389,7 @@ export async function criarVenda(input: VendaInput) {
       valor_total,
       natureza_operacao: natureza,
       forma_pagamento: formaPagamento,
+      pago,
     })
     .select('id')
     .single()
@@ -492,6 +499,10 @@ export async function atualizarVenda(id: string, input: VendaInput) {
 
   const naturezaUpd = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
   const formaPagamento = normalizarFormaPagamento(input.forma_pagamento)
+  const pagoUpd = !!input.pago && formaPagamento !== null && formaPagamento !== 'boleto'
+  if (input.pago && !pagoUpd) {
+    throw new Error('Selecione uma forma de pagamento (diferente de boleto) para marcar a venda como paga.')
+  }
 
   const { error } = await supabase
     .from('pedidos')
@@ -506,6 +517,7 @@ export async function atualizarVenda(id: string, input: VendaInput) {
       valor_total,
       natureza_operacao: naturezaUpd,
       forma_pagamento: formaPagamento,
+      pago: pagoUpd,
     })
     .eq('id', id)
   if (error) throw new Error(error.message)
@@ -738,16 +750,83 @@ export async function deletarVenda(id: string) {
   await assertPermissao('vendas', 'deletar')
   const supabase = await createClient()
 
-  const { data: pedido } = await supabase
+  const { data: pedido, error: pedidoErr } = await supabase
     .from('pedidos')
-    .select('status')
+    .select('status, codigo')
     .eq('id', id)
     .single()
+  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
 
-  if (!pedido || normalizeStatusPedido(String(pedido.status)) !== 'em_espera') {
-    throw new Error('Apenas vendas aguardando pagamento podem ser excluídas.')
+  const statusAtual = normalizeStatusPedido(String(pedido.status))
+  const codigo = String(pedido.codigo ?? id)
+
+  // 1) Bloqueia se existirem parcelas de boleto já recebidas — apagar a venda
+  // sumiria com um recebimento real. Estorne primeiro pela tela de boletos.
+  const { data: boletosVinc } = await supabase
+    .from('boletos')
+    .select('id, parcelas:boleto_parcelas(id, pago_em)')
+    .eq('pedido_id', id)
+
+  const boletos = (boletosVinc ?? []) as { id: string; parcelas: { id: string; pago_em: string | null }[] }[]
+  const temParcelaPaga = boletos.some((b) => (b.parcelas ?? []).some((p) => p.pago_em))
+  if (temParcelaPaga) {
+    throw new Error(
+      'Esta venda tem parcelas de boleto já recebidas. Estorne os recebimentos antes de excluir.',
+    )
   }
 
+  // 2) Se a venda já estava entregue, devolve o estoque das facas e registra
+  // uma movimentação de ajuste para manter o histórico antes de remover o pedido.
+  if (statusAtual === 'entregue') {
+    const { data: itens, error: itensErr } = await supabase
+      .from('pedido_itens')
+      .select('faca_id, quantidade')
+      .eq('pedido_id', id)
+    if (itensErr) throw new Error(itensErr.message)
+
+    const facaIds = [...new Set((itens ?? []).map((i) => i.faca_id))]
+    if (facaIds.length > 0) {
+      const { data: facas } = await supabase
+        .from('facas')
+        .select('id, nome, estoque_atual')
+        .in('id', facaIds)
+      const facaMap = new Map((facas ?? []).map((f) => [f.id, f]))
+
+      const user = await getAuthenticatedUser()
+
+      for (const item of itens ?? []) {
+        const faca = facaMap.get(item.faca_id)
+        if (!faca) continue
+        const novoEstoque = Number(faca.estoque_atual) + Number(item.quantidade)
+
+        const { error: estoqueErr } = await supabase
+          .from('facas')
+          .update({ estoque_atual: novoEstoque })
+          .eq('id', item.faca_id)
+        if (estoqueErr) throw new Error(`Erro ao devolver estoque de ${faca.nome}: ${estoqueErr.message}`)
+        faca.estoque_atual = novoEstoque
+
+        const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
+          tipo: 'ajuste',
+          faca_id: item.faca_id,
+          quantidade: item.quantidade,
+          observacao: `Devolução por exclusão da venda ${codigo}`,
+          usuario_id: user?.id ?? null,
+        })
+        if (movErr) throw new Error(`Erro ao registrar devolução para ${faca.nome}: ${movErr.message}`)
+      }
+    }
+  }
+
+  // 3) Remove boletos vinculados (sem parcelas pagas). O cascade cuida das parcelas.
+  for (const b of boletos) {
+    const { error: delBolErr } = await supabase.from('boletos').delete().eq('id', b.id)
+    if (delBolErr) throw new Error(`Erro ao remover boleto vinculado: ${delBolErr.message}`)
+  }
+
+  // 4) Apaga o pedido. Cascades: pedido_itens, fila_reposicao.
+  // SET NULL: movimentacoes_estoque.pedido_id, orcamentos.convertido_pedido_id
+  // (orçamento volta a ficar "disponível" automaticamente).
   const { error } = await supabase.from('pedidos').delete().eq('id', id)
   if (error) throw new Error(error.message)
 }
