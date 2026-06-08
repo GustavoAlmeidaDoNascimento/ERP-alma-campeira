@@ -443,16 +443,24 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
         {(() => {
           const pagoToggle = pedido.forma_pagamento && pedido.forma_pagamento !== 'boleto' ? (
             perm.editar ? (
-              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+              <label
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-all cursor-pointer select-none"
+                style={{
+                  background: pagoLocal ? '#dcfce7' : 'transparent',
+                  color: pagoLocal ? '#15803d' : 'var(--ac-text)',
+                  border: `1px solid ${pagoLocal ? '#bbf7d0' : 'var(--ac-border)'}`,
+                  fontWeight: 500,
+                  opacity: loadingPago ? 0.6 : 1,
+                  cursor: loadingPago ? 'not-allowed' : 'pointer',
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={pagoLocal}
                   disabled={loadingPago}
                   onChange={(e) => void handleTogglePago(e.target.checked)}
                 />
-                <span className="text-xs font-semibold" style={{ color: pagoLocal ? '#15803d' : 'var(--ac-muted)' }}>
-                  Pago
-                </span>
+                <span>Pago</span>
               </label>
             ) : (
               <span
