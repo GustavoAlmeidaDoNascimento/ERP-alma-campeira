@@ -75,7 +75,6 @@ export function validarCamposObrigatoriosParceiro(
 
   exigirTexto(input.logradouro, 'Logradouro')
   exigirTexto(input.numero, 'Número')
-  exigirTexto(input.complemento, 'Complemento')
   exigirTexto(input.bairro, 'Bairro')
   exigirTexto(input.cidade, 'Cidade')
 
