@@ -444,7 +444,7 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
               {ordenados.map((p, i) => {
                 const st = STATUS_PEDIDO[p.status]
                 const podeEditar = p.status !== 'entregue' && perm.editar
-                const podeDeletar = p.status === 'em_espera' && perm.deletar
+                const podeDeletar = perm.deletar
                 return (
                   <tr
                     key={p.id}
@@ -575,6 +575,18 @@ export function VendasClient({ pedidos: pedidosIniciais, clientes, facas, usuari
               {deletando?.codigo}
             </strong>? Esta ação não pode ser desfeita.
           </p>
+          {deletando?.status === 'entregue' && (
+            <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#92400e', background: '#fef3c7' }}>
+              Esta venda já foi entregue. As facas voltarão ao estoque e será
+              registrada uma movimentação de ajuste para auditoria.
+            </p>
+          )}
+          {deletando && (deletando.forma_pagamento === 'boleto') && (
+            <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#92400e', background: '#fef3c7' }}>
+              Boletos vinculados sem parcelas pagas serão removidos junto. Se
+              houver parcelas já recebidas, estorne primeiro pela tela de boletos.
+            </p>
+          )}
           {erroDelete && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroDelete}</p>
           )}
