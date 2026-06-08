@@ -418,8 +418,7 @@ export function ClienteModal({ open, onClose, editando, onSaved }: Props) {
             />
             <Input
               id="cli-complemento"
-              label="Complemento *"
-              required
+              label="Complemento"
               value={complemento}
               onChange={(e) => setComplemento(e.target.value)}
               placeholder="Sala, bloco..."
