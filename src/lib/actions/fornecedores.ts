@@ -140,7 +140,7 @@ function normalizarFornecedorPayload(input: FornecedorInput) {
     cep,
     logradouro: input.logradouro.trim(),
     numero: input.numero.trim(),
-    complemento: input.complemento.trim(),
+    complemento: input.complemento.trim() || null,
     bairro: input.bairro.trim(),
     cidade: input.cidade.trim(),
     uf,
