@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import type { CategoriaConsumivelDB } from '@/types'
 
 const CATEGORIAS_PADRAO: CategoriaConsumivelDB[] = [
@@ -11,54 +11,60 @@ const CATEGORIAS_PADRAO: CategoriaConsumivelDB[] = [
   { id: 'fallback-seguranca', nome: 'Segurança', ordem: 4, created_at: '' },
 ]
 
+function mapCategoriaConsumivel(row: {
+  id: string
+  nome: string
+  ordem: number
+  createdAt: Date
+}): CategoriaConsumivelDB {
+  return {
+    id: row.id,
+    nome: row.nome,
+    ordem: row.ordem,
+    created_at: row.createdAt.toISOString(),
+  }
+}
+
 export async function getCategoriasConsumivel(): Promise<CategoriaConsumivelDB[]> {
   await assertPermissao('consumiveis', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('categorias_consumivel')
-    .select('*')
-    .order('ordem')
-  if (error) throw new Error(error.message)
-  const categorias = (data ?? []) as CategoriaConsumivelDB[]
-  return categorias.length > 0 ? categorias : CATEGORIAS_PADRAO
+  const categorias = await prisma.categoriaConsumivel.findMany({
+    select: { id: true, nome: true, ordem: true, createdAt: true },
+    orderBy: { ordem: 'asc' },
+  })
+  const mapped = categorias.map(mapCategoriaConsumivel)
+  return mapped.length > 0 ? mapped : CATEGORIAS_PADRAO
 }
 
 type CategoriaInput = { nome: string }
 
 export async function criarCategoriaConsumivel(input: CategoriaInput) {
   await assertPermissao('consumiveis', 'criar')
-  const supabase = await createClient()
-
-  const { data: maxData } = await supabase
-    .from('categorias_consumivel')
-    .select('ordem')
-    .order('ordem', { ascending: false })
-    .limit(1)
-    .single()
-
-  const ordem = (maxData?.ordem ?? 0) + 1
-
-  const { error } = await supabase.from('categorias_consumivel').insert({
-    nome: input.nome.trim(),
-    ordem,
+  const ultimaCategoria = await prisma.categoriaConsumivel.findFirst({
+    select: { ordem: true },
+    orderBy: { ordem: 'desc' },
   })
-  if (error) throw new Error(error.message)
+
+  const ordem = (ultimaCategoria?.ordem ?? 0) + 1
+
+  await prisma.categoriaConsumivel.create({
+    data: {
+      nome: input.nome.trim(),
+      ordem,
+    },
+  })
 }
 
 export async function atualizarCategoriaConsumivel(id: string, input: CategoriaInput) {
   await assertPermissao('consumiveis', 'editar')
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('categorias_consumivel')
-    .update({ nome: input.nome.trim() })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.categoriaConsumivel.updateMany({
+    where: { id },
+    data: { nome: input.nome.trim() },
+  })
 }
 
 export async function deletarCategoriaConsumivel(id: string) {
   await assertPermissao('consumiveis', 'deletar')
-  const supabase = await createClient()
-  const { error } = await supabase.from('categorias_consumivel').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.categoriaConsumivel.deleteMany({
+    where: { id },
+  })
 }

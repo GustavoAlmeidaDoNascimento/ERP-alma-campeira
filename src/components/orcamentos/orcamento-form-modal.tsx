@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useMemo, type KeyboardEvent } from 'react'
 import Link from 'next/link'
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select'
 import { criarOrcamento, atualizarOrcamento } from '@/lib/actions/orcamentos'
 import type { Orcamento, Cliente, Faca, OrcamentoItem } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Props = {
   open: boolean
@@ -16,9 +16,9 @@ type Props = {
   clientes: Cliente[]
   facas: Faca[]
   usuarios: { id: string; nome: string }[]
-  /** Pré-seleciona o vendedor em novo orçamento quando o usuário logado está na lista. */
+  /** PrÃ©-seleciona o vendedor em novo orÃ§amento quando o usuÃ¡rio logado estÃ¡ na lista. */
   usuarioLogadoId: string | null
-  /** Chamado após salvar, com o ID do orçamento (útil pra abrir detalhe direto). */
+  /** Chamado apÃ³s salvar, com o ID do orÃ§amento (Ãºtil pra abrir detalhe direto). */
   onSaved?: (orcamentoId: string) => void
 }
 
@@ -38,7 +38,7 @@ function moeda2(n: number) {
   return Math.round(n * 100) / 100
 }
 
-/** Setas ↑/↓: passo inteiro (1); step=0.01 no HTML continua válido para digitação decimal. */
+/** Setas â†‘/â†“: passo inteiro (1); step=0.01 no HTML continua vÃ¡lido para digitaÃ§Ã£o decimal. */
 function applyArrowStep(
   e: KeyboardEvent<HTMLInputElement>,
   current: number,
@@ -57,9 +57,9 @@ function applyArrowStep(
 }
 
 /**
- * O banco guarda só o preço líquido por item. Ao reabrir o formulário, recompomos
- * "preço de tabela" (catálogo atual da faca) + desconto unitário para não aplicar
- * desconto duas vezes nem perder a visualização do desconto.
+ * O banco guarda sÃ³ o preÃ§o lÃ­quido por item. Ao reabrir o formulÃ¡rio, recompomos
+ * "preÃ§o de tabela" (catÃ¡logo atual da faca) + desconto unitÃ¡rio para nÃ£o aplicar
+ * desconto duas vezes nem perder a visualizaÃ§Ã£o do desconto.
  */
 function itemFormDesdePersistido(i: OrcamentoItem, facas: Faca[]): ItemForm {
   const net = moeda2(Number(i.preco_unitario))
@@ -109,9 +109,9 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
     () =>
       facas.map((f) => ({
         value: f.id,
-        label: `${f.codigo} — ${f.nome}`,
+        label: `${f.codigo} â€” ${f.nome}`,
         imageUrl: f.foto_url
-          ? getOptimizedSupabaseImageUrl(f.foto_url, {
+          ? getOptimizedImageUrl(f.foto_url, {
               width: 40,
               height: 40,
               quality: 60,
@@ -291,7 +291,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
     paddingRight: '32px',
   }
 
-  /** Só borda em forma longa — evita conflito com onFocus que altera `borderColor` (warning do React). */
+  /** SÃ³ borda em forma longa â€” evita conflito com onFocus que altera `borderColor` (warning do React). */
   const inputStyle: React.CSSProperties = {
     background: 'var(--ac-card)',
     borderWidth: '1px',
@@ -304,7 +304,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
     <Modal
       open={open}
       onClose={onClose}
-      title={editando ? `Editar orçamento ${editando.codigo}` : 'Novo orçamento'}
+      title={editando ? `Editar orÃ§amento ${editando.codigo}` : 'Novo orÃ§amento'}
       width="1000px"
     >
       <div className="flex flex-col gap-5">
@@ -339,7 +339,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
               onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
               onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--ac-border)')}
             >
-              <option value="">— Sem cliente —</option>
+              <option value="">â€” Sem cliente â€”</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
@@ -355,7 +355,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
               onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
               onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--ac-border)')}
             >
-              <option value="">— Sem vendedor —</option>
+              <option value="">â€” Sem vendedor â€”</option>
               {usuarios.map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
@@ -363,10 +363,10 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
           </div>
         </div>
 
-        {/* Data do orçamento */}
+        {/* Data do orÃ§amento */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data do orçamento</label>
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data do orÃ§amento</label>
             <input
               type="date"
               value={dataOrcamento}
@@ -379,13 +379,13 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
           </div>
         </div>
 
-        {/* Observação */}
+        {/* ObservaÃ§Ã£o */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</label>
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>ObservaÃ§Ã£o</label>
           <textarea
             value={observacao}
             onChange={(e) => setObservacao(e.target.value)}
-            placeholder="Validade do orçamento, prazo, condições..."
+            placeholder="Validade do orÃ§amento, prazo, condiÃ§Ãµes..."
             rows={2}
             className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all resize-none"
             style={inputStyle}
@@ -397,7 +397,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
         {/* Itens */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Itens do orçamento</label>
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Itens do orÃ§amento</label>
             <button
               onClick={addItem}
               className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
@@ -417,8 +417,8 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
             style={{ gridTemplateColumns: '1fr 70px 110px 180px 90px 32px', color: 'var(--ac-muted)' }}>
             <span>Faca</span>
             <span className="text-center">Qtd</span>
-            <span className="text-right">Preço unit.</span>
-            <span className="text-center">Desconto unitário</span>
+            <span className="text-right">PreÃ§o unit.</span>
+            <span className="text-center">Desconto unitÃ¡rio</span>
             <span className="text-right">Subtotal</span>
             <span></span>
           </div>
@@ -435,7 +435,7 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
                     value={item.faca_id}
                     onChange={(v) => updateItem(idx, 'faca_id', v)}
                     options={opcoesFaca}
-                    placeholder="Pesquisar por código ou nome…"
+                    placeholder="Pesquisar por cÃ³digo ou nomeâ€¦"
                     emptyMessage="Nenhuma faca encontrada"
                   />
 
@@ -642,9 +642,10 @@ export function OrcamentoFormModal({ open, onClose, editando, clientes, facas, u
 
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button loading={loading} onClick={salvar}>{editando ? 'Salvar' : 'Criar orçamento'}</Button>
+          <Button loading={loading} onClick={salvar}>{editando ? 'Salvar' : 'Criar orÃ§amento'}</Button>
         </div>
       </div>
     </Modal>
   )
 }
+

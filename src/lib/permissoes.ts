@@ -2,6 +2,7 @@ import type { CargoPermissao, ModuloKey } from '@/types'
 import { MODULOS } from '@/types'
 
 export type PermMap = Record<ModuloKey, { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }>
+type PermRow = Pick<CargoPermissao, 'modulo' | 'ver' | 'criar' | 'editar' | 'deletar'>
 
 export type PermColKey = 'ver' | 'criar' | 'editar' | 'deletar'
 
@@ -27,18 +28,16 @@ export function permissoesVazias(): PermMap {
   ) as PermMap
 }
 
-export function permissoesFromArray(arr: CargoPermissao[]): PermMap {
+export function permissoesFromArray(arr: PermRow[]): PermMap {
   const base = permissoesVazias()
   const explicit = new Set<ModuloKey>()
   for (const p of arr) {
     base[p.modulo] = { ver: p.ver, criar: p.criar, editar: p.editar, deletar: p.deletar }
     explicit.add(p.modulo)
   }
-  // Fallback de seed: enquanto o módulo `gastos` não tiver linha própria em
-  // cargo_permissoes (migration_gastos_system.sql ainda não rodada para o
-  // cargo), espelha a permissão de `ordens_compra` — mesma estratégia do
-  // seed SQL. Assim o item aparece para quem já podia mexer em compras,
-  // sem depender de um redeploy de banco.
+  // Fallback defensivo: se `gastos` ainda não tiver linha própria em
+  // `cargo_permissoes`, espelha a permissão de `ordens_compra` para manter
+  // compatibilidade com bases antigas já existentes.
   if (!explicit.has('gastos') && explicit.has('ordens_compra')) {
     base.gastos = { ...base.ordens_compra }
   }

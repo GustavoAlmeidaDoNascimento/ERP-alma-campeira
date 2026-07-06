@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useMemo, useCallback } from 'react'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
@@ -10,7 +10,7 @@ import { statusEstoque } from '@/types'
 import type { MateriaPrima } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useMateriasPrimas } from '@/lib/query/hooks'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -51,7 +51,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
       if (!mp.foto_url) continue
       map.set(
         mp.id,
-        getOptimizedSupabaseImageUrl(mp.foto_url, {
+        getOptimizedImageUrl(mp.foto_url, {
           width: 64,
           height: 64,
           quality: 65,
@@ -87,7 +87,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
 
   function abrirFotoLightbox(mp: MateriaPrima, thumbFallback: string) {
     if (!mp.foto_url) return
-    const srcGrande = getOptimizedSupabaseImageUrl(mp.foto_url, {
+    const srcGrande = getOptimizedImageUrl(mp.foto_url, {
       width: 520,
       height: 520,
       quality: 80,
@@ -114,10 +114,10 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
 
   return (
     <>
-      {/* Header da página */}
+      {/* Header da pÃ¡gina */}
       <div className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid var(--ac-border)' }}>
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Matérias-Primas</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>MatÃ©rias-Primas</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
             {materiasPrimas.length} {materiasPrimas.length === 1 ? 'item cadastrado' : 'itens cadastrados'}
           </p>
@@ -128,7 +128,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Nova matéria-prima
+            Nova matÃ©ria-prima
           </Button>
         )}
       </div>
@@ -146,7 +146,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome, código, categoria ou fornecedor..."
+            placeholder="Buscar por nome, cÃ³digo, categoria ou fornecedor..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -174,12 +174,12 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)', width: 80 }}>Foto</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CÃ³digo</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Fornecedor</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>PreÃ§o Custo</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / MÃ­n.</th>
                 <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -188,7 +188,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
               {filtrados.length === 0 && (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
-                    {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma matéria-prima cadastrada ainda.'}
+                    {busca ? 'Nenhum resultado para essa busca.' : 'Nenhuma matÃ©ria-prima cadastrada ainda.'}
                   </td>
                 </tr>
               )}
@@ -276,7 +276,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
                       {mp.categoria}
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
-                      {mp.fornecedor?.nome ?? '—'}
+                      {mp.fornecedor?.nome ?? 'â€”'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
                       {mp.preco_custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -345,7 +345,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
         </div>
       </div>
 
-      {/* Modal CRUD — fornecedores/categorias carregam sob demanda */}
+      {/* Modal CRUD â€” fornecedores/categorias carregam sob demanda */}
       <MPModal
         open={modalAberto}
         onClose={() => setModalAberto(false)}
@@ -356,12 +356,12 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
         onSaved={refreshActiveTab}
       />
 
-      {/* Modal de confirmação de delete */}
-      <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir matéria-prima">
+      {/* Modal de confirmaÃ§Ã£o de delete */}
+      <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir matÃ©ria-prima">
         <div className="flex flex-col gap-4">
           <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
             Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>?
-            {' '}Esta ação não pode ser desfeita.
+            {' '}Esta aÃ§Ã£o nÃ£o pode ser desfeita.
           </p>
           {erroDelete && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
@@ -384,7 +384,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
           setFotoLightboxSrc('')
           setFotoLightboxAlt('')
         }}
-        title={`Foto — ${fotoLightboxAlt}`}
+        title={`Foto â€” ${fotoLightboxAlt}`}
         width="520px"
       >
         <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
@@ -398,3 +398,4 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
     </>
   )
 }
+

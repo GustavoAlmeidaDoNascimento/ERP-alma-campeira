@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { salvarFacaComFoto, getFacaBOM } from '@/lib/actions/facas'
+import { getFacaBOM } from '@/lib/actions/facas'
+import { salvarFacaComFoto } from '@/lib/actions/facas-upload'
 import type { Faca, CategoriaFacaDB, MateriaPrima, FacaMateriaPrima } from '@/types'
 import { calcularPrecoVendaFaca } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 import {
   ORIGENS_MERCADORIA,
   UNIDADES_MEDIDA,
@@ -87,7 +88,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
   const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
 
   const fotoPreviewAtual = editando?.foto_url
-    ? getOptimizedSupabaseImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
+    ? getOptimizedImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
     : ''
 
   // Carregar BOM ao editar
@@ -180,7 +181,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
     setBomItens((prev) => prev.map((item, i) => i === index ? { ...item, [field]: value } : item))
   }
 
-  // MPs já selecionadas (para filtrar dos dropdowns)
+  // MPs jÃ¡ selecionadas (para filtrar dos dropdowns)
   function mpsSelecionadas(excluirIndex: number): Set<string> {
     const set = new Set<string>()
     bomItens.forEach((item, i) => {
@@ -208,12 +209,12 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
     e.preventDefault()
     setErro('')
 
-    if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
+    if (!form.nome.trim()) { setErro('Nome Ã© obrigatÃ³rio.'); return }
 
     // Validar BOM
-    if (bomItens.length === 0) { setErro('Adicione pelo menos 1 matéria-prima.'); return }
+    if (bomItens.length === 0) { setErro('Adicione pelo menos 1 matÃ©ria-prima.'); return }
     for (const item of bomItens) {
-      if (!item.materia_prima_id) { setErro('Selecione a matéria-prima em todos os itens.'); return }
+      if (!item.materia_prima_id) { setErro('Selecione a matÃ©ria-prima em todos os itens.'); return }
       if (!item.quantidade || isNaN(Number(item.quantidade)) || Number(item.quantidade) <= 0) {
         setErro('Quantidade deve ser maior que 0 em todos os itens.'); return
       }
@@ -256,12 +257,12 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={editando ? `Editar — ${editando.codigo}` : 'Nova Faca'} width="640px">
+    <Modal open={open} onClose={onClose} title={editando ? `Editar â€” ${editando.codigo}` : 'Nova Faca'} width="640px">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input
           id="nome"
           label="Nome *"
-          placeholder="Ex: Faca Gauchesca Clássica"
+          placeholder="Ex: Faca Gauchesca ClÃ¡ssica"
           value={form.nome}
           onChange={(e) => set('nome', e.target.value)}
         />
@@ -322,7 +323,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           />
           <Input
             id="estoque_minimo"
-            label="Estoque Mínimo"
+            label="Estoque MÃ­nimo"
             type="number"
             min="0"
             value={form.estoque_minimo}
@@ -336,33 +337,33 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         >
           <div>
             <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
-              Custo de produção
+              Custo de produÃ§Ã£o
             </p>
             <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
               {(custoReferencia + taxasLucro.taxa_producao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
             <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--ac-muted)' }}>
-              Matérias-primas + taxa de produção (R$ {taxasLucro.taxa_producao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+              MatÃ©rias-primas + taxa de produÃ§Ã£o (R$ {taxasLucro.taxa_producao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
             </p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
-              Preço de venda calculado
+              PreÃ§o de venda calculado
             </p>
             <p className="text-sm font-semibold" style={{ color: 'var(--ac-accent)' }}>
               {calcularPrecoVendaFaca(custoReferencia, taxasLucro).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
             <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--ac-muted)' }}>
-              Custo × (1 + {taxasLucro.margem_lucro}% margem)
+              Custo Ã— (1 + {taxasLucro.margem_lucro}% margem)
             </p>
           </div>
         </div>
 
-        {/* ========== SEÇÃO BOM (Matérias-Primas) ========== */}
+        {/* ========== SEÃ‡ÃƒO BOM (MatÃ©rias-Primas) ========== */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-              Matérias-Primas *
+              MatÃ©rias-Primas *
             </label>
             <button
               type="button"
@@ -381,13 +382,13 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           </div>
 
           {loadingBom ? (
-            <div className="text-xs py-3 text-center" style={{ color: 'var(--ac-muted)' }}>Carregando matérias-primas...</div>
+            <div className="text-xs py-3 text-center" style={{ color: 'var(--ac-muted)' }}>Carregando matÃ©rias-primas...</div>
           ) : bomItens.length === 0 ? (
             <div
               className="text-xs py-4 text-center rounded-lg"
               style={{ color: 'var(--ac-muted)', background: 'var(--ac-bg)', border: '1px dashed var(--ac-border)' }}
             >
-              Nenhuma matéria-prima adicionada. Clique em &quot;Adicionar&quot; acima.
+              Nenhuma matÃ©ria-prima adicionada. Clique em &quot;Adicionar&quot; acima.
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -415,13 +416,13 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                       <option value="">Selecione...</option>
                       {disponiveis.map((mp) => (
                         <option key={mp.id} value={mp.id}>
-                          {mp.codigo} — {mp.nome}
+                          {mp.codigo} â€” {mp.nome}
                         </option>
                       ))}
-                      {/* Se o item já selecionado não está em disponiveis (porque foi selecionado antes), inclui-lo */}
+                      {/* Se o item jÃ¡ selecionado nÃ£o estÃ¡ em disponiveis (porque foi selecionado antes), inclui-lo */}
                       {item.materia_prima_id && !disponiveis.some((mp) => mp.id === item.materia_prima_id) && (() => {
                         const mp = materiasPrimas.find((m) => m.id === item.materia_prima_id)
-                        return mp ? <option key={mp.id} value={mp.id}>{mp.codigo} — {mp.nome}</option> : null
+                        return mp ? <option key={mp.id} value={mp.id}>{mp.codigo} â€” {mp.nome}</option> : null
                       })()}
                     </select>
 
@@ -463,7 +464,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           )}
         </div>
 
-        {/* ========== DADOS FISCAIS (colapsável) ========== */}
+        {/* ========== DADOS FISCAIS (colapsÃ¡vel) ========== */}
         <div
           className="rounded-lg"
           style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)' }}
@@ -476,33 +477,33 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
           >
             <span className="text-sm font-semibold">Dados Fiscais (NF-e)</span>
             <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-              {fiscalOpen ? 'Recolher ▲' : 'Expandir ▼'}
+              {fiscalOpen ? 'Recolher â–²' : 'Expandir â–¼'}
             </span>
           </button>
           {fiscalOpen && (
             <div className="px-3 pb-3 flex flex-col gap-3" style={{ borderTop: '1px solid var(--ac-border)' }}>
               <p className="text-xs pt-2" style={{ color: 'var(--ac-muted)' }}>
-                Campos opcionais usados na futura emissão de NF-e. Preencha quando o produto já tiver definição fiscal.
+                Campos opcionais usados na futura emissÃ£o de NF-e. Preencha quando o produto jÃ¡ tiver definiÃ§Ã£o fiscal.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   id="faca-ncm"
-                  label="NCM (8 dígitos)"
+                  label="NCM (8 dÃ­gitos)"
                   placeholder="82119200"
                   value={fiscal.ncm}
                   onChange={(e) => setFiscal((f) => ({ ...f, ncm: e.target.value.replace(/\D/g, '').slice(0, 8) }))}
                 />
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>CFOP padrão</label>
+                  <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>CFOP padrÃ£o</label>
                   <select
                     value={fiscal.cfop_padrao}
                     onChange={(e) => setFiscal((f) => ({ ...f, cfop_padrao: e.target.value }))}
                     className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
                     style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                   >
-                    <option value="">— Não definido —</option>
+                    <option value="">â€” NÃ£o definido â€”</option>
                     {CFOPS_SAIDA.map((c) => (
-                      <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                      <option key={c.codigo} value={c.codigo}>{c.codigo} â€” {c.descricao}</option>
                     ))}
                   </select>
                 </div>
@@ -517,15 +518,15 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                     className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
                     style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                   >
-                    <option value="">— Não definido —</option>
+                    <option value="">â€” NÃ£o definido â€”</option>
                     <optgroup label="CST (Regime Normal)">
                       {CST_ICMS.map((c) => (
-                        <option key={`cst-${c.codigo}`} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                        <option key={`cst-${c.codigo}`} value={c.codigo}>{c.codigo} â€” {c.descricao}</option>
                       ))}
                     </optgroup>
                     <optgroup label="CSOSN (Simples Nacional)">
                       {CSOSN_ICMS.map((c) => (
-                        <option key={`csosn-${c.codigo}`} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                        <option key={`csosn-${c.codigo}`} value={c.codigo}>{c.codigo} â€” {c.descricao}</option>
                       ))}
                     </optgroup>
                   </select>
@@ -538,9 +539,9 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                     className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
                     style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                   >
-                    <option value="">— Não definido —</option>
+                    <option value="">â€” NÃ£o definido â€”</option>
                     {CST_PIS_COFINS.map((c) => (
-                      <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                      <option key={c.codigo} value={c.codigo}>{c.codigo} â€” {c.descricao}</option>
                     ))}
                   </select>
                 </div>
@@ -552,9 +553,9 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                     className="w-full rounded-lg px-3 py-2.5 text-sm outline-none appearance-none"
                     style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                   >
-                    <option value="">— Não definido —</option>
+                    <option value="">â€” NÃ£o definido â€”</option>
                     {CST_PIS_COFINS.map((c) => (
-                      <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.descricao}</option>
+                      <option key={c.codigo} value={c.codigo}>{c.codigo} â€” {c.descricao}</option>
                     ))}
                   </select>
                 </div>
@@ -570,7 +571,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                     style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
                   >
                     {ORIGENS_MERCADORIA.map((o) => (
-                      <option key={o.codigo} value={o.codigo}>{o.codigo} — {o.descricao}</option>
+                      <option key={o.codigo} value={o.codigo}>{o.codigo} â€” {o.descricao}</option>
                     ))}
                   </select>
                 </div>
@@ -590,7 +591,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
                 <Input
                   id="faca-ean"
                   label="EAN/GTIN (opcional)"
-                  placeholder="código de barras"
+                  placeholder="cÃ³digo de barras"
                   value={fiscal.ean_gtin}
                   onChange={(e) => setFiscal((f) => ({ ...f, ean_gtin: e.target.value.replace(/\D/g, '') }))}
                 />
@@ -759,7 +760,7 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button type="submit" loading={loading}>
-            {editando ? 'Salvar alterações' : 'Criar faca'}
+            {editando ? 'Salvar alteraÃ§Ãµes' : 'Criar faca'}
           </Button>
         </div>
       </form>
@@ -794,3 +795,4 @@ export function FacaModal({ open, onClose, editando, categorias, materiasPrimas,
     </Modal>
   )
 }
+

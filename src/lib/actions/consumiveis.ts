@@ -1,142 +1,144 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { Prisma } from '@prisma/client'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
-import type { Consumivel } from '@/types'
+import { prisma } from '@/lib/prisma'
+import type { Consumivel, Fornecedor } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
+
+type ConsumivelRow = {
+  id: string
+  codigo: string
+  nome: string
+  categoria: string
+  fornecedorId: string | null
+  fotoUrl: string | null
+  precoCusto: Prisma.Decimal | number | string | null
+  estoqueAtual: Prisma.Decimal | number | string | null
+  estoqueMinimo: Prisma.Decimal | number | string | null
+  createdAt: Date | string
+  fornecedor: {
+    id: string
+    nome: string
+    telefone: string | null
+    email: string | null
+    createdAt: Date
+    tipoDocumento: 'cnpj' | 'cpf'
+    documento: string | null
+    cep: string | null
+    logradouro: string | null
+    numero: string | null
+    complemento: string | null
+    bairro: string | null
+    cidade: string | null
+    uf: string | null
+    razaoSocial: string | null
+    ie: string | null
+    codigoMunicipioIbge: string | null
+  } | null
+}
+
+function numberFrom(value: Prisma.Decimal | number | string | null | undefined): number {
+  if (value == null) return 0
+  if (typeof value === 'object' && 'toNumber' in value && typeof value.toNumber === 'function') {
+    return value.toNumber()
+  }
+  return Number(value) || 0
+}
+
+function decimal(value: number): Prisma.Decimal {
+  return new Prisma.Decimal(Number.isFinite(value) ? value : 0)
+}
+
+function isoFrom(value: Date | string | null): string {
+  if (!value) return ''
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
+function mapFornecedorRow(row: ConsumivelRow): Fornecedor | null {
+  if (!row.fornecedor) return null
+  return {
+    id: row.fornecedor.id,
+    nome: row.fornecedor.nome,
+    telefone: row.fornecedor.telefone,
+    email: row.fornecedor.email,
+    tipo_documento: row.fornecedor.tipoDocumento ?? 'cnpj',
+    documento: row.fornecedor.documento,
+    cep: row.fornecedor.cep,
+    logradouro: row.fornecedor.logradouro,
+    numero: row.fornecedor.numero,
+    complemento: row.fornecedor.complemento,
+    bairro: row.fornecedor.bairro,
+    cidade: row.fornecedor.cidade,
+    uf: row.fornecedor.uf,
+    razao_social: row.fornecedor.razaoSocial,
+    ie: row.fornecedor.ie,
+    codigo_municipio_ibge: row.fornecedor.codigoMunicipioIbge,
+    created_at: isoFrom(row.fornecedor.createdAt),
+  }
+}
+
+function mapConsumivelRow(row: ConsumivelRow): Consumivel {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    nome: row.nome,
+    categoria: row.categoria,
+    fornecedor_id: row.fornecedorId,
+    foto_url: row.fotoUrl,
+    preco_custo: numberFrom(row.precoCusto),
+    estoque_atual: numberFrom(row.estoqueAtual),
+    estoque_minimo: numberFrom(row.estoqueMinimo),
+    created_at: isoFrom(row.createdAt),
+    fornecedor: mapFornecedorRow(row),
+  }
+}
 
 export async function getConsumiveis(limit = 120): Promise<Consumivel[]> {
   await assertPermissao('consumiveis', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('consumiveis')
-    .select(
-      '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
-    )
-    .order('codigo')
-    .limit(limit)
-  if (error) throw new Error(error.message)
-  return data as Consumivel[]
+  const rows = await prisma.consumivel.findMany({
+    include: {
+      fornecedor: {
+        select: {
+          id: true,
+          nome: true,
+          telefone: true,
+          email: true,
+          createdAt: true,
+          tipoDocumento: true,
+          documento: true,
+          cep: true,
+          logradouro: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          cidade: true,
+          uf: true,
+          razaoSocial: true,
+          ie: true,
+          codigoMunicipioIbge: true,
+        },
+      },
+    },
+    orderBy: { codigo: 'asc' },
+    take: limit,
+  })
+  return rows.map(mapConsumivelRow)
 }
 
 export async function gerarCodigoConsumivel(): Promise<string> {
   return gerarCodigoForte('CN')
 }
 
-const FOTO_BUCKET_CONSUMIVEL = 'consumiveis-fotos'
-
-function extFromFile(file: { type?: string; name?: string }): string {
-  const mime = file.type ?? ''
-  const n = file.name ?? ''
-  if (mime.includes('png')) return 'png'
-  if (mime.includes('webp')) return 'webp'
-  if (mime.includes('jpeg') || mime.includes('jpg') || mime.includes('pjpeg')) return 'jpg'
-  const m = n.match(/\.([a-zA-Z0-9]+)$/)
-  return (m?.[1]?.toLowerCase() ?? 'jpg') === 'jpeg' ? 'jpg' : (m?.[1]?.toLowerCase() ?? 'jpg')
-}
-
-function isFileLike(v: unknown): v is Blob & { type?: string; name?: string } {
-  return typeof v === 'object' && v !== null && typeof (v as Blob).arrayBuffer === 'function'
-}
-
-export async function salvarConsumivelComFoto(formData: FormData) {
-  const id = formData.get('id')
-  const nome = String(formData.get('nome') ?? '').trim()
-  const categoria = String(formData.get('categoria') ?? '').trim()
-  const fornecedor_id = formData.get('fornecedor_id')
-  const preco_custo = Number(formData.get('preco_custo'))
-  const estoque_atual = Number(formData.get('estoque_atual'))
-  const estoque_minimo = Number(formData.get('estoque_minimo'))
-  const foto = formData.get('foto')
-
-  if (!nome) throw new Error('Nome é obrigatório.')
-  if (!categoria) throw new Error('Categoria é obrigatória.')
-  if (!Number.isFinite(preco_custo)) throw new Error('Preço de custo inválido.')
-
-  const supabase = await createClient()
-  const isEdit = typeof id === 'string' && id.length > 0
-
-  await assertPermissao('consumiveis', isEdit ? 'editar' : 'criar')
-
-  let consumivelId: string
-
-  if (isEdit) {
-    consumivelId = id as string
-    const { error } = await supabase.from('consumiveis').update({
-      nome,
-      categoria,
-      fornecedor_id: fornecedor_id ? String(fornecedor_id) : null,
-      preco_custo,
-      estoque_atual: estoque_atual || 0,
-      estoque_minimo: estoque_minimo || 0,
-    }).eq('id', consumivelId)
-    if (error) throw new Error(error.message)
-  } else {
-    const codigo = await gerarCodigoConsumivel()
-    const { data, error } = await supabase
-      .from('consumiveis')
-      .insert({
-        codigo,
-        nome,
-        categoria,
-        fornecedor_id: fornecedor_id ? String(fornecedor_id) : null,
-        preco_custo,
-        estoque_atual: estoque_atual || 0,
-        estoque_minimo: estoque_minimo || 0,
-      })
-      .select('id')
-      .single()
-    if (error) throw new Error(error.message)
-    if (!data?.id) throw new Error('Falha ao criar consumível.')
-    consumivelId = data.id
-  }
-
-  // Upload de foto (opcional)
-  if (foto && isFileLike(foto)) {
-    const admin = createAdminClient()
-
-    const { data: buckets, error: listErr } = await admin.storage.listBuckets()
-    if (listErr) throw new Error(listErr.message)
-
-    const exists = (buckets ?? []).some((b: { name: string }) => b.name === FOTO_BUCKET_CONSUMIVEL)
-    if (!exists) {
-      const { error: createErr } = await admin.storage.createBucket(FOTO_BUCKET_CONSUMIVEL, {
-        public: true,
-        allowedMimeTypes: ['image/*'],
-      })
-      if (createErr) throw new Error(createErr.message)
-    }
-
-    const fileExt = extFromFile(foto as unknown as { type?: string; name?: string })
-    const filePath = `${consumivelId}/foto.${fileExt}`
-
-    const { error: upErr } = await admin.storage
-      .from(FOTO_BUCKET_CONSUMIVEL)
-      .upload(filePath, foto, {
-        upsert: true,
-        contentType: foto.type ?? 'image/jpeg',
-        cacheControl: '3600',
-      })
-    if (upErr) throw new Error(upErr.message)
-
-    const { data: pub } = admin.storage.from(FOTO_BUCKET_CONSUMIVEL).getPublicUrl(filePath)
-    if (pub?.publicUrl) {
-      const { error: fotoUpdateErr } = await supabase
-        .from('consumiveis')
-        .update({ foto_url: pub.publicUrl })
-        .eq('id', consumivelId)
-      if (fotoUpdateErr) throw new Error(fotoUpdateErr.message)
-    }
-  }
-
-}
-
 export async function deletarConsumivel(id: string) {
   await assertPermissao('consumiveis', 'deletar')
-  const supabase = await createClient()
-  const { error } = await supabase.from('consumiveis').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.consumivel.deleteMany({
+    where: { id },
+  })
 }
 
 // ============================================================
@@ -153,34 +155,35 @@ export async function entradaEstoqueConsumivel(
   if (!Number.isFinite(quantidade) || quantidade <= 0) {
     throw new Error('Quantidade deve ser maior que zero.')
   }
+  if (!Number.isInteger(quantidade)) {
+    throw new Error('Quantidade deve ser um número inteiro.')
+  }
 
-  const supabase = await createClient()
-
-  const { data: row, error: fetchErr } = await supabase
-    .from('consumiveis')
-    .select('id, estoque_atual')
-    .eq('id', consumivelId)
-    .single()
-  if (fetchErr) throw new Error(fetchErr.message)
-  if (!row) throw new Error('Consumível não encontrado.')
-
-  const novoEstoque = Math.round((Number(row.estoque_atual) + quantidade) * 1000) / 1000
   const userId = await requireAuthenticatedUserId()
+  await prisma.$transaction(async (tx) => {
+    const row = await tx.consumivel.findUnique({
+      where: { id: consumivelId },
+      select: { id: true, estoqueAtual: true },
+    })
+    if (!row) throw new Error('Consumível não encontrado.')
 
-  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-    tipo: 'entrada',
-    consumivel_id: consumivelId,
-    quantidade,
-    observacao: observacao?.trim() || null,
-    usuario_id: userId,
+    const novoEstoque = round3(numberFrom(row.estoqueAtual) + quantidade)
+
+    await tx.movimentacaoEstoque.create({
+      data: {
+        tipo: 'entrada',
+        consumivelId,
+        quantidade,
+        observacao: observacao?.trim() || null,
+        usuarioId: userId,
+      },
+    })
+
+    await tx.consumivel.update({
+      where: { id: consumivelId },
+      data: { estoqueAtual: decimal(novoEstoque) },
+    })
   })
-  if (movErr) throw new Error(movErr.message)
-
-  const { error: updErr } = await supabase
-    .from('consumiveis')
-    .update({ estoque_atual: novoEstoque })
-    .eq('id', consumivelId)
-  if (updErr) throw new Error(updErr.message)
 
 }
 
@@ -194,38 +197,39 @@ export async function baixaEstoqueConsumivel(
   if (!Number.isFinite(quantidade) || quantidade <= 0) {
     throw new Error('Quantidade deve ser maior que zero.')
   }
-
-  const supabase = await createClient()
-
-  const { data: row, error: fetchErr } = await supabase
-    .from('consumiveis')
-    .select('id, estoque_atual')
-    .eq('id', consumivelId)
-    .single()
-  if (fetchErr) throw new Error(fetchErr.message)
-  if (!row) throw new Error('Consumível não encontrado.')
-
-  const atual = Number(row.estoque_atual)
-  if (quantidade > atual) {
-    throw new Error('Quantidade maior que o estoque disponível.')
+  if (!Number.isInteger(quantidade)) {
+    throw new Error('Quantidade deve ser um número inteiro.')
   }
 
-  const novoEstoque = Math.round((atual - quantidade) * 1000) / 1000
   const userId = await requireAuthenticatedUserId()
+  await prisma.$transaction(async (tx) => {
+    const row = await tx.consumivel.findUnique({
+      where: { id: consumivelId },
+      select: { id: true, estoqueAtual: true },
+    })
+    if (!row) throw new Error('Consumível não encontrado.')
 
-  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-    tipo: 'saida_consumivel',
-    consumivel_id: consumivelId,
-    quantidade,
-    observacao: observacao?.trim() || null,
-    usuario_id: userId,
+    const atual = numberFrom(row.estoqueAtual)
+    if (quantidade > atual) {
+      throw new Error('Quantidade maior que o estoque disponível.')
+    }
+
+    const novoEstoque = round3(atual - quantidade)
+
+    await tx.movimentacaoEstoque.create({
+      data: {
+        tipo: 'saida_consumivel',
+        consumivelId,
+        quantidade,
+        observacao: observacao?.trim() || null,
+        usuarioId: userId,
+      },
+    })
+
+    await tx.consumivel.update({
+      where: { id: consumivelId },
+      data: { estoqueAtual: decimal(novoEstoque) },
+    })
   })
-  if (movErr) throw new Error(movErr.message)
-
-  const { error: updErr } = await supabase
-    .from('consumiveis')
-    .update({ estoque_atual: novoEstoque })
-    .eq('id', consumivelId)
-  if (updErr) throw new Error(updErr.message)
 
 }

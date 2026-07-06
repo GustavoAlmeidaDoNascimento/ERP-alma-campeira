@@ -3,20 +3,28 @@
  * Em produção, o Nginx serve /var/www/erp-uploads diretamente em /uploads/*.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs/promises'
-import path from 'path'
-
-const UPLOADS_BASE = process.env.UPLOADS_DIR ?? path.join(process.cwd(), '.uploads')
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  if (process.env.NODE_ENV !== 'development') {
+    return new NextResponse('Not Found', { status: 404 })
+  }
+
+  const [{ default: fs }, path, { resolveUploadsBase }] = await Promise.all([
+    import('node:fs/promises'),
+    import('node:path'),
+    import('@/lib/uploads-path'),
+  ])
+
+  const uploadsBase = resolveUploadsBase()
   const { path: pathParts } = await params
-  const filePath = path.join(UPLOADS_BASE, ...pathParts)
+  const filePath = path.resolve(uploadsBase, ...pathParts)
+  const relativePath = path.relative(uploadsBase, filePath)
 
   // Segurança: impede path traversal
-  if (!filePath.startsWith(UPLOADS_BASE)) {
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
     return new NextResponse('Forbidden', { status: 403 })
   }
 

@@ -1,20 +1,20 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { STATUS_PEDIDO } from '@/types'
 import type { Orcamento, StatusPedido } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 import { formatarDocumento } from '@/lib/br/documento'
 import { transformarOrcamentoEmVenda, deletarOrcamento, getOrcamentoDetalhe } from '@/lib/actions/orcamentos'
 import { gerarPdfOrcamento } from './orcamento-pdf'
 
 type Props = {
   orcamento: Orcamento | null
-  /** Detalhe completo ainda sendo buscado no servidor — mostra skeleton no corpo do modal. */
+  /** Detalhe completo ainda sendo buscado no servidor â€” mostra skeleton no corpo do modal. */
   carregando?: boolean
-  /** Erro ao buscar detalhe completo (dados parciais da lista podem permanecer visíveis). */
+  /** Erro ao buscar detalhe completo (dados parciais da lista podem permanecer visÃ­veis). */
   erroCarregar?: string | null
   onClose: () => void
   onEditar?: (o: Orcamento) => void
@@ -76,7 +76,7 @@ export function OrcamentoDetalheModal({
 
   if (carregando) {
     return (
-      <Modal open onClose={onClose} title={`Orçamento ${orcamento.codigo}`} width="640px">
+      <Modal open onClose={onClose} title={`OrÃ§amento ${orcamento.codigo}`} width="640px">
         <div className="flex flex-col gap-5" aria-busy="true" aria-live="polite">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-1 flex-col gap-2.5 min-w-0">
@@ -106,7 +106,7 @@ export function OrcamentoDetalheModal({
             ))}
           </div>
           <p className="text-xs text-center" style={{ color: 'var(--ac-muted)' }}>
-            Carregando itens e fotos…
+            Carregando itens e fotosâ€¦
           </p>
           <div className="flex justify-end pt-1" style={{ borderTop: '1px solid var(--ac-border)' }}>
             <Button variant="secondary" onClick={onClose}>Fechar</Button>
@@ -170,7 +170,7 @@ export function OrcamentoDetalheModal({
     : null
 
   return (
-    <Modal open={!!orcamento} onClose={onClose} title={`Orçamento ${orcamento.codigo}`} width="640px">
+    <Modal open={!!orcamento} onClose={onClose} title={`OrÃ§amento ${orcamento.codigo}`} width="640px">
       <div className="flex flex-col gap-5">
         {erroCarregar && (
           <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a' }}>
@@ -217,7 +217,7 @@ export function OrcamentoDetalheModal({
               <p className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
                 {formatarDocumento(orcamento.cliente.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', orcamento.cliente.documento)}
                 {orcamento.cliente.cidade && orcamento.cliente.estado
-                  ? ` · ${orcamento.cliente.cidade}/${orcamento.cliente.estado}`
+                  ? ` Â· ${orcamento.cliente.cidade}/${orcamento.cliente.estado}`
                   : ''}
               </p>
             ) : orcamento.cliente?.cidade && orcamento.cliente?.estado ? (
@@ -252,7 +252,7 @@ export function OrcamentoDetalheModal({
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Faca</th>
                 <th className="text-center px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd</th>
-                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço unit.</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>PreÃ§o unit.</th>
                 <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Desc. unit.</th>
                 <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Subtotal</th>
               </tr>
@@ -266,7 +266,7 @@ export function OrcamentoDetalheModal({
                 </tr>
               )}
               {orcamento.itens?.map((item, i) => {
-                const thumbUrl = getOptimizedSupabaseImageUrl(item.faca?.foto_url, {
+                const thumbUrl = getOptimizedImageUrl(item.faca?.foto_url, {
                   width: 36, height: 36, quality: 60, resize: 'cover', fallbackUrl: '',
                 })
                 const linhaDesc = descontoUnitarioLinha(item.faca?.preco_venda, item.preco_unitario)
@@ -298,7 +298,7 @@ export function OrcamentoDetalheModal({
                         )}
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{item.faca?.codigo}</span>
-                          <span className="text-sm">{item.faca?.nome ?? '—'}</span>
+                          <span className="text-sm">{item.faca?.nome ?? 'â€”'}</span>
                         </div>
                       </div>
                     </td>
@@ -325,12 +325,12 @@ export function OrcamentoDetalheModal({
                       {linhaDesc ? (
                         <div className="flex flex-col items-end gap-0.5">
                           <span className="text-sm font-medium" style={{ color: '#b45309' }}>
-                            −{linhaDesc.desconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            âˆ’{linhaDesc.desconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </span>
-                          <span className="text-xs">−{linhaDesc.pct}%</span>
+                          <span className="text-xs">âˆ’{linhaDesc.pct}%</span>
                         </div>
                       ) : (
-                        <span>—</span>
+                        <span>â€”</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
@@ -358,7 +358,7 @@ export function OrcamentoDetalheModal({
                       Desconto no total
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: '#b45309' }}>
-                      −{descontoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      âˆ’{descontoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                   </tr>
                 )}
@@ -371,7 +371,7 @@ export function OrcamentoDetalheModal({
           <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>
         )}
 
-        {/* Confirmação de conversão em venda */}
+        {/* ConfirmaÃ§Ã£o de conversÃ£o em venda */}
         {confirmandoConversao && (
           <div
             className="rounded-xl p-4 flex flex-col gap-3"
@@ -380,7 +380,7 @@ export function OrcamentoDetalheModal({
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>Transformar em venda</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-                Será criado um novo pedido com base neste orçamento. O estoque das facas envolvidas será reservado conforme a regra normal de vendas.
+                SerÃ¡ criado um novo pedido com base neste orÃ§amento. O estoque das facas envolvidas serÃ¡ reservado conforme a regra normal de vendas.
               </p>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -414,21 +414,21 @@ export function OrcamentoDetalheModal({
                 Cancelar
               </Button>
               <Button loading={loading === 'converter'} onClick={confirmarConversao}>
-                Confirmar conversão
+                Confirmar conversÃ£o
               </Button>
             </div>
           </div>
         )}
 
-        {/* Confirmação de exclusão */}
+        {/* ConfirmaÃ§Ã£o de exclusÃ£o */}
         {confirmandoDelete && (
           <div
             className="rounded-xl p-4 flex items-center justify-between gap-3"
             style={{ background: '#fef2f2', border: '1px solid #fecaca' }}
           >
             <div>
-              <p className="text-sm font-semibold" style={{ color: '#991b1b' }}>Excluir orçamento {orcamento.codigo}?</p>
-              <p className="text-xs mt-0.5" style={{ color: '#b91c1c' }}>Esta ação não pode ser desfeita.</p>
+              <p className="text-sm font-semibold" style={{ color: '#991b1b' }}>Excluir orÃ§amento {orcamento.codigo}?</p>
+              <p className="text-xs mt-0.5" style={{ color: '#b91c1c' }}>Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
             </div>
             <div className="flex gap-2 shrink-0">
               <Button variant="secondary" onClick={() => setConfirmandoDelete(false)} disabled={loading === 'delete'}>
@@ -445,7 +445,7 @@ export function OrcamentoDetalheModal({
           </div>
         )}
 
-        {/* Ações */}
+        {/* AÃ§Ãµes */}
         {!confirmandoConversao && !confirmandoDelete && (
           <div className="flex items-center justify-between gap-2 pt-1 flex-wrap" style={{ borderTop: '1px solid var(--ac-border)' }}>
             <div className="flex gap-2">
@@ -489,3 +489,4 @@ export function OrcamentoDetalheModal({
     </Modal>
   )
 }
+

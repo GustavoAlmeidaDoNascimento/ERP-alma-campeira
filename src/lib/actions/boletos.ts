@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { TIPO_GASTO_OUTROS, TIPO_GASTO_PAGAMENTO_OC } from '@/types'
 import type { Boleto, BoletoTipo } from '@/types'
@@ -28,6 +29,27 @@ export type BoletoInput = {
   ordem_compra_id?: string | null
   pedido_id?: string | null
   parcelas: ParcelaInput[]
+}
+
+type DecimalLike = Prisma.Decimal | number | string | null | undefined
+
+type ParcelaGastoSync = {
+  pago_em: string | null
+  valor_pago: number | null
+  valor: number
+}
+
+function num(value: DecimalLike): number {
+  if (value == null) return 0
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return Number(value)
+  return value.toNumber()
+}
+
+function day(value: Date | string | null | undefined): string | null {
+  if (!value) return null
+  if (typeof value === 'string') return value.slice(0, 10)
+  return value.toISOString().slice(0, 10)
 }
 
 function normalizar(input: BoletoInput) {
@@ -58,333 +80,398 @@ function normalizar(input: BoletoInput) {
   return {
     head: {
       tipo: input.tipo,
-      contraparte_nome: contraparte,
-      cnpj_cpf: (input.cnpj_cpf ?? '').toString().trim() || null,
-      cliente_id: input.tipo === 'entrada' ? input.cliente_id ?? null : null,
-      fornecedor_id: input.tipo === 'saida' ? input.fornecedor_id ?? null : null,
-      vendedor_id: input.tipo === 'entrada' ? input.vendedor_id ?? null : null,
+      contraparteNome: contraparte,
+      cnpjCpf: (input.cnpj_cpf ?? '').toString().trim() || null,
+      clienteId: input.tipo === 'entrada' ? input.cliente_id ?? null : null,
+      fornecedorId: input.tipo === 'saida' ? input.fornecedor_id ?? null : null,
+      vendedorId: input.tipo === 'entrada' ? input.vendedor_id ?? null : null,
       unidades: input.unidades != null && input.unidades > 0 ? Math.trunc(input.unidades) : null,
-      numero_documento: (input.numero_documento ?? '').toString().trim() || null,
-      valor_total,
-      emitido_em: input.emitido_em || null,
+      numeroDocumento: (input.numero_documento ?? '').toString().trim() || null,
+      valorTotal: valor_total,
+      emitidoEm: input.emitido_em ? new Date(input.emitido_em) : null,
       observacao: (input.observacao ?? '').toString().trim() || null,
-      ordem_compra_id: input.ordem_compra_id ?? null,
-      pedido_id: input.pedido_id ?? null,
+      ordemCompraId: input.ordem_compra_id ?? null,
+      pedidoId: input.pedido_id ?? null,
     },
     parcelas: parcelas
       .sort((a, b) => a.numero - b.numero)
       .map((p) => ({
         numero: p.numero,
-        vencimento: p.vencimento,
+        vencimento: new Date(p.vencimento),
         valor: Number(p.valor),
-        pago_em: p.pago_em || null,
-        valor_pago: p.valor_pago != null ? Number(p.valor_pago) : null,
+        pagoEm: p.pago_em ? new Date(p.pago_em) : null,
+        valorPago: p.valor_pago != null ? Number(p.valor_pago) : null,
       })),
   }
 }
 
-const SELECT_BOLETO = `
-  *,
-  parcelas:boleto_parcelas(*),
-  cliente:clientes(id, nome),
-  fornecedor:fornecedores(id, nome),
-  vendedor:usuarios_perfis!boletos_vendedor_id_fkey(id, nome),
-  criador:usuarios_perfis!boletos_criado_por_fkey(id, nome)
-`
+function mapBoleto(row: {
+  id: string
+  tipo: string
+  sequencial: bigint | null
+  contraparteNome: string
+  cnpjCpf: string | null
+  clienteId: string | null
+  fornecedorId: string | null
+  vendedorId: string | null
+  unidades: number | null
+  numeroDocumento: string | null
+  valorTotal: DecimalLike
+  emitidoEm: Date | null
+  ordemCompraId: string | null
+  pedidoId: string | null
+  observacao: string | null
+  criadoPor: string | null
+  createdAt: Date
+  updatedAt: Date
+  parcelas: Array<{
+    id: string
+    boletoId: string
+    numero: number
+    vencimento: Date
+    valor: DecimalLike
+    pagoEm: Date | null
+    valorPago: DecimalLike
+    createdAt: Date
+  }>
+  cliente?: { id: string; nome: string } | null
+  fornecedor?: { id: string; nome: string } | null
+  vendedor?: { id: string; nome: string } | null
+  criador?: { id: string; nome: string } | null
+}): Boleto {
+  return {
+    id: row.id,
+    tipo: row.tipo as BoletoTipo,
+    sequencial: row.sequencial == null ? 0 : Number(row.sequencial),
+    contraparte_nome: row.contraparteNome,
+    cnpj_cpf: row.cnpjCpf,
+    cliente_id: row.clienteId,
+    fornecedor_id: row.fornecedorId,
+    vendedor_id: row.vendedorId,
+    unidades: row.unidades,
+    numero_documento: row.numeroDocumento,
+    valor_total: num(row.valorTotal),
+    emitido_em: day(row.emitidoEm),
+    ordem_compra_id: row.ordemCompraId,
+    pedido_id: row.pedidoId,
+    observacao: row.observacao,
+    criado_por: row.criadoPor,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+    parcelas: [...row.parcelas]
+      .sort((a, b) => a.numero - b.numero)
+      .map((parcela) => ({
+        id: parcela.id,
+        boleto_id: parcela.boletoId,
+        numero: parcela.numero,
+        vencimento: day(parcela.vencimento)!,
+        valor: num(parcela.valor),
+        pago_em: day(parcela.pagoEm),
+        valor_pago: parcela.valorPago == null ? null : num(parcela.valorPago),
+        created_at: parcela.createdAt.toISOString(),
+      })),
+    cliente: row.cliente ?? null,
+    fornecedor: row.fornecedor ?? null,
+    vendedor: row.vendedor ?? null,
+    criador: row.criador ?? null,
+  }
+}
+
+async function nextSequencial(tx: Prisma.TransactionClient, tipo: BoletoTipo): Promise<number> {
+  const agg = await tx.boleto.aggregate({
+    where: { tipo },
+    _max: { sequencial: true },
+  })
+  return Number(agg._max.sequencial ?? 0) + 1
+}
 
 export async function listarBoletos(tipo?: BoletoTipo): Promise<Boleto[]> {
   await assertPermissao('boletos', 'ver')
-  const supabase = await createClient()
-  let query = supabase
-    .from('boletos')
-    .select(SELECT_BOLETO)
-    .order('created_at', { ascending: false })
-    .limit(500)
-  if (tipo) query = query.eq('tipo', tipo)
-  const { data, error } = await query
-  if (error) throw new Error(error.message)
-  const rows = (data ?? []) as unknown as Boleto[]
-  // Ordena parcelas pela posição
-  for (const b of rows) {
-    b.parcelas = (b.parcelas ?? []).sort((a, c) => a.numero - c.numero)
-  }
-  return rows
+  const rows = await prisma.boleto.findMany({
+    where: tipo ? { tipo } : undefined,
+    include: {
+      parcelas: true,
+      cliente: { select: { id: true, nome: true } },
+      fornecedor: { select: { id: true, nome: true } },
+      vendedor: { select: { id: true, nome: true } },
+      criador: { select: { id: true, nome: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  })
+
+  return rows.map(mapBoleto)
 }
 
 export async function criarBoleto(input: BoletoInput): Promise<string> {
   await assertPermissao('boletos', 'criar')
-  const supabase = await createClient()
   const { head, parcelas } = normalizar(input)
-  const criado_por = await requireAuthenticatedUserId().catch(() => null)
+  const criadoPor = await requireAuthenticatedUserId().catch(() => null)
 
-  const { data: boleto, error } = await supabase
-    .from('boletos')
-    .insert({ ...head, criado_por })
-    .select('id')
-    .single()
-  if (error || !boleto) throw new Error(error?.message ?? 'Erro ao criar boleto.')
+  return prisma.$transaction(async (tx) => {
+    const sequencial = await nextSequencial(tx, input.tipo)
+    const boleto = await tx.boleto.create({
+      data: {
+        ...head,
+        criadoPor,
+        sequencial,
+      },
+      select: { id: true },
+    })
 
-  const rows = parcelas.map((p) => ({ ...p, boleto_id: boleto.id }))
-  const { data: parcelasInseridas, error: errPar } = await supabase
-    .from('boleto_parcelas')
-    .insert(rows)
-    .select('id, pago_em, valor_pago, valor')
-  if (errPar) {
-    // rollback manual
-    await supabase.from('boletos').delete().eq('id', boleto.id)
-    throw new Error(errPar.message)
-  }
-  for (const p of parcelasInseridas ?? []) {
-    if (p.pago_em) {
-      await criarGastoDaParcela(
-        supabase,
-        p.id,
-        p.pago_em,
-        Number(p.valor_pago ?? p.valor ?? 0),
-      )
+    const parcelasInseridas = []
+    for (const parcela of parcelas) {
+      const criada = await tx.boletoParcela.create({
+        data: {
+          boletoId: boleto.id,
+          numero: parcela.numero,
+          vencimento: parcela.vencimento,
+          valor: parcela.valor,
+          pagoEm: parcela.pagoEm,
+          valorPago: parcela.valorPago,
+        },
+        select: { id: true, pagoEm: true, valorPago: true, valor: true },
+      })
+      parcelasInseridas.push(criada)
     }
-  }
-  return boleto.id
+
+    for (const parcela of parcelasInseridas) {
+      if (parcela.pagoEm) {
+        await criarGastoDaParcela(
+          tx,
+          boleto.id,
+          parcela.id,
+          day(parcela.pagoEm)!,
+          num(parcela.valorPago ?? parcela.valor),
+          criadoPor,
+        )
+      }
+    }
+    return boleto.id
+  })
 }
 
 export async function atualizarBoleto(id: string, input: BoletoInput) {
   await assertPermissao('boletos', 'editar')
-  const supabase = await createClient()
   const { head, parcelas } = normalizar(input)
+  const uid = await requireAuthenticatedUserId().catch(() => null)
 
-  const { error } = await supabase.from('boletos').update(head).eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.$transaction(async (tx) => {
+    await tx.boleto.update({
+      where: { id },
+      data: {
+        ...head,
+        updatedAt: new Date(),
+      },
+    })
 
-  // Diff por `numero` (chave natural única por boleto). Evita gerar um par
-  // INSERT+DELETE no log de auditoria pra cada parcela quando, na prática,
-  // só um campo mudou.
-  const { data: atuais, error: errFetch } = await supabase
-    .from('boleto_parcelas')
-    .select('id, numero, vencimento, valor, pago_em, valor_pago')
-    .eq('boleto_id', id)
-  if (errFetch) throw new Error(errFetch.message)
+    const atuais = await tx.boletoParcela.findMany({
+      where: { boletoId: id },
+      select: { id: true, numero: true, vencimento: true, valor: true, pagoEm: true, valorPago: true },
+    })
 
-  const atuaisPorNumero = new Map(
-    (atuais ?? []).map((p) => [Number(p.numero), p]),
-  )
+    const atuaisPorNumero = new Map(atuais.map((p) => [Number(p.numero), p]))
+    const numerosNovos = new Set<number>()
 
-  const numerosNovos = new Set<number>()
-  for (const p of parcelas) {
-    numerosNovos.add(p.numero)
-    const atual = atuaisPorNumero.get(p.numero)
-    if (!atual) {
-      const { data: nova, error: errIns } = await supabase
-        .from('boleto_parcelas')
-        .insert({ ...p, boleto_id: id })
-        .select('id')
-        .single()
-      if (errIns) throw new Error(errIns.message)
-      if (p.pago_em && nova) {
-        await criarGastoDaParcela(
-          supabase,
-          nova.id,
-          p.pago_em,
-          Number(p.valor_pago ?? p.valor),
-        )
-      }
-      continue
-    }
-    const estavaPago = !!(atual.pago_em ?? null)
-    const ficouPago = !!(p.pago_em ?? null)
-    const mudou =
-      String(atual.vencimento) !== String(p.vencimento) ||
-      Number(atual.valor) !== Number(p.valor) ||
-      estavaPago !== ficouPago ||
-      Number(atual.valor_pago ?? 0) !== Number(p.valor_pago ?? 0)
-    if (mudou) {
-      const { error: errUpd } = await supabase
-        .from('boleto_parcelas')
-        .update({
-          vencimento: p.vencimento,
-          valor: p.valor,
-          pago_em: p.pago_em,
-          valor_pago: p.valor_pago,
+    for (const parcela of parcelas) {
+      numerosNovos.add(parcela.numero)
+      const atual = atuaisPorNumero.get(parcela.numero)
+
+      if (!atual) {
+        const nova = await tx.boletoParcela.create({
+          data: {
+            boletoId: id,
+            numero: parcela.numero,
+            vencimento: parcela.vencimento,
+            valor: parcela.valor,
+            pagoEm: parcela.pagoEm,
+            valorPago: parcela.valorPago,
+          },
+          select: { id: true },
         })
-        .eq('id', atual.id)
-      if (errUpd) throw new Error(errUpd.message)
-      await sincronizarGastoParcela(supabase, atual.id, estavaPago, ficouPago, p)
-    }
-  }
+        if (parcela.pagoEm) {
+          await criarGastoDaParcela(tx, id, nova.id, day(parcela.pagoEm)!, Number(parcela.valorPago ?? parcela.valor), uid)
+        }
+        continue
+      }
 
-  const removidos = (atuais ?? []).filter((p) => !numerosNovos.has(Number(p.numero)))
-  if (removidos.length > 0) {
-    for (const p of removidos) {
-      await removerGastoDaParcela(supabase, p.id)
+      const estavaPago = !!atual.pagoEm
+      const ficouPago = !!parcela.pagoEm
+      const mudou =
+        day(atual.vencimento) !== day(parcela.vencimento) ||
+        num(atual.valor) !== Number(parcela.valor) ||
+        estavaPago !== ficouPago ||
+        num(atual.valorPago ?? 0) !== Number(parcela.valorPago ?? 0)
+
+      if (!mudou) continue
+
+      await tx.boletoParcela.update({
+        where: { id: atual.id },
+        data: {
+          vencimento: parcela.vencimento,
+          valor: parcela.valor,
+          pagoEm: parcela.pagoEm,
+          valorPago: parcela.valorPago,
+        },
+      })
+
+      await sincronizarGastoParcela(tx, id, atual.id, estavaPago, ficouPago, {
+        pago_em: day(parcela.pagoEm),
+        valor_pago: parcela.valorPago != null ? Number(parcela.valorPago) : null,
+        valor: Number(parcela.valor),
+      }, uid)
     }
-    const { error: errDel } = await supabase
-      .from('boleto_parcelas')
-      .delete()
-      .in('id', removidos.map((p) => p.id))
-    if (errDel) throw new Error(errDel.message)
-  }
+
+    const removidos = atuais.filter((p) => !numerosNovos.has(Number(p.numero)))
+    if (removidos.length > 0) {
+      for (const parcela of removidos) {
+        await removerGastoDaParcela(tx, parcela.id)
+      }
+      await tx.boletoParcela.deleteMany({
+        where: { id: { in: removidos.map((p) => p.id) } },
+      })
+    }
+  })
 }
 
 export async function deletarBoleto(id: string) {
   await assertPermissao('boletos', 'deletar')
-  const supabase = await createClient()
-  const { error } = await supabase.from('boletos').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.boleto.delete({ where: { id } })
 }
 
-/**
- * Marca/desmarca uma parcela como paga.
- * O cliente DEVE passar `valor_pago` (vem do estado local da parcela) para
- * evitar um SELECT extra no servidor — mantém o caminho rápido em 1 UPDATE.
- * Se não vier, faz fallback com SELECT+UPDATE (uso defensivo).
- */
 export async function marcarParcela(
   parcela_id: string,
   pago: boolean,
   opts?: { pago_em?: string; valor_pago?: number },
 ) {
   await assertPermissao('boletos', 'editar')
-  const supabase = await createClient()
-  if (pago) {
-    const pago_em = opts?.pago_em ?? new Date().toISOString().slice(0, 10)
-    let valor_pago = opts?.valor_pago
-    if (valor_pago == null) {
-      const { data: parcela } = await supabase
-        .from('boleto_parcelas')
-        .select('valor')
-        .eq('id', parcela_id)
-        .single()
-      valor_pago = Number(parcela?.valor ?? 0)
+  const uid = await requireAuthenticatedUserId().catch(() => null)
+
+  await prisma.$transaction(async (tx) => {
+    const parcela = await tx.boletoParcela.findUnique({
+      where: { id: parcela_id },
+      select: { id: true, boletoId: true, valor: true },
+    })
+    if (!parcela) throw new Error('Parcela não encontrada.')
+
+    if (pago) {
+      const pagoEm = opts?.pago_em ?? new Date().toISOString().slice(0, 10)
+      const valorPago = opts?.valor_pago ?? num(parcela.valor)
+
+      await tx.boletoParcela.update({
+        where: { id: parcela_id },
+        data: {
+          pagoEm: new Date(pagoEm),
+          valorPago,
+        },
+      })
+
+      await criarGastoDaParcela(tx, parcela.boletoId, parcela_id, pagoEm, valorPago, uid)
+      return
     }
-    const { error } = await supabase
-      .from('boleto_parcelas')
-      .update({ pago_em, valor_pago })
-      .eq('id', parcela_id)
-    if (error) throw new Error(error.message)
 
-    await criarGastoDaParcela(supabase, parcela_id, pago_em, valor_pago ?? 0)
-  } else {
-    const { error } = await supabase
-      .from('boleto_parcelas')
-      .update({ pago_em: null, valor_pago: null })
-      .eq('id', parcela_id)
-    if (error) throw new Error(error.message)
+    await tx.boletoParcela.update({
+      where: { id: parcela_id },
+      data: { pagoEm: null, valorPago: null },
+    })
 
-    await removerGastoDaParcela(supabase, parcela_id)
-  }
+    await removerGastoDaParcela(tx, parcela_id)
+  })
 }
 
-type ParcelaGastoSync = {
-  pago_em: string | null
-  valor_pago: number | null
-  valor: number
+async function removerGastoDaParcela(tx: Prisma.TransactionClient, parcelaId: string) {
+  await tx.gasto.deleteMany({
+    where: { boletoParcelaId: parcelaId },
+  })
 }
 
-async function removerGastoDaParcela(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  parcelaId: string,
-) {
-  const { error } = await supabase
-    .from('gastos')
-    .delete()
-    .eq('boleto_parcela_id', parcelaId)
-  if (error) throw new Error(error.message)
-}
-
-/** Mantém gastos alinhados ao estado de pagamento da parcela (modal de boleto / edição). */
 async function sincronizarGastoParcela(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  tx: Prisma.TransactionClient,
+  boletoId: string,
   parcelaId: string,
   estavaPago: boolean,
   ficouPago: boolean,
   parcela: ParcelaGastoSync,
+  usuarioId: string | null,
 ) {
   if (!estavaPago && ficouPago && parcela.pago_em) {
-    await criarGastoDaParcela(
-      supabase,
-      parcelaId,
-      parcela.pago_em,
-      Number(parcela.valor_pago ?? parcela.valor),
-    )
+    await criarGastoDaParcela(tx, boletoId, parcelaId, parcela.pago_em, Number(parcela.valor_pago ?? parcela.valor), usuarioId)
     return
   }
   if (estavaPago && !ficouPago) {
-    await removerGastoDaParcela(supabase, parcelaId)
+    await removerGastoDaParcela(tx, parcelaId)
     return
   }
   if (estavaPago && ficouPago && parcela.pago_em) {
-    const valor = Number(parcela.valor_pago ?? parcela.valor)
-    const { data: gastoExistente } = await supabase
-      .from('gastos')
-      .select('id')
-      .eq('boleto_parcela_id', parcelaId)
-      .limit(1)
-      .maybeSingle()
-    if (!gastoExistente) {
-      await criarGastoDaParcela(supabase, parcelaId, parcela.pago_em, valor)
+    const existente = await tx.gasto.findFirst({
+      where: { boletoParcelaId: parcelaId },
+      select: { id: true },
+    })
+    if (!existente) {
+      await criarGastoDaParcela(tx, boletoId, parcelaId, parcela.pago_em, Number(parcela.valor_pago ?? parcela.valor), usuarioId)
       return
     }
-    const { error } = await supabase
-      .from('gastos')
-      .update({ valor, data_gasto: parcela.pago_em })
-      .eq('boleto_parcela_id', parcelaId)
-    if (error) throw new Error(error.message)
+    await tx.gasto.updateMany({
+      where: { boletoParcelaId: parcelaId },
+      data: {
+        valor: Number(parcela.valor_pago ?? parcela.valor),
+        dataGasto: new Date(parcela.pago_em),
+      },
+    })
   }
 }
 
 async function criarGastoDaParcela(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  tx: Prisma.TransactionClient,
+  boletoId: string,
   parcelaId: string,
   pagoEm: string,
   valorPago: number,
+  usuarioId: string | null,
 ) {
-  const { data: existing } = await supabase
-    .from('gastos')
-    .select('id')
-    .eq('boleto_parcela_id', parcelaId)
-    .limit(1)
-    .maybeSingle()
+  const existing = await tx.gasto.findFirst({
+    where: { boletoParcelaId: parcelaId },
+    select: { id: true },
+  })
   if (existing) return
 
-  const { data: parcela } = await supabase
-    .from('boleto_parcelas')
-    .select('boleto_id, numero')
-    .eq('id', parcelaId)
-    .single()
+  const parcela = await tx.boletoParcela.findUnique({
+    where: { id: parcelaId },
+    select: { numero: true },
+  })
   if (!parcela) return
 
-  const { data: boleto } = await supabase
-    .from('boletos')
-    .select('tipo, contraparte_nome, ordem_compra_id')
-    .eq('id', parcela.boleto_id)
-    .single()
+  const boleto = await tx.boleto.findUnique({
+    where: { id: boletoId },
+    select: {
+      tipo: true,
+      contraparteNome: true,
+      ordemCompraId: true,
+      ordemCompra: {
+        select: { codigo: true },
+      },
+    },
+  })
   if (!boleto || boleto.tipo !== 'saida') return
 
-  const uid = await requireAuthenticatedUserId().catch(() => null)
-
-  let descricao = `Boleto parcela ${parcela.numero} — ${boleto.contraparte_nome}`
+  let descricao = `Boleto parcela ${parcela.numero} - ${boleto.contraparteNome}`
   let tipo: string = TIPO_GASTO_OUTROS
 
-  if (boleto.ordem_compra_id) {
-    const { data: oc } = await supabase
-      .from('ordens_compra')
-      .select('codigo')
-      .eq('id', boleto.ordem_compra_id)
-      .single()
-    if (oc) {
-      descricao = `Pagamento OC ${oc.codigo} — parcela ${parcela.numero} — ${boleto.contraparte_nome}`
-      tipo = TIPO_GASTO_PAGAMENTO_OC
-    }
+  if (boleto.ordemCompraId && boleto.ordemCompra?.codigo) {
+    descricao = `Pagamento OC ${boleto.ordemCompra.codigo} - parcela ${parcela.numero} - ${boleto.contraparteNome}`
+    tipo = TIPO_GASTO_PAGAMENTO_OC
   }
 
-  const { error: insertErr } = await supabase.from('gastos').insert({
-    tipo,
-    descricao,
-    valor: valorPago,
-    forma_pagamento: 'boleto',
-    data_gasto: pagoEm,
-    ordem_compra_id: boleto.ordem_compra_id ?? null,
-    boleto_parcela_id: parcelaId,
-    usuario_id: uid,
+  await tx.gasto.create({
+    data: {
+      tipo,
+      descricao,
+      valor: valorPago,
+      formaPagamento: 'boleto',
+      dataGasto: new Date(pagoEm),
+      ordemCompraId: boleto.ordemCompraId ?? null,
+      boletoParcelaId: parcelaId,
+      usuarioId,
+    },
   })
-  if (insertErr) throw new Error(insertErr.message)
 }

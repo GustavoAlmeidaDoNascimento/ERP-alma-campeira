@@ -1,11 +1,94 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
-import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
+import { assertPermissao, getAuthenticatedUser } from '@/lib/auth'
 import { analisarReposicaoParaPedido } from '@/lib/ordens-compra/analisar-reposicao'
-import type { FormaPagamentoOC, Pedido, StatusPedido } from '@/types'
+import type { FormaPagamentoOC, Pedido, PedidoItem, StatusPedido } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 import { criarBoleto, type ParcelaInput } from '@/lib/actions/boletos'
+
+type DecimalLike = Prisma.Decimal | number | string | null | undefined
+
+type PedidoClienteRow = {
+  id: string
+  nome: string
+  tipo: string
+  tipoDocumento: string
+  documento: string | null
+  cidade: string | null
+  estado: string | null
+  telefone: string | null
+  email: string | null
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  razaoSocial: string | null
+  ie: string | null
+} | null
+
+type PedidoVendedorRow = { id: string; nome: string } | null
+
+type PedidoItemRow = {
+  id: string
+  pedidoId: string
+  facaId: string
+  quantidade: number
+  precoUnitario: DecimalLike
+  subtotal?: DecimalLike
+  ncm: string | null
+  cfop: string | null
+  faca?: {
+    id: string
+    codigo: string
+    nome: string
+    precoVenda: DecimalLike
+    fotoUrl: string | null
+    unidade: string | null
+    eanGtin: string | null
+  } | null
+}
+
+type PedidoRow = {
+  id: string
+  codigo: string
+  sequencial: bigint | null
+  clienteId: string | null
+  vendedorId: string | null
+  dataPedido: string
+  status: string
+  observacao: string | null
+  valorTotal: DecimalLike
+  frete: DecimalLike
+  descontoTotal: DecimalLike
+  naturezaOperacao: string | null
+  formaPagamento: string | null
+  pago: boolean
+  entregueAt: Date | null
+  createdAt: Date
+  cliente?: PedidoClienteRow
+  vendedor?: PedidoVendedorRow
+  itens?: PedidoItemRow[]
+}
+
+type FacaEstoqueRow = {
+  id: string
+  nome: string
+  estoqueAtual: number
+}
+
+function num(value: DecimalLike): number {
+  if (value == null) return 0
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return Number(value)
+  return value.toNumber()
+}
+
+function iso(value: Date | null | undefined): string | null {
+  return value ? value.toISOString() : null
+}
 
 function normalizeStatusPedido(status: string): StatusPedido {
   if (status === 'em_espera' || status === 'em_producao' || status === 'entregue') return status
@@ -14,80 +97,439 @@ function normalizeStatusPedido(status: string): StatusPedido {
   return 'em_espera'
 }
 
-function normalizePedido(pedido: Pedido): Pedido {
-  const itens = pedido.itens
-    ? [...pedido.itens].sort((a, b) => a.id.localeCompare(b.id))
-    : pedido.itens
-  return { ...pedido, status: normalizeStatusPedido(String(pedido.status)), itens }
+function mapPedidoItem(item: PedidoItemRow): PedidoItem {
+  return {
+    id: item.id,
+    pedido_id: item.pedidoId,
+    faca_id: item.facaId,
+    quantidade: item.quantidade,
+    preco_unitario: num(item.precoUnitario),
+    subtotal: item.subtotal == null ? num(item.precoUnitario) * item.quantidade : num(item.subtotal),
+    ncm: item.ncm,
+    cfop: item.cfop,
+    faca: item.faca
+      ? {
+          id: item.faca.id,
+          codigo: item.faca.codigo,
+          nome: item.faca.nome,
+          preco_venda: num(item.faca.precoVenda),
+          foto_url: item.faca.fotoUrl,
+          unidade: item.faca.unidade,
+          ean_gtin: item.faca.eanGtin,
+        }
+      : undefined,
+  }
+}
+
+function mapPedido(row: PedidoRow): Pedido {
+  const itens = row.itens ? [...row.itens].sort((a, b) => a.id.localeCompare(b.id)).map(mapPedidoItem) : undefined
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    sequencial: row.sequencial == null ? null : Number(row.sequencial),
+    cliente_id: row.clienteId,
+    vendedor_id: row.vendedorId,
+    data_pedido: row.dataPedido,
+    status: normalizeStatusPedido(String(row.status)),
+    observacao: row.observacao,
+    valor_total: row.valorTotal == null ? null : num(row.valorTotal),
+    frete: num(row.frete),
+    desconto_total: num(row.descontoTotal),
+    natureza_operacao: row.naturezaOperacao,
+    forma_pagamento: (row.formaPagamento as FormaPagamentoOC | null) ?? null,
+    pago: Boolean(row.pago),
+    entregue_at: iso(row.entregueAt),
+    created_at: row.createdAt.toISOString(),
+    cliente: row.cliente
+      ? {
+          id: row.cliente.id,
+          nome: row.cliente.nome,
+          tipo: row.cliente.tipo as any,
+          tipo_documento: row.cliente.tipoDocumento as any,
+          documento: row.cliente.documento,
+          cidade: row.cliente.cidade,
+          estado: row.cliente.estado,
+          telefone: row.cliente.telefone,
+          email: row.cliente.email,
+          cep: row.cliente.cep,
+          logradouro: row.cliente.logradouro,
+          numero: row.cliente.numero,
+          complemento: row.cliente.complemento,
+          bairro: row.cliente.bairro,
+          razao_social: row.cliente.razaoSocial,
+          ie: row.cliente.ie,
+        }
+      : null,
+    vendedor: row.vendedor ? { id: row.vendedor.id, nome: row.vendedor.nome } : null,
+    itens,
+  }
+}
+
+async function loadFiscalByFacaIds(facaIds: string[]): Promise<Map<string, { ncm: string | null; cfop: string | null }>> {
+  const uniqueIds = [...new Set(facaIds)]
+  if (uniqueIds.length === 0) return new Map()
+
+  const fiscais = await prisma.faca.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { id: true, ncm: true, cfopPadrao: true },
+  })
+
+  return new Map(
+    fiscais.map((f) => [f.id, { ncm: f.ncm ?? null, cfop: f.cfopPadrao ?? null }]),
+  )
+}
+
+async function loadFacasEstoqueByIds(facaIds: string[]): Promise<Map<string, FacaEstoqueRow>> {
+  const uniqueIds = [...new Set(facaIds)]
+  if (uniqueIds.length === 0) return new Map()
+
+  const facas = await prisma.faca.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { id: true, nome: true, estoqueAtual: true },
+  })
+
+  return new Map(facas.map((f) => [f.id, f]))
+}
+
+function normalizarFormaPagamento(forma?: FormaPagamentoOC | null): FormaPagamentoOC | null {
+  if (
+    forma === 'pix'
+    || forma === 'dinheiro'
+    || forma === 'cartao_credito'
+    || forma === 'boleto'
+    || forma === 'cheque'
+    || forma === 'link'
+  ) {
+    return forma
+  }
+  return null
+}
+
+function assertClienteEVendedorObrigatorios(input: VendaInput) {
+  if (!input.cliente_id?.trim()) throw new Error('Selecione um cliente.')
+  if (!input.vendedor_id?.trim()) throw new Error('Selecione um vendedor.')
+}
+
+async function criarBoletoDaVenda(
+  pedidoId: string,
+  clienteId: string,
+  vendedorId: string | null,
+  codigo: string,
+  parcelas: ParcelaInput[],
+) {
+  const parcelasValidas = (parcelas ?? []).filter((p) => p.vencimento && Number(p.valor) > 0)
+  if (parcelasValidas.length === 0) return
+
+  const existente = await prisma.boleto.findFirst({
+    where: { pedidoId },
+    select: { id: true },
+  })
+  if (existente) return
+
+  const cliente = await prisma.cliente.findUnique({
+    where: { id: clienteId },
+    select: { nome: true },
+  })
+
+  const valorTotal = parcelasValidas.reduce((s, p) => s + Number(p.valor), 0)
+
+  await criarBoleto({
+    tipo: 'entrada',
+    contraparte_nome: cliente?.nome ?? 'Cliente',
+    cliente_id: clienteId,
+    vendedor_id: vendedorId ?? null,
+    valor_total: valorTotal,
+    emitido_em: new Date().toISOString().slice(0, 10),
+    observacao: `Boleto gerado da venda ${codigo}`,
+    pedido_id: pedidoId,
+    parcelas: parcelasValidas,
+  })
+}
+
+async function inserirItensPedido(pedidoId: string, itens: VendaItemInput[]) {
+  const fiscais = await loadFiscalByFacaIds(itens.map((item) => item.faca_id))
+
+  await prisma.pedidoItem.createMany({
+    data: itens.map((item) => {
+      const fiscal = fiscais.get(item.faca_id) ?? { ncm: null, cfop: null }
+      return {
+        pedidoId,
+        facaId: item.faca_id,
+        quantidade: item.quantidade,
+        precoUnitario: item.preco_unitario,
+        ncm: fiscal.ncm,
+        cfop: fiscal.cfop,
+      }
+    }),
+  })
+}
+
+async function sincronizarItensPedido(pedidoId: string, novos: VendaItemInput[]) {
+  const atuais = await prisma.pedidoItem.findMany({
+    where: { pedidoId },
+    select: {
+      id: true,
+      facaId: true,
+      quantidade: true,
+      precoUnitario: true,
+    },
+    orderBy: { id: 'asc' },
+  })
+
+  const max = Math.max(atuais.length, novos.length)
+  const facasParaFiscal = new Set<string>()
+
+  for (let i = 0; i < max; i++) {
+    const atual = atuais[i]
+    const novo = novos[i]
+    if (novo && (!atual || atual.facaId !== novo.faca_id)) {
+      facasParaFiscal.add(novo.faca_id)
+    }
+  }
+
+  const fiscais = await loadFiscalByFacaIds([...facasParaFiscal])
+
+  for (let i = 0; i < max; i++) {
+    const atual = atuais[i]
+    const novo = novos[i]
+
+    if (atual && novo) {
+      const facaMudou = atual.facaId !== novo.faca_id
+      const mudou =
+        facaMudou ||
+        Number(atual.quantidade) !== Number(novo.quantidade) ||
+        num(atual.precoUnitario) !== Number(novo.preco_unitario)
+
+      if (!mudou) continue
+
+      const patch: Prisma.PedidoItemUpdateInput = {
+        faca: { connect: { id: novo.faca_id } },
+        quantidade: novo.quantidade,
+        precoUnitario: novo.preco_unitario,
+      }
+
+      if (facaMudou) {
+        const fiscal = fiscais.get(novo.faca_id) ?? { ncm: null, cfop: null }
+        patch.ncm = fiscal.ncm
+        patch.cfop = fiscal.cfop
+      }
+
+      await prisma.pedidoItem.update({
+        where: { id: atual.id },
+        data: patch,
+      })
+      continue
+    }
+
+    if (novo) {
+      const fiscal = fiscais.get(novo.faca_id) ?? { ncm: null, cfop: null }
+      await prisma.pedidoItem.create({
+        data: {
+          pedidoId,
+          facaId: novo.faca_id,
+          quantidade: novo.quantidade,
+          precoUnitario: novo.preco_unitario,
+          ncm: fiscal.ncm,
+          cfop: fiscal.cfop,
+        },
+      })
+      continue
+    }
+
+    if (atual) {
+      await prisma.pedidoItem.delete({ where: { id: atual.id } })
+    }
+  }
+}
+
+async function reverterEntregaPedido(id: string, novoStatus: 'em_espera' | 'em_producao') {
+  const itens = await prisma.pedidoItem.findMany({
+    where: { pedidoId: id },
+    select: { facaId: true, quantidade: true },
+  })
+  const facaMap = await loadFacasEstoqueByIds(itens.map((item) => item.facaId))
+  const user = await getAuthenticatedUser()
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of itens) {
+      const faca = facaMap.get(item.facaId)
+      if (!faca) continue
+
+      const novoEstoque = Number(faca.estoqueAtual) + Number(item.quantidade)
+      await tx.faca.update({
+        where: { id: item.facaId },
+        data: { estoqueAtual: novoEstoque },
+      })
+      await tx.movimentacaoEstoque.create({
+        data: {
+          tipo: 'ajuste',
+          facaId: item.facaId,
+          quantidade: item.quantidade,
+          observacao: `Reversão de venda entregue (pedido ${id})`,
+          usuarioId: user?.id ?? null,
+        },
+      })
+      faca.estoqueAtual = novoEstoque
+    }
+
+    await tx.pedido.update({
+      where: { id },
+      data: { status: novoStatus, entregueAt: null },
+    })
+  })
+}
+
+async function executarEntregaPedido(id: string, itens: { faca_id: string; quantidade: number }[]) {
+  const facaMap = await loadFacasEstoqueByIds(itens.map((item) => item.faca_id))
+
+  const insuficientes = itens.filter((item) => {
+    const faca = facaMap.get(item.faca_id)
+    return !faca || faca.estoqueAtual < item.quantidade
+  })
+
+  if (insuficientes.length > 0) {
+    const detalhes = insuficientes
+      .map((item) => {
+        const f = facaMap.get(item.faca_id)
+        return `${f?.nome ?? 'Desconhecida'} (precisa ${item.quantidade}, tem ${f?.estoqueAtual ?? 0})`
+      })
+      .join('; ')
+    throw new Error(`Estoque insuficiente: ${detalhes}`)
+  }
+
+  const user = await getAuthenticatedUser()
+
+  await prisma.$transaction(async (tx) => {
+    await tx.pedido.update({
+      where: { id },
+      data: { status: 'entregue', entregueAt: new Date() },
+    })
+
+    for (const item of itens) {
+      const faca = facaMap.get(item.faca_id)!
+      await tx.movimentacaoEstoque.create({
+        data: {
+          tipo: 'saida_venda',
+          facaId: item.faca_id,
+          pedidoId: id,
+          quantidade: item.quantidade,
+          usuarioId: user?.id ?? null,
+        },
+      })
+      const novoEstoque = faca.estoqueAtual - item.quantidade
+      await tx.faca.update({
+        where: { id: item.faca_id },
+        data: { estoqueAtual: novoEstoque },
+      })
+      faca.estoqueAtual = novoEstoque
+    }
+  })
+
+  const resultado = await analisarReposicaoParaPedido(id)
+  console.log(`[fila_reposicao] pedido=${id} criouFila=${resultado.criouFila} itens=${resultado.quantidadeItens}`)
 }
 
 export async function getVendas(limit = 80): Promise<Pedido[]> {
   await assertPermissao('vendas', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('pedidos')
-    .select(`
-      *,
-      cliente:clientes(
-        id,
-        nome,
-        tipo,
-        tipo_documento,
-        documento,
-        cidade,
-        estado,
-        telefone,
-        email,
-        cep,
-        logradouro,
-        numero,
-        complemento,
-        bairro,
-        razao_social,
-        ie
-      ),
-      vendedor:usuarios_perfis(id, nome),
-      itens:pedido_itens(*)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw new Error(error.message)
-  return (data as Pedido[]).map(normalizePedido)
+  const data = await prisma.pedido.findMany({
+    include: {
+      cliente: {
+        select: {
+          id: true,
+          nome: true,
+          tipo: true,
+          tipoDocumento: true,
+          documento: true,
+          cidade: true,
+          estado: true,
+          telefone: true,
+          email: true,
+          cep: true,
+          logradouro: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          razaoSocial: true,
+          ie: true,
+        },
+      },
+      vendedor: { select: { id: true, nome: true } },
+      itens: {
+        select: {
+          id: true,
+          pedidoId: true,
+          facaId: true,
+          quantidade: true,
+          precoUnitario: true,
+          subtotal: true,
+          ncm: true,
+          cfop: true,
+        },
+        orderBy: { id: 'asc' },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  })
+
+  return data.map((row) => mapPedido(row as unknown as PedidoRow))
 }
 
 export async function getVendaDetalhe(id: string): Promise<Pedido> {
   await assertPermissao('vendas', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('pedidos')
-    .select(`
-      *,
-      cliente:clientes(
-        id,
-        nome,
-        tipo,
-        tipo_documento,
-        documento,
-        cidade,
-        estado,
-        telefone,
-        email,
-        cep,
-        logradouro,
-        numero,
-        complemento,
-        bairro,
-        razao_social,
-        ie
-      ),
-      vendedor:usuarios_perfis(id, nome),
-      itens:pedido_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url, unidade, ean_gtin))
-    `)
-    .eq('id', id)
-    .single()
+  const data = await prisma.pedido.findUnique({
+    where: { id },
+    include: {
+      cliente: {
+        select: {
+          id: true,
+          nome: true,
+          tipo: true,
+          tipoDocumento: true,
+          documento: true,
+          cidade: true,
+          estado: true,
+          telefone: true,
+          email: true,
+          cep: true,
+          logradouro: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          razaoSocial: true,
+          ie: true,
+        },
+      },
+      vendedor: { select: { id: true, nome: true } },
+      itens: {
+        select: {
+          id: true,
+          pedidoId: true,
+          facaId: true,
+          quantidade: true,
+          precoUnitario: true,
+          subtotal: true,
+          ncm: true,
+          cfop: true,
+          faca: {
+            select: {
+              id: true,
+              codigo: true,
+              nome: true,
+              precoVenda: true,
+              fotoUrl: true,
+              unidade: true,
+              eanGtin: true,
+            },
+          },
+        },
+        orderBy: { id: 'asc' },
+      },
+    },
+  })
 
-  if (error || !data) throw new Error(error?.message ?? 'Venda não encontrada.')
-  return normalizePedido(data as Pedido)
+  if (!data) throw new Error('Venda não encontrada.')
+  return mapPedido(data as unknown as PedidoRow)
 }
 
 export async function gerarCodigoPedido(): Promise<string> {
@@ -109,251 +551,39 @@ export type VendaInput = {
   frete: number
   desconto_total: number
   natureza_operacao?: string
-  /** Forma de pagamento da venda (ver FormaPagamentoOC). */
   forma_pagamento?: FormaPagamentoOC | null
-  /** Marca a venda como paga (só faz sentido para formas != boleto). */
   pago?: boolean
-  /** Parcelas do boleto de entrada (a receber), quando forma_pagamento === 'boleto'. */
   boletoParcelas?: ParcelaInput[]
-  /** Usuário confirmou venda com estoque abaixo do solicitado (venda antes da produção). */
   confirmarEstoqueInsuficiente?: boolean
   itens: VendaItemInput[]
 }
 
-function normalizarFormaPagamento(forma?: FormaPagamentoOC | null): FormaPagamentoOC | null {
-  if (
-    forma === 'pix'
-    || forma === 'dinheiro'
-    || forma === 'cartao_credito'
-    || forma === 'boleto'
-    || forma === 'cheque'
-    || forma === 'link'
-  ) {
-    return forma
-  }
-  return null
-}
-
-/**
- * Cria um boleto de ENTRADA (a receber) vinculado à venda, usando o cliente
- * como contraparte. Só cria se ainda não houver boleto ligado a este pedido.
- */
-async function criarBoletoDaVenda(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  pedidoId: string,
-  clienteId: string,
-  vendedorId: string | null,
-  codigo: string,
-  parcelas: ParcelaInput[],
-) {
-  const parcelasValidas = (parcelas ?? []).filter((p) => p.vencimento && Number(p.valor) > 0)
-  if (parcelasValidas.length === 0) return
-
-  const { data: existente } = await supabase
-    .from('boletos')
-    .select('id')
-    .eq('pedido_id', pedidoId)
-    .limit(1)
-    .maybeSingle()
-  if (existente) return
-
-  const { data: cliente } = await supabase
-    .from('clientes')
-    .select('nome')
-    .eq('id', clienteId)
-    .single()
-
-  const valorTotal = parcelasValidas.reduce((s, p) => s + Number(p.valor), 0)
-
-  await criarBoleto({
-    tipo: 'entrada',
-    contraparte_nome: cliente?.nome ?? 'Cliente',
-    cliente_id: clienteId,
-    vendedor_id: vendedorId ?? null,
-    valor_total: valorTotal,
-    emitido_em: new Date().toISOString().slice(0, 10),
-    observacao: `Boleto gerado da venda ${codigo}`,
-    pedido_id: pedidoId,
-    parcelas: parcelasValidas,
-  })
-}
-
-async function inserirItensPedido(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  pedidoId: string,
-  itens: VendaItemInput[]
-) {
-  // Snapshot fiscal: copiamos NCM/CFOP atuais da faca para cada item, para
-  // que alterações futuras no cadastro não afetem notas já emitidas.
-  const facaIds = [...new Set(itens.map((i) => i.faca_id))]
-  const fiscalByFaca = new Map<string, { ncm: string | null; cfop: string | null }>()
-  if (facaIds.length > 0) {
-    const { data: fiscaisFacas } = await supabase
-      .from('facas')
-      .select('id, ncm, cfop_padrao')
-      .in('id', facaIds)
-    for (const f of fiscaisFacas ?? []) {
-      fiscalByFaca.set(f.id, {
-        ncm: (f as { ncm: string | null }).ncm ?? null,
-        cfop: (f as { cfop_padrao: string | null }).cfop_padrao ?? null,
-      })
-    }
-  }
-
-  for (const item of itens) {
-    const fiscal = fiscalByFaca.get(item.faca_id) ?? { ncm: null, cfop: null }
-    const { error } = await supabase.from('pedido_itens').insert({
-      pedido_id: pedidoId,
-      faca_id: item.faca_id,
-      quantidade: item.quantidade,
-      preco_unitario: item.preco_unitario,
-      ncm: fiscal.ncm,
-      cfop: fiscal.cfop,
-    })
-
-    if (error) {
-      throw new Error(error.message)
-    }
-  }
-}
-
-/**
- * Sincroniza pedido_itens fazendo diff por posição (ordenado por id).
- * Em vez de apagar tudo e reinserir — que gerava 1 INSERT + 1 DELETE por item
- * no log de auditoria —, só atualiza o que realmente mudou, insere novos e
- * deleta os que sobraram. O snapshot fiscal (ncm/cfop) só é renovado quando
- * faca_id muda.
- */
-async function sincronizarItensPedido(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  pedidoId: string,
-  novos: VendaItemInput[],
-) {
-  const { data: atuais, error: errFetch } = await supabase
-    .from('pedido_itens')
-    .select('id, faca_id, quantidade, preco_unitario, ncm, cfop')
-    .eq('pedido_id', pedidoId)
-    .order('id', { ascending: true })
-  if (errFetch) throw new Error(errFetch.message)
-
-  const atuaisArr = atuais ?? []
-  const max = Math.max(atuaisArr.length, novos.length)
-
-  // Pré-carrega NCM/CFOP só pras facas que vamos precisar (faca_id novo ou
-  // diferente do existente naquela posição).
-  const facasParaFiscal = new Set<string>()
-  for (let i = 0; i < max; i++) {
-    const atual = atuaisArr[i]
-    const novo = novos[i]
-    if (novo && (!atual || atual.faca_id !== novo.faca_id)) {
-      facasParaFiscal.add(novo.faca_id)
-    }
-  }
-  const fiscalByFaca = new Map<string, { ncm: string | null; cfop: string | null }>()
-  if (facasParaFiscal.size > 0) {
-    const { data: fiscais } = await supabase
-      .from('facas')
-      .select('id, ncm, cfop_padrao')
-      .in('id', [...facasParaFiscal])
-    for (const f of fiscais ?? []) {
-      fiscalByFaca.set(f.id, {
-        ncm: (f as { ncm: string | null }).ncm ?? null,
-        cfop: (f as { cfop_padrao: string | null }).cfop_padrao ?? null,
-      })
-    }
-  }
-
-  for (let i = 0; i < max; i++) {
-    const atual = atuaisArr[i]
-    const novo = novos[i]
-
-    if (atual && novo) {
-      const facaMudou = atual.faca_id !== novo.faca_id
-      const mudou =
-        facaMudou ||
-        Number(atual.quantidade) !== Number(novo.quantidade) ||
-        Number(atual.preco_unitario) !== Number(novo.preco_unitario)
-      if (mudou) {
-        const patch: Record<string, unknown> = {
-          faca_id: novo.faca_id,
-          quantidade: novo.quantidade,
-          preco_unitario: novo.preco_unitario,
-        }
-        if (facaMudou) {
-          const fiscal = fiscalByFaca.get(novo.faca_id) ?? { ncm: null, cfop: null }
-          patch.ncm = fiscal.ncm
-          patch.cfop = fiscal.cfop
-        }
-        const { error } = await supabase
-          .from('pedido_itens')
-          .update(patch)
-          .eq('id', atual.id)
-        if (error) throw new Error(error.message)
-      }
-    } else if (novo) {
-      const fiscal = fiscalByFaca.get(novo.faca_id) ?? { ncm: null, cfop: null }
-      const { error } = await supabase.from('pedido_itens').insert({
-        pedido_id: pedidoId,
-        faca_id: novo.faca_id,
-        quantidade: novo.quantidade,
-        preco_unitario: novo.preco_unitario,
-        ncm: fiscal.ncm,
-        cfop: fiscal.cfop,
-      })
-      if (error) throw new Error(error.message)
-    } else if (atual) {
-      const { error } = await supabase
-        .from('pedido_itens')
-        .delete()
-        .eq('id', atual.id)
-      if (error) throw new Error(error.message)
-    }
-  }
-}
-
-function assertClienteEVendedorObrigatorios(input: VendaInput) {
-  if (!input.cliente_id?.trim()) {
-    throw new Error('Selecione um cliente.')
-  }
-  if (!input.vendedor_id?.trim()) {
-    throw new Error('Selecione um vendedor.')
-  }
-}
-
 export async function criarVenda(input: VendaInput) {
   await assertPermissao('vendas', 'criar')
-  const supabase = await createClient()
-
   assertClienteEVendedorObrigatorios(input)
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
 
   if (!input.confirmarEstoqueInsuficiente) {
-    const facaIds = [...new Set(input.itens.map((i) => i.faca_id))]
-    const { data: facas } = await supabase
-      .from('facas')
-      .select('id, nome, estoque_atual')
-      .in('id', facaIds)
+    const facaMap = await loadFacasEstoqueByIds(input.itens.map((item) => item.faca_id))
+    const qtdPorFaca = new Map<string, number>()
+    for (const item of input.itens) {
+      qtdPorFaca.set(item.faca_id, (qtdPorFaca.get(item.faca_id) ?? 0) + item.quantidade)
+    }
 
-    if (facas) {
-      const facaMap = new Map(facas.map((f) => [f.id, f]))
-      const qtdPorFaca = new Map<string, number>()
-      for (const item of input.itens) {
-        qtdPorFaca.set(item.faca_id, (qtdPorFaca.get(item.faca_id) ?? 0) + item.quantidade)
-      }
-      const insuficientes = [...qtdPorFaca.entries()].filter(([facaId, qtd]) => {
-        const faca = facaMap.get(facaId)
-        return faca && faca.estoque_atual < qtd
-      })
-      if (insuficientes.length > 0) {
-        const detalhes = insuficientes
-          .map(([facaId, qtd]) => {
-            const f = facaMap.get(facaId)
-            return `${f?.nome ?? 'Desconhecida'} (solicitado: ${qtd}, disponível: ${f?.estoque_atual ?? 0})`
-          })
-          .join('; ')
-        throw new Error(`Estoque insuficiente: ${detalhes}`)
-      }
+    const insuficientes = [...qtdPorFaca.entries()].filter(([facaId, qtd]) => {
+      const faca = facaMap.get(facaId)
+      return faca && faca.estoqueAtual < qtd
+    })
+
+    if (insuficientes.length > 0) {
+      const detalhes = insuficientes
+        .map(([facaId, qtd]) => {
+          const f = facaMap.get(facaId)
+          return `${f?.nome ?? 'Desconhecida'} (solicitado: ${qtd}, disponível: ${f?.estoqueAtual ?? 0})`
+        })
+        .join('; ')
+      throw new Error(`Estoque insuficiente: ${detalhes}`)
     }
   }
 
@@ -361,54 +591,44 @@ export async function criarVenda(input: VendaInput) {
   const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
   const frete = Math.max(0, input.frete || 0)
   const bruto = subtotalItens + frete
-  const desconto_total = Math.min(Math.max(0, input.desconto_total || 0), bruto)
-  const valor_total = bruto - desconto_total
-
-  // Se já entregue de início, inserimos como em_producao e executarEntregaPedido
-  // vai finalizar com status=entregue e entregue_at.
+  const descontoTotal = Math.min(Math.max(0, input.desconto_total || 0), bruto)
+  const valorTotal = bruto - descontoTotal
   const statusInsert = input.status === 'entregue' ? 'em_producao' : input.status
-
   const natureza = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
   const formaPagamento = normalizarFormaPagamento(input.forma_pagamento)
   const pago = !!input.pago && formaPagamento !== null && formaPagamento !== 'boleto'
+
   if (input.pago && !pago) {
     throw new Error('Selecione uma forma de pagamento (diferente de boleto) para marcar a venda como paga.')
   }
 
-  const { data: pedido, error } = await supabase
-    .from('pedidos')
-    .insert({
+  const pedido = await prisma.pedido.create({
+    data: {
       codigo,
-      cliente_id: input.cliente_id!.trim(),
-      vendedor_id: input.vendedor_id!.trim(),
-      data_pedido: input.data_pedido,
+      clienteId: input.cliente_id!.trim(),
+      vendedorId: input.vendedor_id!.trim(),
+      dataPedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
       status: statusInsert,
       frete,
-      desconto_total,
-      valor_total,
-      natureza_operacao: natureza,
-      forma_pagamento: formaPagamento,
+      descontoTotal,
+      valorTotal,
+      naturezaOperacao: natureza,
+      formaPagamento,
       pago,
-    })
-    .select('id')
-    .single()
-
-  if (error) throw new Error(error.message)
-  if (!pedido?.id) throw new Error('Não foi possível criar a venda (ID não retornado).')
+    },
+    select: { id: true },
+  })
 
   try {
-    await inserirItensPedido(supabase, pedido.id, input.itens)
+    await inserirItensPedido(pedido.id, input.itens)
   } catch (e) {
-    // Evita pedido órfão quando falha ao gravar itens.
-    await supabase.from('pedido_itens').delete().eq('pedido_id', pedido.id)
-    await supabase.from('pedidos').delete().eq('id', pedido.id)
+    await prisma.pedido.delete({ where: { id: pedido.id } }).catch(() => {})
     throw e
   }
 
   if (formaPagamento === 'boleto' && (input.boletoParcelas?.length ?? 0) > 0) {
     await criarBoletoDaVenda(
-      supabase,
       pedido.id,
       input.cliente_id!.trim(),
       input.vendedor_id?.trim() ?? null,
@@ -418,43 +638,36 @@ export async function criarVenda(input: VendaInput) {
   }
 
   if (input.status === 'entregue') {
-    const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
-    await executarEntregaPedido(supabase, pedido.id, itensEntrega)
+    const itensEntrega = input.itens.map((item) => ({ faca_id: item.faca_id, quantidade: item.quantidade }))
+    await executarEntregaPedido(pedido.id, itensEntrega)
   }
-
 }
 
 export async function atualizarVenda(id: string, input: VendaInput) {
   await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
-
   assertClienteEVendedorObrigatorios(input)
 
   if (input.itens.length === 0) throw new Error('Adicione ao menos um item à venda.')
 
-  const { data: pedidoAtual } = await supabase
-    .from('pedidos')
-    .select('status, codigo')
-    .eq('id', id)
-    .single()
+  const pedidoAtual = await prisma.pedido.findUnique({
+    where: { id },
+    select: { status: true, codigo: true },
+  })
+
   if (!pedidoAtual || normalizeStatusPedido(String(pedidoAtual.status)) === 'entregue') {
     throw new Error('Vendas entregues não podem ser editadas.')
   }
 
-  // Valida estoque apenas para o delta de aumento de quantidade.
-  // Itens já existentes no pedido não consomem estoque até a entrega,
-  // então só bloqueamos se a nova quantidade EXCEDER a anterior.
-  const { data: itensAtuais } = await supabase
-    .from('pedido_itens')
-    .select('faca_id, quantidade')
-    .eq('pedido_id', id)
+  const itensAtuais = await prisma.pedidoItem.findMany({
+    where: { pedidoId: id },
+    select: { facaId: true, quantidade: true },
+  })
 
   const qtdAtualMap = new Map<string, number>()
-  for (const i of itensAtuais ?? []) {
-    qtdAtualMap.set(i.faca_id, (qtdAtualMap.get(i.faca_id) ?? 0) + Number(i.quantidade))
+  for (const item of itensAtuais) {
+    qtdAtualMap.set(item.facaId, (qtdAtualMap.get(item.facaId) ?? 0) + Number(item.quantidade))
   }
 
-  // Por faca, quanto a mais está sendo pedido vs o que já estava no pedido
   const deltaMap = new Map<string, number>()
   for (const item of input.itens) {
     const anterior = qtdAtualMap.get(item.faca_id) ?? 0
@@ -463,68 +676,56 @@ export async function atualizarVenda(id: string, input: VendaInput) {
   }
 
   if (!input.confirmarEstoqueInsuficiente && deltaMap.size > 0) {
-    const facaIds = [...deltaMap.keys()]
-    const { data: facas } = await supabase
-      .from('facas')
-      .select('id, nome, estoque_atual')
-      .in('id', facaIds)
+    const facaMap = await loadFacasEstoqueByIds([...deltaMap.keys()])
+    const insuficientes = [...deltaMap.keys()].filter((facaId) => {
+      const faca = facaMap.get(facaId)
+      return faca && faca.estoqueAtual < (deltaMap.get(facaId) ?? 0)
+    })
 
-    if (facas) {
-      const facaMap = new Map(facas.map((f) => [f.id, f]))
-      const insuficientes = facaIds.filter((fid) => {
-        const faca = facaMap.get(fid)
-        return faca && faca.estoque_atual < (deltaMap.get(fid) ?? 0)
-      })
-      if (insuficientes.length > 0) {
-        const detalhes = insuficientes
-          .map((fid) => {
-            const f = facaMap.get(fid)
-            return `${f?.nome ?? 'Desconhecida'} (adicionar: ${deltaMap.get(fid)}, disponível: ${f?.estoque_atual ?? 0})`
-          })
-          .join('; ')
-        throw new Error(`Estoque insuficiente: ${detalhes}`)
-      }
+    if (insuficientes.length > 0) {
+      const detalhes = insuficientes
+        .map((facaId) => {
+          const faca = facaMap.get(facaId)
+          return `${faca?.nome ?? 'Desconhecida'} (adicionar: ${deltaMap.get(facaId)}, disponível: ${faca?.estoqueAtual ?? 0})`
+        })
+        .join('; ')
+      throw new Error(`Estoque insuficiente: ${detalhes}`)
     }
   }
 
   const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
   const frete = Math.max(0, input.frete || 0)
   const bruto = subtotalItens + frete
-  const desconto_total = Math.min(Math.max(0, input.desconto_total || 0), bruto)
-  const valor_total = bruto - desconto_total
-
-  // Se o usuário quer marcar como entregue, o update inicial usa em_producao;
-  // executarEntregaPedido fará o update final com status=entregue e entregue_at.
+  const descontoTotal = Math.min(Math.max(0, input.desconto_total || 0), bruto)
+  const valorTotal = bruto - descontoTotal
   const statusUpdate = input.status === 'entregue' ? 'em_producao' : input.status
-
   const naturezaUpd = (input.natureza_operacao ?? '').trim() || 'VENDA DE MERCADORIA'
   const formaPagamento = normalizarFormaPagamento(input.forma_pagamento)
   const pagoUpd = !!input.pago && formaPagamento !== null && formaPagamento !== 'boleto'
+
   if (input.pago && !pagoUpd) {
     throw new Error('Selecione uma forma de pagamento (diferente de boleto) para marcar a venda como paga.')
   }
 
-  const { error } = await supabase
-    .from('pedidos')
-    .update({
-      cliente_id: input.cliente_id!.trim(),
-      vendedor_id: input.vendedor_id!.trim(),
-      data_pedido: input.data_pedido,
+  await prisma.pedido.update({
+    where: { id },
+    data: {
+      clienteId: input.cliente_id!.trim(),
+      vendedorId: input.vendedor_id!.trim(),
+      dataPedido: input.data_pedido,
       observacao: input.observacao.trim() || null,
       status: statusUpdate,
       frete,
-      desconto_total,
-      valor_total,
-      natureza_operacao: naturezaUpd,
-      forma_pagamento: formaPagamento,
+      descontoTotal,
+      valorTotal,
+      naturezaOperacao: naturezaUpd,
+      formaPagamento,
       pago: pagoUpd,
-    })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+    },
+  })
 
   if (formaPagamento === 'boleto' && (input.boletoParcelas?.length ?? 0) > 0) {
     await criarBoletoDaVenda(
-      supabase,
       id,
       input.cliente_id!.trim(),
       input.vendedor_id?.trim() ?? null,
@@ -533,300 +734,172 @@ export async function atualizarVenda(id: string, input: VendaInput) {
     )
   }
 
-  await sincronizarItensPedido(supabase, id, input.itens)
+  await sincronizarItensPedido(id, input.itens)
 
   if (input.status === 'entregue') {
-    const itensEntrega = input.itens.map((i) => ({ faca_id: i.faca_id, quantidade: i.quantidade }))
-    await executarEntregaPedido(supabase, id, itensEntrega)
+    const itensEntrega = input.itens.map((item) => ({ faca_id: item.faca_id, quantidade: item.quantidade }))
+    await executarEntregaPedido(id, itensEntrega)
   }
-
 }
 
 export async function avancarStatus(id: string, novoStatus: 'em_producao') {
   await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('pedidos')
-    .update({ status: novoStatus })
-    .eq('id', id)
-
-  if (error) throw new Error(error.message)
-}
-
-async function reverterEntregaPedido(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string,
-  novoStatus: 'em_espera' | 'em_producao',
-) {
-  const { data: itens, error: itensErr } = await supabase
-    .from('pedido_itens')
-    .select('faca_id, quantidade')
-    .eq('pedido_id', id)
-  if (itensErr) throw new Error(itensErr.message)
-
-  const facaIds = [...new Set((itens ?? []).map((i) => i.faca_id))]
-  const { data: facas } = await supabase
-    .from('facas')
-    .select('id, nome, estoque_atual')
-    .in('id', facaIds)
-  const facaMap = new Map((facas ?? []).map((f) => [f.id, f]))
-
-  const user = await getAuthenticatedUser()
-
-  for (const item of itens ?? []) {
-    const faca = facaMap.get(item.faca_id)
-    if (!faca) continue
-    const novoEstoque = Number(faca.estoque_atual) + Number(item.quantidade)
-
-    const { error: estoqueErr } = await supabase
-      .from('facas')
-      .update({ estoque_atual: novoEstoque })
-      .eq('id', item.faca_id)
-    if (estoqueErr) throw new Error(`Erro ao reverter estoque de ${faca.nome}: ${estoqueErr.message}`)
-    faca.estoque_atual = novoEstoque
-
-    const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-      tipo: 'ajuste',
-      faca_id: item.faca_id,
-      quantidade: item.quantidade,
-      observacao: `Reversão de venda entregue (pedido ${id})`,
-      usuario_id: user?.id ?? null,
-    })
-    if (movErr) throw new Error(`Erro ao registrar reversão para ${faca.nome}: ${movErr.message}`)
-  }
-
-  const { error: upErr } = await supabase
-    .from('pedidos')
-    .update({ status: novoStatus, entregue_at: null })
-    .eq('id', id)
-  if (upErr) throw new Error(upErr.message)
+  await prisma.pedido.update({
+    where: { id },
+    data: { status: novoStatus },
+  })
 }
 
 export async function alterarStatus(id: string, novoStatus: StatusPedido) {
   await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('status, itens:pedido_itens(faca_id, quantidade)')
-    .eq('id', id)
-    .single()
-  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
+  const pedido = await prisma.pedido.findUnique({
+    where: { id },
+    select: {
+      status: true,
+      itens: {
+        select: { facaId: true, quantidade: true },
+      },
+    },
+  })
+
+  if (!pedido) throw new Error('Venda não encontrada.')
 
   const statusAtual = normalizeStatusPedido(String(pedido.status))
   if (statusAtual === novoStatus) return
 
-  if (statusAtual === 'entregue') {
-    if (novoStatus === 'em_espera' || novoStatus === 'em_producao') {
-      await reverterEntregaPedido(supabase, id, novoStatus)
-      return
-    }
-  }
-
-  if (novoStatus === 'entregue') {
-    const itens = (pedido.itens ?? []) as { faca_id: string; quantidade: number }[]
-    await executarEntregaPedido(supabase, id, itens)
+  if (statusAtual === 'entregue' && (novoStatus === 'em_espera' || novoStatus === 'em_producao')) {
+    await reverterEntregaPedido(id, novoStatus)
     return
   }
 
-  const { error } = await supabase
-    .from('pedidos')
-    .update({ status: novoStatus })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-}
+  if (novoStatus === 'entregue') {
+    await executarEntregaPedido(
+      id,
+      (pedido.itens ?? []).map((item) => ({ faca_id: item.facaId, quantidade: item.quantidade })),
+    )
+    return
+  }
 
-async function executarEntregaPedido(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string,
-  itens: { faca_id: string; quantidade: number }[]
-) {
-  const facaIds = [...new Set(itens.map((i) => i.faca_id))]
-  const { data: facas } = await supabase
-    .from('facas')
-    .select('id, nome, estoque_atual')
-    .in('id', facaIds)
-
-  const facaMap = new Map((facas ?? []).map((f) => [f.id, f]))
-
-  const insuficientes = itens.filter((item) => {
-    const faca = facaMap.get(item.faca_id)
-    return !faca || faca.estoque_atual < item.quantidade
+  await prisma.pedido.update({
+    where: { id },
+    data: { status: novoStatus },
   })
-
-  if (insuficientes.length > 0) {
-    const detalhes = insuficientes
-      .map((item) => {
-        const f = facaMap.get(item.faca_id)
-        return `${f?.nome ?? 'Desconhecida'} (precisa ${item.quantidade}, tem ${f?.estoque_atual ?? 0})`
-      })
-      .join('; ')
-    throw new Error(`Estoque insuficiente: ${detalhes}`)
-  }
-
-  const user = await getAuthenticatedUser()
-
-  const { error: upErr } = await supabase
-    .from('pedidos')
-    .update({ status: 'entregue', entregue_at: new Date().toISOString() })
-    .eq('id', id)
-  if (upErr) throw new Error(upErr.message)
-
-  for (const item of itens) {
-    const faca = facaMap.get(item.faca_id)!
-
-    const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-      tipo: 'saida_venda',
-      faca_id: item.faca_id,
-      pedido_id: id,
-      quantidade: item.quantidade,
-      usuario_id: user?.id ?? null,
-    })
-    if (movErr) throw new Error(`Erro ao registrar movimentação para ${faca.nome}: ${movErr.message}`)
-
-    const { error: estoqueErr } = await supabase
-      .from('facas')
-      .update({ estoque_atual: faca.estoque_atual - item.quantidade })
-      .eq('id', item.faca_id)
-    if (estoqueErr) throw new Error(`Erro ao atualizar estoque de ${faca.nome}: ${estoqueErr.message}`)
-  }
-
-  // Não engolir o erro: falhas na análise de reposição estavam silenciando
-  // problemas reais de RLS/schema e a fila simplesmente nunca aparecia.
-  const resultado = await analisarReposicaoParaPedido(supabase, id)
-  console.log(`[fila_reposicao] pedido=${id} criouFila=${resultado.criouFila} itens=${resultado.quantidadeItens}`)
 }
 
 export async function marcarEntregue(id: string) {
   await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('*, itens:pedido_itens(*)')
-    .eq('id', id)
-    .single()
+  const pedido = await prisma.pedido.findUnique({
+    where: { id },
+    select: {
+      status: true,
+      itens: { select: { facaId: true, quantidade: true } },
+    },
+  })
 
-  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
+  if (!pedido) throw new Error('Venda não encontrada.')
   if (normalizeStatusPedido(String(pedido.status)) !== 'em_producao') {
     throw new Error('A venda precisa estar "Em Produção" para ser entregue.')
   }
 
-  const itens = pedido.itens as { faca_id: string; quantidade: number }[]
-  await executarEntregaPedido(supabase, id, itens)
-
+  await executarEntregaPedido(
+    id,
+    (pedido.itens ?? []).map((item) => ({ faca_id: item.facaId, quantidade: item.quantidade })),
+  )
 }
 
-/**
- * Marca/desmarca o recebimento da venda. Só faz sentido para vendas que NÃO
- * são no boleto — nessas o recebimento é controlado pelas parcelas pagas.
- */
 export async function definirPagoVenda(id: string, pago: boolean) {
   await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('forma_pagamento')
-    .eq('id', id)
-    .single()
-  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
-  if (pedido.forma_pagamento === 'boleto') {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id },
+    select: { formaPagamento: true },
+  })
+
+  if (!pedido) throw new Error('Venda não encontrada.')
+  if (pedido.formaPagamento === 'boleto') {
     throw new Error('Vendas no boleto têm o recebimento controlado pelas parcelas.')
   }
-  if (pago && !pedido.forma_pagamento) {
+  if (pago && !pedido.formaPagamento) {
     throw new Error('Selecione a forma de pagamento antes de marcar a venda como paga.')
   }
 
-  const { error } = await supabase
-    .from('pedidos')
-    .update({ pago })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.pedido.update({
+    where: { id },
+    data: { pago },
+  })
 }
 
 export async function deletarVenda(id: string) {
   await assertPermissao('vendas', 'deletar')
-  const supabase = await createClient()
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('status, codigo')
-    .eq('id', id)
-    .single()
-  if (pedidoErr || !pedido) throw new Error('Venda não encontrada.')
+  const pedido = await prisma.pedido.findUnique({
+    where: { id },
+    select: { status: true, codigo: true },
+  })
+  if (!pedido) throw new Error('Venda não encontrada.')
 
   const statusAtual = normalizeStatusPedido(String(pedido.status))
   const codigo = String(pedido.codigo ?? id)
 
-  // 1) Bloqueia se existirem parcelas de boleto já recebidas — apagar a venda
-  // sumiria com um recebimento real. Estorne primeiro pela tela de boletos.
-  const { data: boletosVinc } = await supabase
-    .from('boletos')
-    .select('id, parcelas:boleto_parcelas(id, pago_em)')
-    .eq('pedido_id', id)
+  const boletos = await prisma.boleto.findMany({
+    where: { pedidoId: id },
+    select: {
+      id: true,
+      parcelas: {
+        select: { id: true, pagoEm: true },
+      },
+    },
+  })
 
-  const boletos = (boletosVinc ?? []) as { id: string; parcelas: { id: string; pago_em: string | null }[] }[]
-  const temParcelaPaga = boletos.some((b) => (b.parcelas ?? []).some((p) => p.pago_em))
+  const temParcelaPaga = boletos.some((boleto) => boleto.parcelas.some((parcela) => !!parcela.pagoEm))
   if (temParcelaPaga) {
-    throw new Error(
-      'Esta venda tem parcelas de boleto já recebidas. Estorne os recebimentos antes de excluir.',
-    )
+    throw new Error('Esta venda tem parcelas de boleto já recebidas. Estorne os recebimentos antes de excluir.')
   }
 
-  // 2) Se a venda já estava entregue, devolve o estoque das facas e registra
-  // uma movimentação de ajuste para manter o histórico antes de remover o pedido.
-  if (statusAtual === 'entregue') {
-    const { data: itens, error: itensErr } = await supabase
-      .from('pedido_itens')
-      .select('faca_id, quantidade')
-      .eq('pedido_id', id)
-    if (itensErr) throw new Error(itensErr.message)
+  const user = await getAuthenticatedUser()
 
-    const facaIds = [...new Set((itens ?? []).map((i) => i.faca_id))]
-    if (facaIds.length > 0) {
-      const { data: facas } = await supabase
-        .from('facas')
-        .select('id, nome, estoque_atual')
-        .in('id', facaIds)
-      const facaMap = new Map((facas ?? []).map((f) => [f.id, f]))
+  await prisma.$transaction(async (tx) => {
+    if (statusAtual === 'entregue') {
+      const itens = await tx.pedidoItem.findMany({
+        where: { pedidoId: id },
+        select: { facaId: true, quantidade: true },
+      })
+      const facas = await tx.faca.findMany({
+        where: { id: { in: [...new Set(itens.map((item) => item.facaId))] } },
+        select: { id: true, nome: true, estoqueAtual: true },
+      })
+      const facaMap = new Map(facas.map((f) => [f.id, f]))
 
-      const user = await getAuthenticatedUser()
-
-      for (const item of itens ?? []) {
-        const faca = facaMap.get(item.faca_id)
+      for (const item of itens) {
+        const faca = facaMap.get(item.facaId)
         if (!faca) continue
-        const novoEstoque = Number(faca.estoque_atual) + Number(item.quantidade)
 
-        const { error: estoqueErr } = await supabase
-          .from('facas')
-          .update({ estoque_atual: novoEstoque })
-          .eq('id', item.faca_id)
-        if (estoqueErr) throw new Error(`Erro ao devolver estoque de ${faca.nome}: ${estoqueErr.message}`)
-        faca.estoque_atual = novoEstoque
-
-        const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-          tipo: 'ajuste',
-          faca_id: item.faca_id,
-          quantidade: item.quantidade,
-          observacao: `Devolução por exclusão da venda ${codigo}`,
-          usuario_id: user?.id ?? null,
+        const novoEstoque = Number(faca.estoqueAtual) + Number(item.quantidade)
+        await tx.faca.update({
+          where: { id: item.facaId },
+          data: { estoqueAtual: novoEstoque },
         })
-        if (movErr) throw new Error(`Erro ao registrar devolução para ${faca.nome}: ${movErr.message}`)
+        await tx.movimentacaoEstoque.create({
+          data: {
+            tipo: 'ajuste',
+            facaId: item.facaId,
+            quantidade: item.quantidade,
+            observacao: `Devolução por exclusão da venda ${codigo}`,
+            usuarioId: user?.id ?? null,
+          },
+        })
+        faca.estoqueAtual = novoEstoque
       }
     }
-  }
 
-  // 3) Remove boletos vinculados (sem parcelas pagas). O cascade cuida das parcelas.
-  for (const b of boletos) {
-    const { error: delBolErr } = await supabase.from('boletos').delete().eq('id', b.id)
-    if (delBolErr) throw new Error(`Erro ao remover boleto vinculado: ${delBolErr.message}`)
-  }
+    if (boletos.length > 0) {
+      await tx.boleto.deleteMany({
+        where: { id: { in: boletos.map((boleto) => boleto.id) } },
+      })
+    }
 
-  // 4) Apaga o pedido. Cascades: pedido_itens, fila_reposicao.
-  // SET NULL: movimentacoes_estoque.pedido_id, orcamentos.convertido_pedido_id
-  // (orçamento volta a ficar "disponível" automaticamente).
-  const { error } = await supabase.from('pedidos').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+    await tx.pedido.delete({ where: { id } })
+  })
 }

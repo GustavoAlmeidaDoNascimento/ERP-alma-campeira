@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useMemo } from 'react'
 import { BadgeEstoque } from '@/components/ui/badge-estoque'
@@ -11,7 +11,7 @@ import { statusEstoqueConsumivel } from '@/types'
 import type { Consumivel, Fornecedor, CategoriaConsumivelDB } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useConsumiveis, useFornecedores, useCategoriasConsumivel } from '@/lib/query/hooks'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -65,7 +65,7 @@ export function ConsumivelClient({
       if (!c.foto_url) continue
       map.set(
         c.id,
-        getOptimizedSupabaseImageUrl(c.foto_url, {
+        getOptimizedImageUrl(c.foto_url, {
           width: 64,
           height: 64,
           quality: 65,
@@ -87,7 +87,7 @@ export function ConsumivelClient({
 
   function abrirFotoLightbox(c: Consumivel, thumbFallback: string) {
     if (!c.foto_url) return
-    const srcGrande = getOptimizedSupabaseImageUrl(c.foto_url, {
+    const srcGrande = getOptimizedImageUrl(c.foto_url, {
       width: 520,
       height: 520,
       quality: 80,
@@ -123,7 +123,7 @@ export function ConsumivelClient({
       setMovModal(null)
       refreshActiveTab()
     } catch (e: unknown) {
-      setMovErro(e instanceof Error ? e.message : 'Erro ao registrar movimentação.')
+      setMovErro(e instanceof Error ? e.message : 'Erro ao registrar movimentaÃ§Ã£o.')
     } finally {
       setMovLoading(false)
     }
@@ -146,10 +146,10 @@ export function ConsumivelClient({
 
   return (
     <>
-      {/* Header da página */}
+      {/* Header da pÃ¡gina */}
       <div className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid var(--ac-border)' }}>
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Consumíveis</h2>
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>ConsumÃ­veis</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
             {consumiveis.length} {consumiveis.length === 1 ? 'item cadastrado' : 'itens cadastrados'}
           </p>
@@ -160,7 +160,7 @@ export function ConsumivelClient({
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Novo consumível
+            Novo consumÃ­vel
           </Button>
         )}
       </div>
@@ -178,7 +178,7 @@ export function ConsumivelClient({
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome, código, categoria ou fornecedor..."
+            placeholder="Buscar por nome, cÃ³digo, categoria ou fornecedor..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -206,12 +206,12 @@ export function ConsumivelClient({
             <thead>
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)', width: 80 }}>Foto</th>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CÃ³digo</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                 <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Fornecedor</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço Custo</th>
-                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / Mín.</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>PreÃ§o Custo</th>
+                <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Estoque / MÃ­n.</th>
                 <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
@@ -220,7 +220,7 @@ export function ConsumivelClient({
               {filtrados.length === 0 && (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-sm" style={{ color: 'var(--ac-muted)' }}>
-                    {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum consumível cadastrado ainda.'}
+                    {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum consumÃ­vel cadastrado ainda.'}
                   </td>
                 </tr>
               )}
@@ -306,7 +306,7 @@ export function ConsumivelClient({
                       {c.categoria}
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
-                      {c.fornecedor?.nome ?? '—'}
+                      {c.fornecedor?.nome ?? 'â€”'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
                       {c.preco_custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -432,8 +432,8 @@ export function ConsumivelClient({
         title={
           movModal
             ? movModal.tipo === 'entrada'
-              ? `Entrada de estoque — ${movModal.item.codigo}`
-              : `Baixa — ${movModal.item.codigo}`
+              ? `Entrada de estoque â€” ${movModal.item.codigo}`
+              : `Baixa â€” ${movModal.item.codigo}`
             : ''
         }
         width="440px"
@@ -445,13 +445,13 @@ export function ConsumivelClient({
                 <>
                   Informe a quantidade recebida de{' '}
                   <strong style={{ color: 'var(--ac-text)' }}>{movModal.item.nome}</strong>.
-                  O estoque será atualizado e o registro entra no histórico de movimentações.
+                  O estoque serÃ¡ atualizado e o registro entra no histÃ³rico de movimentaÃ§Ãµes.
                 </>
               ) : (
                 <>
                   Registre a quantidade retirada de{' '}
                   <strong style={{ color: 'var(--ac-text)' }}>{movModal.item.nome}</strong>.
-                  Não é permitido baixar mais do que o estoque atual.
+                  NÃ£o Ã© permitido baixar mais do que o estoque atual.
                 </>
               )}
             </p>
@@ -466,7 +466,7 @@ export function ConsumivelClient({
               </strong>
               {movQtdNum > 0 && (
                 <>
-                  <span style={{ color: 'var(--ac-muted)' }}>→</span>
+                  <span style={{ color: 'var(--ac-muted)' }}>â†’</span>
                   <strong
                     style={{
                       color:
@@ -502,7 +502,7 @@ export function ConsumivelClient({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-                Observação (opcional)
+                ObservaÃ§Ã£o (opcional)
               </label>
               <input
                 type="text"
@@ -514,7 +514,7 @@ export function ConsumivelClient({
                   border: '1px solid var(--ac-border)',
                   color: 'var(--ac-text)',
                 }}
-                placeholder="Ex.: Uso no escritório, reposição..."
+                placeholder="Ex.: Uso no escritÃ³rio, reposiÃ§Ã£o..."
               />
             </div>
 
@@ -541,12 +541,12 @@ export function ConsumivelClient({
         )}
       </Modal>
 
-      {/* Modal de confirmação de delete */}
-      <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir consumível">
+      {/* Modal de confirmaÃ§Ã£o de delete */}
+      <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir consumÃ­vel">
         <div className="flex flex-col gap-4">
           <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
             Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>?
-            {' '}Esta ação não pode ser desfeita.
+            {' '}Esta aÃ§Ã£o nÃ£o pode ser desfeita.
           </p>
           {erroDelete && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
@@ -569,7 +569,7 @@ export function ConsumivelClient({
           setFotoLightboxSrc('')
           setFotoLightboxAlt('')
         }}
-        title={`Foto — ${fotoLightboxAlt}`}
+        title={`Foto â€” ${fotoLightboxAlt}`}
         width="520px"
       >
         <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
@@ -583,3 +583,4 @@ export function ConsumivelClient({
     </>
   )
 }
+

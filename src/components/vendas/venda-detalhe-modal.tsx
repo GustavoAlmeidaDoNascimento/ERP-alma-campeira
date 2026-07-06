@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Modal } from '@/components/ui/modal'
@@ -9,7 +9,7 @@ import type { Pedido, PedidoClienteJoin, StatusPedido } from '@/types'
 
 const STATUS_OPTIONS: StatusPedido[] = ['em_espera', 'em_producao', 'entregue']
 import { abrirImpressaoPedido, abrirImpressaoVendaSemValor } from '@/components/vendas/venda-impressao'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 import { formatarDocumento } from '@/lib/br/documento'
 
 function fmtDataHora(iso: string) {
@@ -40,7 +40,7 @@ function clienteTemContatoOuEndereco(c: PedidoClienteJoin) {
   )
 }
 
-/** Endereço formatado ou null quando não há nada a exibir */
+/** EndereÃ§o formatado ou null quando nÃ£o hÃ¡ nada a exibir */
 function textoEnderecoCliente(c: PedidoClienteJoin): string | null {
   const cep = fmtCep(c.cep)
   const rua = [c.logradouro?.trim(), c.numero?.trim()].filter(Boolean).join(', ')
@@ -51,8 +51,8 @@ function textoEnderecoCliente(c: PedidoClienteJoin): string | null {
       ? `${c.cidade}/${c.estado}`
       : c.cidade || c.estado || ''
 
-  const line1 = [cep, rua].filter(Boolean).join(' · ')
-  const line2 = [comp, bai].filter(Boolean).join(' · ')
+  const line1 = [cep, rua].filter(Boolean).join(' Â· ')
+  const line2 = [comp, bai].filter(Boolean).join(' Â· ')
   const blocos = [line1, line2, cidadeUf.trim()].filter((s) => s.length > 0)
   if (blocos.length === 0) return null
   return blocos.join('\n')
@@ -143,10 +143,10 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
   async function handleAlterarStatus(novoStatus: StatusPedido) {
     if (!pedido || novoStatus === pedido.status) return
     if (novoStatus === 'entregue') {
-      const ok = window.confirm('Marcar como entregue dará baixa no estoque das facas. Confirmar?')
+      const ok = window.confirm('Marcar como entregue darÃ¡ baixa no estoque das facas. Confirmar?')
       if (!ok) return
     } else if (pedido.status === 'entregue') {
-      const ok = window.confirm('Voltar de Entregue irá reverter a baixa de estoque (criando movimentações de ajuste). Confirmar?')
+      const ok = window.confirm('Voltar de Entregue irÃ¡ reverter a baixa de estoque (criando movimentaÃ§Ãµes de ajuste). Confirmar?')
       if (!ok) return
     }
     setErro('')
@@ -174,7 +174,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     <Modal
       open={!!pedido}
       onClose={onClose}
-      title={`Venda ${pedido.sequencial != null ? `#${pedido.sequencial} · ` : ''}${pedido.codigo}`}
+      title={`Venda ${pedido.sequencial != null ? `#${pedido.sequencial} Â· ` : ''}${pedido.codigo}`}
       width="820px"
     >
       <div className="flex flex-col gap-5">
@@ -207,7 +207,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
               <p className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>
                 {formatarDocumento(pedido.cliente.tipo_documento === 'cpf' ? 'cpf' : 'cnpj', pedido.cliente.documento)}
                 {pedido.cliente.cidade && pedido.cliente.estado
-                  ? ` · ${pedido.cliente.cidade}/${pedido.cliente.estado}`
+                  ? ` Â· ${pedido.cliente.cidade}/${pedido.cliente.estado}`
                   : ''}
               </p>
             ) : pedido.cliente?.cidade && pedido.cliente?.estado ? (
@@ -217,7 +217,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             ) : null}
             {pedido.cliente?.razao_social?.trim() ? (
               <p className="text-xs mt-1" style={{ color: 'var(--ac-muted)' }}>
-                Razão social:{' '}
+                RazÃ£o social:{' '}
                 <span style={{ color: 'var(--ac-text)' }}>{pedido.cliente.razao_social}</span>
               </p>
             ) : null}
@@ -251,12 +251,12 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             Cadastro no sistema
           </p>
           <DetailMeta
-            label="Vendedor responsável"
-            value={pedido.vendedor?.nome?.trim() || '—'}
+            label="Vendedor responsÃ¡vel"
+            value={pedido.vendedor?.nome?.trim() || 'â€”'}
           />
           <DetailMeta label="Registrado em" value={fmtDataHora(pedido.created_at)} />
           {pedido.natureza_operacao?.trim() ? (
-            <DetailMeta label="Natureza da operação" value={pedido.natureza_operacao.trim()} />
+            <DetailMeta label="Natureza da operaÃ§Ã£o" value={pedido.natureza_operacao.trim()} />
           ) : null}
           {pedido.forma_pagamento ? (
             <DetailMeta
@@ -266,7 +266,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
           ) : null}
         </div>
 
-        {/* Contato e endereço do cliente */}
+        {/* Contato e endereÃ§o do cliente */}
         {pedido.cliente && clienteTemContatoOuEndereco(pedido.cliente) && (
           <div
             className="rounded-xl px-4 py-3 flex flex-col gap-2 text-sm"
@@ -276,7 +276,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
             }}
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-              Contato e endereço
+              Contato e endereÃ§o
             </p>
             {pedido.cliente.telefone?.trim() ? (
               <DetailMeta label="Telefone" value={pedido.cliente.telefone.trim()} />
@@ -300,7 +300,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
               if (!t) return null
               return (
                 <DetailMeta
-                  label="Endereço"
+                  label="EndereÃ§o"
                   value={<span className="whitespace-pre-wrap">{t}</span>}
                 />
               )
@@ -315,7 +315,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
               <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                 <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Faca</th>
                 <th className="text-center px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd</th>
-                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>PreÃ§o</th>
                 <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Subtotal</th>
               </tr>
             </thead>
@@ -332,7 +332,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                   style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
                   <td className="px-4 py-2.5" style={{ color: 'var(--ac-text)' }}>
                     {(() => {
-                      const thumbUrl = getOptimizedSupabaseImageUrl(item.faca?.foto_url, {
+                      const thumbUrl = getOptimizedImageUrl(item.faca?.foto_url, {
                         width: 36,
                         height: 36,
                         quality: 60,
@@ -382,12 +382,12 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                               <span className="font-mono text-xs shrink-0" style={{ color: 'var(--ac-muted)' }}>
                                 {item.faca?.codigo}
                               </span>
-                              <span className="text-sm">{item.faca?.nome ?? '—'}</span>
+                              <span className="text-sm">{item.faca?.nome ?? 'â€”'}</span>
                             </div>
                             {(item.ncm?.trim() || item.cfop?.trim()) ? (
                               <div className="text-[11px] font-mono" style={{ color: 'var(--ac-muted)' }}>
                                 {[item.ncm?.trim() ? `NCM ${item.ncm.trim()}` : null,
-                                  item.cfop?.trim() ? `CFOP ${item.cfop.trim()}` : null].filter(Boolean).join(' · ')}
+                                  item.cfop?.trim() ? `CFOP ${item.cfop.trim()}` : null].filter(Boolean).join(' Â· ')}
                               </div>
                             ) : null}
                           </div>
@@ -425,7 +425,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                       Desconto no total
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: '#b45309' }}>
-                      −{descontoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      âˆ’{descontoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                   </tr>
                 )}
@@ -439,7 +439,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
           <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erro}</p>
         )}
 
-        {/* Botão Imprimir (dropdown) — reutilizado em ambos os modos */}
+        {/* BotÃ£o Imprimir (dropdown) â€” reutilizado em ambos os modos */}
         {(() => {
           const pagoToggle = pedido.forma_pagamento && pedido.forma_pagamento !== 'boleto' ? (
             perm.editar ? (
@@ -484,7 +484,7 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
                 aria-haspopup="menu"
                 aria-expanded={imprimirOpen}
               >
-                Imprimir ▾
+                Imprimir â–¾
               </Button>
               {imprimirOpen && (
                 <div
@@ -566,3 +566,4 @@ export function VendaDetalheModal({ pedido, onClose, onStatusChange, perm }: Pro
     </Modal>
   )
 }
+

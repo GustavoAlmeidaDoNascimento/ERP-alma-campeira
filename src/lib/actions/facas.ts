@@ -1,397 +1,390 @@
-'use server'
+"use server";
 
-import { createClient } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
-import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, MaterialInsuficiente } from '@/types'
-import { gerarCodigoForte } from '@/lib/utils/codigo'
-import { withTiming } from '@/lib/perf/timing'
-import { fetchFacasComCustoList } from '@/lib/cache/list-data'
-import { revalidateTag } from 'next/cache'
+import { Prisma } from "@prisma/client";
+import { assertPermissao, requireAuthenticatedUserId } from "@/lib/auth";
+import type {
+  Faca,
+  FacaMateriaPrima,
+  MaterialInsuficiente,
+  MateriaPrima,
+  MovimentacaoEstoque,
+  PedidoItemComPedido,
+  StatusPedido,
+} from "@/types";
+import { gerarCodigoForte } from "@/lib/utils/codigo";
+import { withTiming } from "@/lib/perf/timing";
+import { fetchFacasComCustoList } from "@/lib/cache/list-data";
+import { revalidateTag } from "next/cache";
+import { prisma } from "@/lib/prisma";
 
 async function revalidateFacasLists() {
   try {
-    const userId = await requireAuthenticatedUserId()
-    revalidateTag(`list-facas-${userId}`, 'max')
+    const userId = await requireAuthenticatedUserId();
+    revalidateTag(`list-facas-${userId}`, "max");
+    revalidateTag(`list-materias-primas-${userId}`, "max");
   } catch {}
 }
 
-export async function getFacas(limit = 80, options?: { comCusto?: boolean }): Promise<Faca[]> {
-  const comCusto = options?.comCusto ?? true
-  return withTiming(`getFacas${comCusto ? '' : '(sem custo)'}`, async () => {
-    const userId = await requireAuthenticatedUserId()
-    await assertPermissao('facas', 'ver')
-    if (comCusto) {
-      const rows = await fetchFacasComCustoList(userId)
-      return rows.slice(0, limit)
-    }
-    const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('facas')
-      .select('*')
-      .order('codigo')
-      .limit(limit)
-    if (error) throw new Error(error.message)
-    const facas = (data ?? []) as Faca[]
-    return facas.map((f) => ({ ...f, preco_custo: 0 }))
-  })
+type FacaRow = {
+  id: string;
+  codigo: string;
+  nome: string;
+  categoria: string;
+  fotoUrl: string | null;
+  taxaProducao: Prisma.Decimal | number | string | null;
+  taxaVenda: Prisma.Decimal | number | string | null;
+  precoVenda: Prisma.Decimal | number | string | null;
+  estoqueAtual: number | string | null;
+  estoqueMinimo: number | string | null;
+  ncm: string | null;
+  cfopPadrao: string | null;
+  cstIcms: string | null;
+  cstPis: string | null;
+  cstCofins: string | null;
+  origem: number | null;
+  unidade: string | null;
+  eanGtin: string | null;
+  createdAt: Date | string;
+};
+
+type MovimentacaoRow = {
+  id: string;
+  tipo: string;
+  materia_prima_id: string | null;
+  faca_id: string | null;
+  consumivel_id: string | null;
+  pedido_id: string | null;
+  quantidade: Prisma.Decimal | number | string;
+  observacao: string | null;
+  usuario_id: string | null;
+  created_at: Date | string;
+};
+
+function numberFrom(value: Prisma.Decimal | number | string | bigint | null | undefined): number {
+  if (value == null) return 0;
+  if (typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+    return value.toNumber();
+  }
+  return Number(value) || 0;
 }
 
-export async function gerarCodigoFaca(): Promise<string> {
-  return gerarCodigoForte('FK')
+function decimal(value: number): Prisma.Decimal {
+  return new Prisma.Decimal(Number.isFinite(value) ? value : 0);
 }
 
-type FacaInput = {
-  nome: string
-  categoria: string
-  preco_venda: number
-  estoque_atual: number
-  estoque_minimo: number
-}
-
-export async function criarFaca(input: FacaInput) {
-  await assertPermissao('facas', 'criar')
-  const supabase = await createClient()
-  const codigo = await gerarCodigoFaca()
-
-  const { error } = await supabase.from('facas').insert({
-    codigo,
-    nome: input.nome.trim(),
-    categoria: input.categoria,
-    taxa_producao: 0,
-    taxa_venda: 0,
-    preco_venda: input.preco_venda,
-    estoque_atual: input.estoque_atual,
-    estoque_minimo: input.estoque_minimo,
-  })
-
-  if (error) throw new Error(error.message)
-  await revalidateFacasLists()
-}
-
-export async function atualizarFaca(id: string, input: FacaInput) {
-  await assertPermissao('facas', 'editar')
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('facas')
-    .update({
-      nome: input.nome.trim(),
-      categoria: input.categoria,
-      taxa_producao: 0,
-      taxa_venda: 0,
-      preco_venda: input.preco_venda,
-      estoque_atual: input.estoque_atual,
-      estoque_minimo: input.estoque_minimo,
-    })
-    .eq('id', id)
-
-  if (error) throw new Error(error.message)
-  await revalidateFacasLists()
-}
-
-export type DeletarFacaModo = 'desmontar' | 'apagar_materias_primas'
-
-const FOTO_BUCKET_FACAS = 'facas-fotos'
-
-function extFromFile(file: { type?: string; name?: string }): string {
-  const mime = file.type ?? ''
-  const n = file.name ?? ''
-  if (mime.includes('png')) return 'png'
-  if (mime.includes('webp')) return 'webp'
-  if (mime.includes('jpeg') || mime.includes('jpg') || mime.includes('pjpeg')) return 'jpg'
-  const m = n.match(/\.([a-zA-Z0-9]+)$/)
-  return (m?.[1]?.toLowerCase() ?? 'jpg') === 'jpeg' ? 'jpg' : (m?.[1]?.toLowerCase() ?? 'jpg')
-}
-
-function isFileLike(v: unknown): v is Blob & { type?: string; name?: string } {
-  return typeof v === 'object' && v !== null && typeof (v as Blob).arrayBuffer === 'function'
-}
-
-export async function salvarFacaComFoto(formData: FormData) {
-  const id = formData.get('id')
-  const nome = String(formData.get('nome') ?? '').trim()
-  const categoria = String(formData.get('categoria') ?? '').trim()
-  const estoque_atual = Number(formData.get('estoque_atual'))
-  const estoque_minimo = Number(formData.get('estoque_minimo'))
-  const foto = formData.get('foto')
-  const bomRaw = formData.get('bom')
-
-  // Campos fiscais (preparação NF-e — todos opcionais).
-  const fiscaisRaw = {
-    ncm: String(formData.get('ncm') ?? '').replace(/\D/g, '').trim(),
-    cfop_padrao: String(formData.get('cfop_padrao') ?? '').replace(/\D/g, '').trim(),
-    cst_icms: String(formData.get('cst_icms') ?? '').trim(),
-    cst_pis: String(formData.get('cst_pis') ?? '').trim(),
-    cst_cofins: String(formData.get('cst_cofins') ?? '').trim(),
-    origem: String(formData.get('origem') ?? '').trim(),
-    unidade: String(formData.get('unidade') ?? '').trim().toUpperCase(),
-    ean_gtin: String(formData.get('ean_gtin') ?? '').replace(/\D/g, '').trim(),
-  }
-  if (fiscaisRaw.ncm && fiscaisRaw.ncm.length !== 8) throw new Error('NCM deve ter 8 dígitos.')
-  if (fiscaisRaw.cfop_padrao && fiscaisRaw.cfop_padrao.length !== 4) throw new Error('CFOP deve ter 4 dígitos.')
-  const origemNum = fiscaisRaw.origem === '' ? null : Number(fiscaisRaw.origem)
-  if (origemNum != null && (!Number.isFinite(origemNum) || origemNum < 0 || origemNum > 8)) {
-    throw new Error('Origem da mercadoria inválida.')
-  }
-  const dadosFiscais = {
-    ncm: fiscaisRaw.ncm || null,
-    cfop_padrao: fiscaisRaw.cfop_padrao || null,
-    cst_icms: fiscaisRaw.cst_icms || null,
-    cst_pis: fiscaisRaw.cst_pis || null,
-    cst_cofins: fiscaisRaw.cst_cofins || null,
-    origem: origemNum,
-    unidade: fiscaisRaw.unidade || null,
-    ean_gtin: fiscaisRaw.ean_gtin || null,
-  }
-
-  if (!nome) throw new Error('Nome é obrigatório.')
-  if (!categoria) throw new Error('Categoria é obrigatória.')
-  if (!Number.isFinite(estoque_atual)) throw new Error('Estoque atual inválido.')
-  if (!Number.isFinite(estoque_minimo)) throw new Error('Estoque mínimo inválido.')
-
-  // Parse e valida BOM
-  let bomItens: { materia_prima_id: string; quantidade: number }[] = []
-  if (typeof bomRaw === 'string' && bomRaw.length > 0) {
-    try { bomItens = JSON.parse(bomRaw) } catch { throw new Error('BOM inválido.') }
-  }
-  if (bomItens.length === 0) throw new Error('Adicione pelo menos 1 matéria-prima.')
-  for (const item of bomItens) {
-    if (!item.materia_prima_id || !item.quantidade || item.quantidade <= 0) {
-      throw new Error('Cada matéria-prima precisa de uma quantidade válida (> 0).')
-    }
-  }
-
-  const supabase = await createClient()
-  const isEdit = typeof id === 'string' && id.length > 0
-
-  await assertPermissao('facas', isEdit ? 'editar' : 'criar')
-
-  // Calcular custo BOM para auto-calcular preço de venda
-  const mpIds = bomItens.map((i) => i.materia_prima_id)
-  const { data: mpsData } = await supabase
-    .from('materias_primas')
-    .select('id, preco_custo')
-    .in('id', mpIds)
-  const precoCustoById = new Map((mpsData ?? []).map((m: { id: string; preco_custo: number }) => [m.id, Number(m.preco_custo ?? 0)]))
-  const custoBom = bomItens.reduce((acc, item) => acc + (precoCustoById.get(item.materia_prima_id) ?? 0) * item.quantidade, 0)
-
-  const { data: configData } = await supabase
-    .from('app_config')
-    .select('taxa_producao_lucro, margem_lucro')
-    .eq('id', 1)
-    .maybeSingle()
-  const taxas = {
-    taxa_producao: Number(configData?.taxa_producao_lucro ?? 0),
-    margem_lucro: Number(configData?.margem_lucro ?? 0),
-  }
-  const custoProd = custoBom + taxas.taxa_producao
-  const preco_venda = custoProd * (1 + taxas.margem_lucro / 100)
-
-  let facaId: string
-
-  if (isEdit) {
-    facaId = id as string
-    const { error } = await supabase.from('facas').update({
-      nome,
-      categoria,
-      taxa_producao: 0,
-      taxa_venda: 0,
-      preco_venda,
-      estoque_atual,
-      estoque_minimo,
-      ...dadosFiscais,
-    }).eq('id', facaId)
-    if (error) throw new Error(error.message)
-  } else {
-    const codigo = await gerarCodigoFaca()
-    const { data, error } = await supabase
-      .from('facas')
-      .insert({
-        codigo,
-        nome,
-        categoria,
-        taxa_producao: 0,
-        taxa_venda: 0,
-        preco_venda,
-        estoque_atual,
-        estoque_minimo,
-        ...dadosFiscais,
-      })
-      .select('id')
-      .single()
-    if (error) throw new Error(error.message)
-    if (!data?.id) throw new Error('Falha ao criar faca.')
-    facaId = data.id
-  }
-
-  // Upload de foto (opcional)
-  if (foto && isFileLike(foto)) {
-    const admin = createAdminClient()
-
-    // Garante bucket público para download + compactador/transformações.
-    const { data: buckets, error: listErr } = await admin.storage.listBuckets()
-    if (listErr) throw new Error(listErr.message)
-
-    const exists = (buckets ?? []).some((b: { name: string }) => b.name === FOTO_BUCKET_FACAS)
-    if (!exists) {
-      const { error: createErr } = await admin.storage.createBucket(FOTO_BUCKET_FACAS, {
-        public: true,
-        allowedMimeTypes: ['image/*'],
-      })
-      if (createErr) throw new Error(createErr.message)
-    }
-
-    const fileExt = extFromFile(foto as unknown as { type?: string; name?: string })
-    const filePath = `${facaId}/foto.${fileExt}`
-
-    const { error: upErr } = await admin.storage
-      .from(FOTO_BUCKET_FACAS)
-      .upload(filePath, foto, {
-        upsert: true,
-        contentType: foto.type ?? 'image/jpeg',
-        cacheControl: '3600',
-      })
-    if (upErr) throw new Error(upErr.message)
-
-    const { data: pub } = admin.storage.from(FOTO_BUCKET_FACAS).getPublicUrl(filePath)
-    if (pub?.publicUrl) {
-      const { error: fotoUpdateErr } = await supabase
-        .from('facas')
-        .update({ foto_url: pub.publicUrl })
-        .eq('id', facaId)
-      if (fotoUpdateErr) throw new Error(fotoUpdateErr.message)
-    }
-  }
-
-  // Salvar BOM: deletar existentes e inserir novos
-  const { error: delBomErr } = await supabase
-    .from('faca_materias_primas')
-    .delete()
-    .eq('faca_id', facaId)
-  if (delBomErr) throw new Error(delBomErr.message)
-
-  const bomRows = bomItens.map((item) => ({
-    faca_id: facaId,
-    materia_prima_id: item.materia_prima_id,
-    quantidade: item.quantidade,
-  }))
-  const { error: insBomErr } = await supabase
-    .from('faca_materias_primas')
-    .insert(bomRows)
-  if (insBomErr) throw new Error(insBomErr.message)
-
-  await revalidateFacasLists()
+function isoFrom(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
 function round3(n: number) {
-  return Math.round(n * 1000) / 1000
+  return Math.round(n * 1000) / 1000;
 }
 
-export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar') {
-  await assertPermissao('facas', 'deletar')
-  const supabase = await createClient()
+function mapFacaRow(row: FacaRow, extra?: Partial<Faca>): Faca {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    nome: row.nome,
+    categoria: row.categoria,
+    foto_url: row.fotoUrl,
+    taxa_producao: numberFrom(row.taxaProducao),
+    taxa_venda: numberFrom(row.taxaVenda),
+    preco_venda: numberFrom(row.precoVenda),
+    estoque_atual: numberFrom(row.estoqueAtual),
+    estoque_minimo: numberFrom(row.estoqueMinimo),
+    ncm: row.ncm,
+    cfop_padrao: row.cfopPadrao,
+    cst_icms: row.cstIcms,
+    cst_pis: row.cstPis,
+    cst_cofins: row.cstCofins,
+    origem: row.origem,
+    unidade: row.unidade,
+    ean_gtin: row.eanGtin,
+    created_at: isoFrom(row.createdAt),
+    ...extra,
+  };
+}
 
-  if (modo === 'desmontar') {
-    const { data: faca, error: facaErr } = await supabase
-      .from('facas')
-      .select('id, codigo, estoque_atual')
-      .eq('id', id)
-      .single()
+function mapMateriaPrimaRow(row: {
+  id: string;
+  codigo: string;
+  nome: string;
+  precoCusto: Prisma.Decimal;
+  estoqueAtual: Prisma.Decimal;
+  estoqueMinimo: Prisma.Decimal;
+  fotoUrl: string | null;
+  fornecedorId: string | null;
+  createdAt: Date;
+}): MateriaPrima {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    nome: row.nome,
+    categoria: "",
+    fornecedor_id: row.fornecedorId,
+    foto_url: row.fotoUrl,
+    preco_custo: numberFrom(row.precoCusto),
+    estoque_atual: numberFrom(row.estoqueAtual),
+    estoque_minimo: numberFrom(row.estoqueMinimo),
+    created_at: row.createdAt.toISOString(),
+  };
+}
 
-    if (facaErr) throw new Error(facaErr.message)
-    if (!faca) throw new Error('Faca não encontrada.')
+function mapMovimentacaoRow(
+  row: MovimentacaoRow,
+  usuariosMap: Map<string, { id: string; nome: string }>,
+  materiaPrimaMap?: Map<string, Pick<MateriaPrima, "id" | "codigo" | "nome">>,
+): MovimentacaoEstoque {
+  return {
+    id: row.id,
+    tipo: row.tipo as MovimentacaoEstoque["tipo"],
+    materia_prima_id: row.materia_prima_id,
+    faca_id: row.faca_id,
+    consumivel_id: row.consumivel_id,
+    pedido_id: row.pedido_id,
+    quantidade: numberFrom(row.quantidade),
+    observacao: row.observacao,
+    usuario_id: row.usuario_id,
+    created_at: isoFrom(row.created_at),
+    materia_prima: row.materia_prima_id
+      ? (materiaPrimaMap?.get(row.materia_prima_id) ?? null)
+      : null,
+    faca: null,
+    consumivel: null,
+    usuario: row.usuario_id ? (usuariosMap.get(row.usuario_id) ?? null) : null,
+  };
+}
 
-    const estoqueFaca = Number(faca.estoque_atual) || 0
-    if (estoqueFaca > 0) {
-      const { data: boms, error: bomsErr } = await supabase
-        .from('faca_materias_primas')
-        .select('materia_prima_id, quantidade')
-        .eq('faca_id', id)
+async function getFacaRows(limit: number): Promise<FacaRow[]> {
+  return prisma.faca.findMany({
+    orderBy: { codigo: "asc" },
+    take: limit,
+    select: {
+      id: true,
+      codigo: true,
+      nome: true,
+      categoria: true,
+      fotoUrl: true,
+      taxaProducao: true,
+      taxaVenda: true,
+      precoVenda: true,
+      estoqueAtual: true,
+      estoqueMinimo: true,
+      ncm: true,
+      cfopPadrao: true,
+      cstIcms: true,
+      cstPis: true,
+      cstCofins: true,
+      origem: true,
+      unidade: true,
+      eanGtin: true,
+      createdAt: true,
+    },
+  });
+}
 
-      if (bomsErr) throw new Error(bomsErr.message)
+async function getFacaRowById(facaId: string): Promise<FacaRow | null> {
+  return prisma.faca.findUnique({
+    where: { id: facaId },
+    select: {
+      id: true,
+      codigo: true,
+      nome: true,
+      categoria: true,
+      fotoUrl: true,
+      taxaProducao: true,
+      taxaVenda: true,
+      precoVenda: true,
+      estoqueAtual: true,
+      estoqueMinimo: true,
+      ncm: true,
+      cfopPadrao: true,
+      cstIcms: true,
+      cstPis: true,
+      cstCofins: true,
+      origem: true,
+      unidade: true,
+      eanGtin: true,
+      createdAt: true,
+    },
+  });
+}
 
-      const mpIds = [...new Set((boms ?? []).map((b) => b.materia_prima_id))] as string[]
-      if (mpIds.length > 0) {
-        const { data: mps, error: mpsErr } = await supabase
-          .from('materias_primas')
-          .select('id, estoque_atual')
-          .in('id', mpIds)
+async function loadFacaBOM(facaId: string): Promise<FacaMateriaPrima[]> {
+  const rows = await prisma.facaMateriaPrima.findMany({
+    where: { facaId },
+    orderBy: { id: "asc" },
+    include: {
+      materiaPrima: {
+        select: {
+          id: true,
+          codigo: true,
+          nome: true,
+          precoCusto: true,
+          estoqueAtual: true,
+          estoqueMinimo: true,
+          fotoUrl: true,
+          fornecedorId: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
 
-        if (mpsErr) throw new Error(mpsErr.message)
+  return rows.map((row) => ({
+    id: row.id,
+    faca_id: row.facaId,
+    materia_prima_id: row.materiaPrimaId,
+    quantidade: numberFrom(row.quantidade),
+    materia_prima: mapMateriaPrimaRow(row.materiaPrima),
+  }));
+}
 
-        const mpMap = new Map<string, { estoque_atual: number }>()
-        for (const mp of mps ?? []) {
-          mpMap.set(mp.id, { estoque_atual: Number(mp.estoque_atual) || 0 })
-        }
+export async function getFacas(limit = 80, options?: { comCusto?: boolean }): Promise<Faca[]> {
+  const comCusto = options?.comCusto ?? true;
+  return withTiming(`getFacas${comCusto ? "" : "(sem custo)"}`, async () => {
+    await assertPermissao("facas", "ver");
+    if (comCusto) {
+      const userId = await requireAuthenticatedUserId();
+      const rows = await fetchFacasComCustoList(userId);
+      return rows.slice(0, limit);
+    }
+    const rows = await getFacaRows(limit);
+    return rows.map((row) => mapFacaRow(row, { preco_custo: 0 }));
+  });
+}
 
-        const userId = await requireAuthenticatedUserId()
+export async function gerarCodigoFaca(): Promise<string> {
+  return gerarCodigoForte("FK");
+}
 
-        for (const bom of (boms ?? [])) {
-          const mp = mpMap.get(bom.materia_prima_id)
-          if (!mp) continue
+type FacaInput = {
+  nome: string;
+  categoria: string;
+  preco_venda: number;
+  estoque_atual: number;
+  estoque_minimo: number;
+};
 
-          const quantidadePorFaca = Number(bom.quantidade) || 0
-          const delta = round3(estoqueFaca * quantidadePorFaca)
-          if (!delta) continue
+export async function criarFaca(input: FacaInput) {
+  await assertPermissao("facas", "criar");
+  const codigo = await gerarCodigoFaca();
 
-          const novoEstoque = round3(mp.estoque_atual + delta)
-          mp.estoque_atual = novoEstoque
+  await prisma.faca.create({
+    data: {
+      codigo,
+      nome: input.nome.trim(),
+      categoria: input.categoria,
+      taxaProducao: 0,
+      taxaVenda: 0,
+      precoVenda: input.preco_venda,
+      estoqueAtual: input.estoque_atual,
+      estoqueMinimo: input.estoque_minimo,
+    },
+  });
 
-          const { error: updErr } = await supabase
-            .from('materias_primas')
-            .update({ estoque_atual: novoEstoque })
-            .eq('id', bom.materia_prima_id)
-          if (updErr) throw new Error(updErr.message)
+  await revalidateFacasLists();
+}
 
-          // `movimentacoes_estoque.faca_id` restringe exclusões; mantemos `faca_id` como NULL.
-          const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-            tipo: 'ajuste',
-            materia_prima_id: bom.materia_prima_id,
-            quantidade: delta,
-            observacao: `Desmontar faca ${faca.codigo}`,
-            usuario_id: userId,
-          })
-          if (movErr) throw new Error(movErr.message)
+export async function atualizarFaca(id: string, input: FacaInput) {
+  await assertPermissao("facas", "editar");
+
+  await prisma.faca.updateMany({
+    where: { id },
+    data: {
+      nome: input.nome.trim(),
+      categoria: input.categoria,
+      taxaProducao: 0,
+      taxaVenda: 0,
+      precoVenda: input.preco_venda,
+      estoqueAtual: input.estoque_atual,
+      estoqueMinimo: input.estoque_minimo,
+    },
+  });
+
+  await revalidateFacasLists();
+}
+
+export type DeletarFacaModo = "desmontar" | "apagar_materias_primas";
+
+export async function deletarFaca(id: string, modo: DeletarFacaModo = "desmontar") {
+  await assertPermissao("facas", "deletar");
+
+  const faca = await getFacaRowById(id);
+  if (!faca) throw new Error("Faca não encontrada.");
+
+  await prisma.$transaction(async (tx) => {
+    const boms = await tx.facaMateriaPrima.findMany({
+      where: { facaId: id },
+      select: { materiaPrimaId: true, quantidade: true },
+    });
+
+    if (modo === "desmontar") {
+      const estoqueFaca = numberFrom(faca.estoqueAtual);
+      if (estoqueFaca > 0) {
+        const mpIds = [...new Set(boms.map((b) => b.materiaPrimaId))];
+        const mps = await tx.materiaPrima.findMany({
+          where: { id: { in: mpIds } },
+          select: { id: true, estoqueAtual: true },
+        });
+        const mpMap = new Map(
+          mps.map((mp) => [mp.id, { estoque_atual: numberFrom(mp.estoqueAtual) }]),
+        );
+        const userId = await requireAuthenticatedUserId();
+
+        for (const bom of boms) {
+          const mp = mpMap.get(bom.materiaPrimaId);
+          if (!mp) continue;
+
+          const quantidadePorFaca = numberFrom(bom.quantidade);
+          const delta = round3(estoqueFaca * quantidadePorFaca);
+          if (!delta) continue;
+
+          const novoEstoque = round3(mp.estoque_atual + delta);
+          mp.estoque_atual = novoEstoque;
+
+          await tx.materiaPrima.update({
+            where: { id: bom.materiaPrimaId },
+            data: { estoqueAtual: decimal(novoEstoque) },
+          });
+
+          await tx.movimentacaoEstoque.create({
+            data: {
+              tipo: "ajuste",
+              materiaPrimaId: bom.materiaPrimaId,
+              quantidade: delta,
+              observacao: `Desmontar faca ${faca.codigo}`,
+              usuarioId: userId,
+            },
+          });
         }
       }
     }
 
-    // Atualiza telas de matérias-primas após devolver o estoque.
-  }
+    if (modo === "apagar_materias_primas") {
+      const mpIds = [...new Set(boms.map((b) => b.materiaPrimaId))];
 
-  if (modo === 'apagar_materias_primas') {
-    const { data: boms, error: bomsErr } = await supabase
-      .from('faca_materias_primas')
-      .select('materia_prima_id')
-      .eq('faca_id', id)
+      await tx.faca.deleteMany({
+        where: { id },
+      });
 
-    if (bomsErr) throw new Error(bomsErr.message)
-    const mpIds = [...new Set((boms ?? []).map((b) => b.materia_prima_id))] as string[]
-
-    const { error: delFacaErr } = await supabase.from('facas').delete().eq('id', id)
-    if (delFacaErr) throw new Error(delFacaErr.message)
-
-    for (const mpId of mpIds) {
-      const { data: uso, error: usoErr } = await supabase
-        .from('faca_materias_primas')
-        .select('id')
-        .eq('materia_prima_id', mpId)
-        .limit(1)
-      if (usoErr) throw new Error(usoErr.message)
-
-      if (!uso || uso.length === 0) {
-        const { error: delMpErr } = await supabase.from('materias_primas').delete().eq('id', mpId)
-        if (delMpErr) throw new Error(delMpErr.message)
+      for (const mpId of mpIds) {
+        const uso = await tx.facaMateriaPrima.findFirst({
+          where: { materiaPrimaId: mpId },
+          select: { id: true },
+        });
+        if (!uso) {
+          await tx.materiaPrima.delete({ where: { id: mpId } });
+        }
       }
+    } else {
+      await tx.faca.deleteMany({
+        where: { id },
+      });
     }
+  });
 
-  } else {
-    const { error } = await supabase.from('facas').delete().eq('id', id)
-    if (error) throw new Error(error.message)
-  }
-
-  await revalidateFacasLists()
+  await revalidateFacasLists();
 }
 
 // ============================================================
@@ -399,107 +392,111 @@ export async function deletarFaca(id: string, modo: DeletarFacaModo = 'desmontar
 // ============================================================
 
 export async function getFacaBOM(facaId: string): Promise<FacaMateriaPrima[]> {
-  await assertPermissao('facas', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('faca_materias_primas')
-    .select('*, materia_prima:materias_primas(id, codigo, nome, preco_custo, estoque_atual, estoque_minimo, foto_url, fornecedor_id, created_at)')
-    .eq('faca_id', facaId)
-    .order('id')
-  if (error) throw new Error(error.message)
-  return (data ?? []) as FacaMateriaPrima[]
+  await assertPermissao("facas", "ver");
+  return loadFacaBOM(facaId);
 }
 
 export type FacaDetalheData = {
-  faca: Faca
-  bom: FacaMateriaPrima[]
-  vendas: PedidoItemComPedido[]
-  movimentacoes: MovimentacaoEstoque[]
-}
+  faca: Faca;
+  bom: FacaMateriaPrima[];
+  vendas: PedidoItemComPedido[];
+  movimentacoes: MovimentacaoEstoque[];
+};
 
 export async function getFacaDetalhe(facaId: string): Promise<FacaDetalheData> {
   return withTiming(`getFacaDetalhe(${facaId})`, async () => {
-  await assertPermissao('facas', 'ver')
-  const supabase = await createClient()
-  const admin = createAdminClient()
+    await assertPermissao("facas", "ver");
 
-  const [facaRes, bomRes, vendasRes, movRes, usuariosRes] = await Promise.all([
-    supabase.from('facas').select('*').eq('id', facaId).single(),
-    supabase
-      .from('faca_materias_primas')
-      .select('*, materia_prima:materias_primas(id, codigo, nome, preco_custo, estoque_atual, estoque_minimo, foto_url, fornecedor_id, created_at)')
-      .eq('faca_id', facaId)
-      .order('id'),
-    supabase
-      .from('pedido_itens')
-      .select('*, pedido:pedidos(id, codigo, status, data_pedido)')
-      .eq('faca_id', facaId)
-      .order('id', { ascending: false })
-      .limit(50),
-    // Não usa join para usuario_id -> usuarios_perfis para evitar falha quando
-    // a FK não estiver declarada no banco; enriquecemos manualmente abaixo.
-    admin
-      .from('movimentacoes_estoque')
-      .select('*, materia_prima:materias_primas(id, codigo, nome)')
-      .eq('faca_id', facaId)
-      .is('materia_prima_id', null)
-      .order('created_at', { ascending: false })
-      .limit(50),
-    supabase
-      .from('usuarios_perfis')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome'),
-  ])
+    const [faca, bom, vendasRows, movRows, usuariosRows] = await Promise.all([
+      getFacaRowById(facaId),
+      loadFacaBOM(facaId),
+      prisma.pedidoItem.findMany({
+        where: { facaId },
+        orderBy: { id: "desc" },
+        take: 50,
+        include: {
+          pedido: {
+            select: {
+              id: true,
+              codigo: true,
+              status: true,
+              dataPedido: true,
+            },
+          },
+        },
+      }),
+      prisma.movimentacaoEstoque
+        .findMany({
+          where: {
+            facaId,
+            materiaPrimaId: null,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+          select: {
+            id: true,
+            tipo: true,
+            materiaPrimaId: true,
+            facaId: true,
+            consumivelId: true,
+            pedidoId: true,
+            quantidade: true,
+            observacao: true,
+            usuarioId: true,
+            createdAt: true,
+          },
+        })
+        .then((rows) =>
+          rows.map((row) => ({
+            id: row.id,
+            tipo: row.tipo,
+            materia_prima_id: row.materiaPrimaId,
+            faca_id: row.facaId,
+            consumivel_id: row.consumivelId,
+            pedido_id: row.pedidoId,
+            quantidade: row.quantidade,
+            observacao: row.observacao,
+            usuario_id: row.usuarioId,
+            created_at: row.createdAt,
+          })),
+        ),
+      prisma.usuarioPerfil.findMany({
+        where: { ativo: true },
+        orderBy: { nome: "asc" },
+        select: { id: true, nome: true },
+      }),
+    ]);
 
-  if (facaRes.error) throw new Error(facaRes.error.message)
-  if (!facaRes.data) throw new Error('Faca não encontrada.')
-  if (movRes.error) throw new Error(`Erro ao buscar movimentações da faca: ${movRes.error.message}`)
+    if (!faca) throw new Error("Faca não encontrada.");
 
-  const usuariosMap = new Map((usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }]))
-  const movimentacoes = (movRes.data ?? []).map((mov: any) => ({
-    ...mov,
-    usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
-  })) as MovimentacaoEstoque[]
+    const usuariosMap = new Map(usuariosRows.map((u) => [u.id, { id: u.id, nome: u.nome }]));
+    const movimentacoes = movRows.map((row) => mapMovimentacaoRow(row, usuariosMap));
+    const vendas: PedidoItemComPedido[] = vendasRows.map((row) => ({
+      id: row.id,
+      pedido_id: row.pedidoId,
+      faca_id: row.facaId,
+      quantidade: row.quantidade,
+      preco_unitario: numberFrom(row.precoUnitario),
+      subtotal: numberFrom(row.subtotal),
+      ncm: row.ncm,
+      cfop: row.cfop,
+      pedido: row.pedido
+        ? {
+            id: row.pedido.id,
+            codigo: row.pedido.codigo,
+            status: row.pedido.status as StatusPedido,
+            data_pedido: row.pedido.dataPedido,
+          }
+        : null,
+    }));
 
-  return {
-    faca: facaRes.data as Faca,
-    bom: (bomRes.data ?? []) as FacaMateriaPrima[],
-    vendas: (vendasRes.data ?? []) as PedidoItemComPedido[],
-    movimentacoes,
-  }
-  })
-}
-
-async function calcularPrecoCustoPorFaca(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  facas: Faca[]
-): Promise<Map<string, number>> {
-  const facaIds = facas.map((f) => f.id)
-  if (facaIds.length === 0) return new Map()
-
-  const { data: boms, error } = await supabase
-    .from('faca_materias_primas')
-    .select('faca_id, quantidade, materia_prima:materias_primas(preco_custo)')
-    .in('faca_id', facaIds)
-
-  if (error) throw new Error(error.message)
-
-  const baseByFaca = new Map<string, number>()
-  for (const bom of boms ?? []) {
-    const mp = (Array.isArray(bom.materia_prima) ? bom.materia_prima[0] : bom.materia_prima) as { preco_custo: number } | null
-    const custoMp = Number(mp?.preco_custo ?? 0)
-    const qtd = Number(bom.quantidade ?? 0)
-    const atual = baseByFaca.get(bom.faca_id) ?? 0
-    baseByFaca.set(bom.faca_id, atual + (custoMp * qtd))
-  }
-
-  const custoByFaca = new Map<string, number>()
-  for (const faca of facas) {
-    const base = baseByFaca.get(faca.id) ?? 0
-    custoByFaca.set(faca.id, Math.round(base * 100) / 100)
-  }
-  return custoByFaca
+    return {
+      faca: mapFacaRow(faca),
+      bom,
+      vendas,
+      movimentacoes,
+    };
+  });
 }
 
 // ============================================================
@@ -509,48 +506,50 @@ async function calcularPrecoCustoPorFaca(
 export async function entradaEstoqueFaca(
   facaId: string,
   quantidadeProduzida: number,
-  registradoPorId?: string | null
-): Promise<{ materiaisConsumidos: { codigo: string; nome: string; consumido: number }[]; movimentacoesCriadas: MovimentacaoEstoque[] }> {
-  await assertPermissao('facas', 'editar')
+  registradoPorId?: string | null,
+): Promise<{
+  materiaisConsumidos: { codigo: string; nome: string; consumido: number }[];
+  movimentacoesCriadas: MovimentacaoEstoque[];
+}> {
+  await assertPermissao("facas", "editar");
 
   if (!Number.isFinite(quantidadeProduzida) || quantidadeProduzida <= 0) {
-    throw new Error('Quantidade deve ser maior que zero.')
+    throw new Error("Quantidade deve ser maior que zero.");
   }
 
-  const supabase = await createClient()
+  const faca = await getFacaRowById(facaId);
+  if (!faca) throw new Error("Faca não encontrada.");
 
-  const { data: faca, error: facaErr } = await supabase
-    .from('facas')
-    .select('id, codigo, estoque_atual')
-    .eq('id', facaId)
-    .single()
-  if (facaErr) throw new Error(facaErr.message)
-  if (!faca) throw new Error('Faca não encontrada.')
+  const boms = await prisma.facaMateriaPrima.findMany({
+    where: { facaId },
+    select: { materiaPrimaId: true, quantidade: true },
+  });
+  if (boms.length === 0) throw new Error("Esta faca não tem matérias-primas cadastradas.");
 
-  const { data: boms, error: bomsErr } = await supabase
-    .from('faca_materias_primas')
-    .select('materia_prima_id, quantidade')
-    .eq('faca_id', facaId)
-  if (bomsErr) throw new Error(bomsErr.message)
-  if (!boms || boms.length === 0) throw new Error('Esta faca não tem matérias-primas cadastradas.')
+  const mpIds = [...new Set(boms.map((b) => b.materiaPrimaId))];
+  const mps = await prisma.materiaPrima.findMany({
+    where: { id: { in: mpIds } },
+    select: { id: true, codigo: true, nome: true, estoqueAtual: true },
+  });
 
-  const mpIds = [...new Set(boms.map((b) => b.materia_prima_id))] as string[]
-  const { data: mps, error: mpsErr } = await supabase
-    .from('materias_primas')
-    .select('id, codigo, nome, estoque_atual')
-    .in('id', mpIds)
-  if (mpsErr) throw new Error(mpsErr.message)
-
-  const mpMap = new Map<string, { id: string; codigo: string; nome: string; estoque_atual: number }>()
-  for (const mp of mps ?? []) {
-    mpMap.set(mp.id, { ...mp, estoque_atual: Number(mp.estoque_atual) || 0 })
+  const mpMap = new Map<
+    string,
+    { id: string; codigo: string; nome: string; estoque_atual: number }
+  >();
+  for (const mp of mps) {
+    mpMap.set(mp.id, {
+      id: mp.id,
+      codigo: mp.codigo,
+      nome: mp.nome,
+      estoque_atual: numberFrom(mp.estoqueAtual),
+    });
   }
 
-  const insuficientes: MaterialInsuficiente[] = []
+  const insuficientes: MaterialInsuficiente[] = [];
   for (const bom of boms) {
-    const mp = mpMap.get(bom.materia_prima_id)
-    if (!mp) continue
-    const necessario = round3(quantidadeProduzida * (Number(bom.quantidade) || 0))
+    const mp = mpMap.get(bom.materiaPrimaId);
+    if (!mp) continue;
+    const necessario = round3(quantidadeProduzida * numberFrom(bom.quantidade));
     if (mp.estoque_atual < necessario) {
       insuficientes.push({
         materia_prima_id: mp.id,
@@ -559,194 +558,220 @@ export async function entradaEstoqueFaca(
         necessario,
         disponivel: mp.estoque_atual,
         falta: round3(necessario - mp.estoque_atual),
-      })
+      });
     }
   }
 
   if (insuficientes.length > 0) {
     const detalhes = insuficientes
-      .map((m) => `${m.codigo} (${m.nome}): precisa ${m.necessario}, tem ${m.disponivel}, falta ${m.falta}`)
-      .join('\n')
-    throw new Error(`Matérias-primas insuficientes:\n${detalhes}`)
+      .map(
+        (m) =>
+          `${m.codigo} (${m.nome}): precisa ${m.necessario}, tem ${m.disponivel}, falta ${m.falta}`,
+      )
+      .join("\n");
+    throw new Error(`Matérias-primas insuficientes:\n${detalhes}`);
   }
 
-  const authUserId = await requireAuthenticatedUserId()
-  const userId = registradoPorId || authUserId
-  const materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] = []
-  let movimentacaoEntradaFaca: MovimentacaoEstoque | null = null
+  const authUserId = await requireAuthenticatedUserId();
+  const userId = registradoPorId || authUserId;
+  const materiaisConsumidos: { codigo: string; nome: string; consumido: number }[] = [];
+  let movimentacaoEntradaFaca: MovimentacaoEstoque | null = null;
 
   // Calcula consumos em memória (evita round-trips no loop).
   type ConsumoItem = {
-    materia_prima_id: string
-    novoEstoque: number
-    consumo: number
-    mp: { codigo: string; nome: string }
-  }
-  const consumos: ConsumoItem[] = []
+    materia_prima_id: string;
+    novoEstoque: number;
+    consumo: number;
+    mp: { codigo: string; nome: string };
+  };
+  const consumos: ConsumoItem[] = [];
   for (const bom of boms) {
-    const mp = mpMap.get(bom.materia_prima_id)
-    if (!mp) continue
-    const consumo = round3(quantidadeProduzida * (Number(bom.quantidade) || 0))
-    if (!consumo) continue
+    const mp = mpMap.get(bom.materiaPrimaId);
+    if (!mp) continue;
+    const consumo = round3(quantidadeProduzida * numberFrom(bom.quantidade));
+    if (!consumo) continue;
     consumos.push({
-      materia_prima_id: bom.materia_prima_id,
+      materia_prima_id: bom.materiaPrimaId,
       consumo,
       novoEstoque: round3(mp.estoque_atual - consumo),
       mp: { codigo: mp.codigo, nome: mp.nome },
-    })
+    });
   }
 
-  // Atualizações em paralelo + 1 batch insert para movimentações.
-  // Antes: 2 round-trips sequenciais por MP (N MPs = 2N latências em série).
-  // Agora: N updates paralelos + 1 insert (≈ 2 latências totais).
-  if (consumos.length > 0) {
-    const observacao = `Produção de ${quantidadeProduzida}x ${faca.codigo}`
-    const updates = consumos.map((c) =>
-      supabase.from('materias_primas').update({ estoque_atual: c.novoEstoque }).eq('id', c.materia_prima_id),
-    )
-    const updateResults = await Promise.all(updates)
-    for (const r of updateResults) {
-      if (r.error) throw new Error(r.error.message)
-    }
+  const observacao = `Produção de ${quantidadeProduzida}x ${faca.codigo}`;
 
-    const movRows = consumos.map((c) => ({
-      tipo: 'saida_producao' as const,
-      materia_prima_id: c.materia_prima_id,
-      faca_id: facaId,
-      quantidade: c.consumo,
-      observacao,
-      usuario_id: userId,
-    }))
-    const { error: movErr } = await supabase.from('movimentacoes_estoque').insert(movRows)
-    if (movErr) throw new Error(movErr.message)
-
+  movimentacaoEntradaFaca = await prisma.$transaction(async (tx) => {
     for (const c of consumos) {
-      materiaisConsumidos.push({ codigo: c.mp.codigo, nome: c.mp.nome, consumido: c.consumo })
+      await tx.materiaPrima.update({
+        where: { id: c.materia_prima_id },
+        data: { estoqueAtual: decimal(c.novoEstoque) },
+      });
+
+      await tx.movimentacaoEstoque.create({
+        data: {
+          tipo: "saida_producao",
+          materiaPrimaId: c.materia_prima_id,
+          facaId,
+          quantidade: c.consumo,
+          observacao,
+          usuarioId: userId,
+        },
+      });
+
+      materiaisConsumidos.push({ codigo: c.mp.codigo, nome: c.mp.nome, consumido: c.consumo });
     }
-  }
 
-  const novoEstoqueFaca = (Number(faca.estoque_atual) || 0) + quantidadeProduzida
-  const { error: updFacaErr } = await supabase
-    .from('facas')
-    .update({ estoque_atual: novoEstoqueFaca })
-    .eq('id', facaId)
-  if (updFacaErr) throw new Error(updFacaErr.message)
+    const novoEstoqueFaca = round3(numberFrom(faca.estoqueAtual) + quantidadeProduzida);
+    await tx.faca.update({
+      where: { id: facaId },
+      data: { estoqueAtual: novoEstoqueFaca },
+    });
 
-  const { data: movEntrada, error: movEntradaErr } = await supabase
-    .from('movimentacoes_estoque')
-    .insert({
-      tipo: 'entrada',
-      faca_id: facaId,
-      quantidade: quantidadeProduzida,
-      observacao: `Produção de ${quantidadeProduzida}x ${faca.codigo}`,
-      usuario_id: userId,
-      materia_prima_id: null,
-    })
-    .select('*')
-    .single()
-  if (movEntradaErr) throw new Error(movEntradaErr.message)
-  if (movEntrada) {
-    movimentacaoEntradaFaca = {
-      ...(movEntrada as unknown as MovimentacaoEstoque),
-      materia_prima: null,
-      usuario: null,
-    }
-  }
+    const movEntrada = await tx.movimentacaoEstoque.create({
+      data: {
+        tipo: "entrada",
+        facaId,
+        quantidade: quantidadeProduzida,
+        observacao,
+        usuarioId: userId,
+        materiaPrimaId: null,
+      },
+      select: {
+        id: true,
+        tipo: true,
+        materiaPrimaId: true,
+        facaId: true,
+        consumivelId: true,
+        pedidoId: true,
+        quantidade: true,
+        observacao: true,
+        usuarioId: true,
+        createdAt: true,
+      },
+    });
 
+    const usuariosMap = new Map<string, { id: string; nome: string }>();
+    return mapMovimentacaoRow(
+      {
+        id: movEntrada.id,
+        tipo: movEntrada.tipo,
+        materia_prima_id: movEntrada.materiaPrimaId,
+        faca_id: movEntrada.facaId,
+        consumivel_id: movEntrada.consumivelId,
+        pedido_id: movEntrada.pedidoId,
+        quantidade: movEntrada.quantidade,
+        observacao: movEntrada.observacao,
+        usuario_id: movEntrada.usuarioId,
+        created_at: movEntrada.createdAt,
+      },
+      usuariosMap,
+    );
+  });
 
-  return { materiaisConsumidos, movimentacoesCriadas: movimentacaoEntradaFaca ? [movimentacaoEntradaFaca] : [] }
+  await revalidateFacasLists();
+  return {
+    materiaisConsumidos,
+    movimentacoesCriadas: movimentacaoEntradaFaca ? [movimentacaoEntradaFaca] : [],
+  };
 }
 
 export async function atualizarMovimentacaoFacaProducao(input: {
-  movimentacaoId: string
-  quantidade: number
-  usuarioId: string
-  observacao?: string | null
+  movimentacaoId: string;
+  quantidade: number;
+  usuarioId: string;
+  observacao?: string | null;
 }): Promise<void> {
-  await assertPermissao('movimentacoes_estoque', 'editar')
-  await assertPermissao('usuarios', 'editar')
+  await assertPermissao("movimentacoes_estoque", "editar");
+  await assertPermissao("usuarios", "editar");
 
-  const { movimentacaoId, quantidade, usuarioId, observacao } = input
-  if (!movimentacaoId) throw new Error('ID da movimentação é obrigatório.')
-  if (!Number.isFinite(quantidade) || quantidade <= 0) throw new Error('Quantidade deve ser maior que zero.')
-  if (!usuarioId) throw new Error('Selecione o usuário responsável.')
+  const { movimentacaoId, quantidade, usuarioId, observacao } = input;
+  if (!movimentacaoId) throw new Error("ID da movimentação é obrigatório.");
+  if (!Number.isFinite(quantidade) || quantidade <= 0)
+    throw new Error("Quantidade deve ser maior que zero.");
+  if (!usuarioId) throw new Error("Selecione o usuário responsável.");
 
-  const admin = createAdminClient()
-
-  const { data: movAtual, error: movErr } = await admin
-    .from('movimentacoes_estoque')
-    .select('id, tipo, quantidade, materia_prima_id, faca_id')
-    .eq('id', movimentacaoId)
-    .single()
-  if (movErr) throw new Error(movErr.message)
-  if (!movAtual) throw new Error('Movimentação não encontrada.')
-  const tipo = String(movAtual.tipo)
-  if (tipo !== 'saida_producao' && tipo !== 'entrada') {
-    throw new Error('Somente movimentações de produção (entrada/consumo) podem ser editadas aqui.')
-  }
-
-  const { data: usuario, error: userErr } = await admin
-    .from('usuarios_perfis')
-    .select('id')
-    .eq('id', usuarioId)
-    .single()
-  if (userErr) throw new Error(userErr.message)
-  if (!usuario) throw new Error('Usuário não encontrado.')
-
-  const quantidadeAntiga = Number(movAtual.quantidade)
-  const delta = quantidade - quantidadeAntiga
-  if (tipo === 'saida_producao') {
-    if (!movAtual.materia_prima_id) throw new Error('Movimentação sem matéria-prima vinculada.')
-    const { data: mp, error: mpErr } = await admin
-      .from('materias_primas')
-      .select('id, estoque_atual')
-      .eq('id', movAtual.materia_prima_id)
-      .single()
-    if (mpErr) throw new Error(mpErr.message)
-    if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
-
-    const novoEstoque = round3(Number(mp.estoque_atual) - delta)
-    if (novoEstoque < 0) throw new Error('Operação inválida: o estoque da matéria-prima ficaria negativo.')
-
-    if (delta !== 0) {
-      const { error: updMpErr } = await admin
-        .from('materias_primas')
-        .update({ estoque_atual: novoEstoque })
-        .eq('id', mp.id)
-      if (updMpErr) throw new Error(updMpErr.message)
+  await prisma.$transaction(async (tx) => {
+    const movAtual = await tx.movimentacaoEstoque.findUnique({
+      where: { id: movimentacaoId },
+      select: {
+        id: true,
+        tipo: true,
+        materiaPrimaId: true,
+        facaId: true,
+        consumivelId: true,
+        pedidoId: true,
+        quantidade: true,
+        observacao: true,
+        usuarioId: true,
+        createdAt: true,
+      },
+    });
+    if (!movAtual) throw new Error("Movimentação não encontrada.");
+    const tipo = String(movAtual.tipo);
+    if (tipo !== "saida_producao" && tipo !== "entrada") {
+      throw new Error(
+        "Somente movimentações de produção (entrada/consumo) podem ser editadas aqui.",
+      );
     }
-  }
 
-  if (tipo === 'entrada') {
-    if (!movAtual.faca_id) throw new Error('Movimentação sem faca vinculada.')
-    const { data: faca, error: facaErr } = await admin
-      .from('facas')
-      .select('id, estoque_atual')
-      .eq('id', movAtual.faca_id)
-      .single()
-    if (facaErr) throw new Error(facaErr.message)
-    if (!faca) throw new Error('Faca vinculada não encontrada.')
+    const usuario = await tx.usuarioPerfil.findUnique({
+      where: { id: usuarioId },
+      select: { id: true },
+    });
+    if (!usuario) throw new Error("Usuário não encontrado.");
 
-    const novoEstoqueFaca = round3(Number(faca.estoque_atual) + delta)
-    if (novoEstoqueFaca < 0) throw new Error('Operação inválida: o estoque da faca ficaria negativo.')
+    const quantidadeAntiga = numberFrom(movAtual.quantidade);
+    const delta = quantidade - quantidadeAntiga;
 
-    if (delta !== 0) {
-      const { error: updFacaErr } = await admin
-        .from('facas')
-        .update({ estoque_atual: novoEstoqueFaca })
-        .eq('id', faca.id)
-      if (updFacaErr) throw new Error(updFacaErr.message)
+    if (tipo === "saida_producao") {
+      if (!movAtual.materiaPrimaId) throw new Error("Movimentação sem matéria-prima vinculada.");
+      const mp = await tx.materiaPrima.findUnique({
+        where: { id: movAtual.materiaPrimaId },
+        select: { id: true, estoqueAtual: true },
+      });
+      if (!mp) throw new Error("Matéria-prima vinculada não encontrada.");
+
+      const novoEstoque = round3(numberFrom(mp.estoqueAtual) - delta);
+      if (novoEstoque < 0)
+        throw new Error("Operação inválida: o estoque da matéria-prima ficaria negativo.");
+
+      if (delta !== 0) {
+        await tx.materiaPrima.update({
+          where: { id: mp.id },
+          data: { estoqueAtual: decimal(novoEstoque) },
+        });
+      }
     }
-  }
 
-  const { error: updMovErr } = await admin
-    .from('movimentacoes_estoque')
-    .update({
-      quantidade,
-      usuario_id: usuarioId,
-      observacao: observacao?.trim() || null,
-    })
-    .eq('id', movimentacaoId)
-  if (updMovErr) throw new Error(updMovErr.message)
+    if (tipo === "entrada") {
+      if (!movAtual.facaId) throw new Error("Movimentação sem faca vinculada.");
+      const faca = await tx.faca.findUnique({
+        where: { id: movAtual.facaId },
+        select: { id: true, estoqueAtual: true },
+      });
+      if (!faca) throw new Error("Faca vinculada não encontrada.");
 
+      const novoEstoqueFaca = round3(numberFrom(faca.estoqueAtual) + delta);
+      if (novoEstoqueFaca < 0)
+        throw new Error("Operação inválida: o estoque da faca ficaria negativo.");
+
+      if (delta !== 0) {
+        await tx.faca.update({
+          where: { id: faca.id },
+          data: { estoqueAtual: novoEstoqueFaca },
+        });
+      }
+    }
+
+    await tx.movimentacaoEstoque.update({
+      where: { id: movimentacaoId },
+      data: {
+        quantidade,
+        usuarioId,
+        observacao: observacao?.trim() || null,
+      },
+    });
+  });
+
+  await revalidateFacasLists();
 }

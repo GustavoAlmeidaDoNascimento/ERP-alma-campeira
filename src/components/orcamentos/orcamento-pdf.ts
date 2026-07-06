@@ -1,12 +1,12 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Orcamento } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 import { formatarDocumento } from '@/lib/br/documento'
 
 const FACA_THUMB_PX = 96
 
-// Paleta (amarelo do sistema — --ac-accent #EAB308 / dark #ca8a04)
+// Paleta (amarelo do sistema â€” --ac-accent #EAB308 / dark #ca8a04)
 const COR_BRAND: [number, number, number]   = [202, 138, 4]   // amarelo escuro Alma Campeira
 const COR_ACCENT: [number, number, number]  = [234, 179, 8]   // amarelo vivo (barra superior)
 const COR_TEXTO: [number, number, number]   = [28, 28, 28]
@@ -93,7 +93,7 @@ function dataLocal(iso: string): string {
 }
 
 /**
- * Gera PDF do orçamento com layout limpo, cabeçalho com marca, bloco do
+ * Gera PDF do orÃ§amento com layout limpo, cabeÃ§alho com marca, bloco do
  * cliente em card, tabela com fotos e descontos por item + bloco de totais.
  */
 export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
@@ -102,7 +102,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 40
 
-  // ── CABEÇALHO ─────────────────────────────────────────────────────────
+  // â”€â”€ CABEÃ‡ALHO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Barra superior fina com a cor da marca
   doc.setFillColor(...COR_ACCENT)
   doc.rect(0, 0, pageWidth, 6, 'F')
@@ -124,7 +124,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     doc.text('Cutelaria artesanal', margin, 72)
   }
 
-  // Bloco direito: código / data / vendedor
+  // Bloco direito: cÃ³digo / data / vendedor
   const boxW = 190
   const boxX = pageWidth - margin - boxW
   const boxY = 40
@@ -135,7 +135,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...COR_MUTED)
-  doc.text('ORÇAMENTO', boxX + 12, boxY + 16)
+  doc.text('ORÃ‡AMENTO', boxX + 12, boxY + 16)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(12)
@@ -150,7 +150,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     doc.text(`Vendedor: ${orcamento.vendedor.nome}`, boxX + 12, boxY + 55)
   }
 
-  // ── CLIENTE ───────────────────────────────────────────────────────────
+  // â”€â”€ CLIENTE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const clienteY = 140
   const clienteH = 54
 
@@ -194,16 +194,16 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     doc.text('Sem cliente associado', margin + 12, clienteY + 34)
   }
 
-  // ── ITENS ─────────────────────────────────────────────────────────────
+  // â”€â”€ ITENS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const itens = orcamento.itens ?? []
 
-  // Calcula descontos por item (preço tabela vs. líquido)
+  // Calcula descontos por item (preÃ§o tabela vs. lÃ­quido)
   type Linha = {
     qtd: number
-    precoTabela: number   // faca.preco_venda (ou preco_unitario se não tiver)
-    precoLiquido: number  // item.preco_unitario (valor já com desconto aplicado)
-    descontoUnit: number  // tabela - líquido (por unidade)
-    descontoTotal: number // descontoUnit × qtd
+    precoTabela: number   // faca.preco_venda (ou preco_unitario se nÃ£o tiver)
+    precoLiquido: number  // item.preco_unitario (valor jÃ¡ com desconto aplicado)
+    descontoUnit: number  // tabela - lÃ­quido (por unidade)
+    descontoTotal: number // descontoUnit Ã— qtd
     subtotal: number      // item.subtotal
   }
 
@@ -227,7 +227,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   // Carrega fotos em paralelo
   const fotos = await Promise.all(
     itens.map(async (item) => {
-      const url = getOptimizedSupabaseImageUrl(item.faca?.foto_url ?? null, {
+      const url = getOptimizedImageUrl(item.faca?.foto_url ?? null, {
         width: FACA_THUMB_PX,
         height: FACA_THUMB_PX,
         quality: 75,
@@ -238,7 +238,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     }),
   )
 
-  // Linhas da tabela — colunas condicionais para o caso de ter desconto por item
+  // Linhas da tabela â€” colunas condicionais para o caso de ter desconto por item
   const body: (string | number)[][] = itens.map((item, idx) => {
     const l = linhas[idx]
     const faca = `${item.faca?.codigo ?? ''}\n${item.faca?.nome ?? '-'}`
@@ -256,8 +256,8 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   })
 
   const head = temDescontoItem
-    ? [['Foto', 'Faca', 'Qtd', 'Preço unit.', 'Desconto', 'Subtotal']]
-    : [['Foto', 'Faca', 'Qtd', 'Preço unit.', 'Subtotal']]
+    ? [['Foto', 'Faca', 'Qtd', 'PreÃ§o unit.', 'Desconto', 'Subtotal']]
+    : [['Foto', 'Faca', 'Qtd', 'PreÃ§o unit.', 'Subtotal']]
 
   const startY = 212
 
@@ -330,7 +330,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     margin: { left: margin, right: margin },
   })
 
-  // ── TOTAIS ────────────────────────────────────────────────────────────
+  // â”€â”€ TOTAIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const lastY =
     (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? startY
 
@@ -348,7 +348,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   const totaisX = pageWidth - margin - totaisW
   const totaisY = lastY + 16
 
-  // calcula altura dinâmica
+  // calcula altura dinÃ¢mica
   const rows: Array<{ label: string; value: string; cor: [number, number, number]; bold?: boolean }> = []
   if (descontoItens > 0.005) {
     const bruto = subtotalItens + descontoItens
@@ -376,7 +376,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     yRow += lineH
   }
 
-  // Divisória antes do total
+  // DivisÃ³ria antes do total
   doc.setDrawColor(...COR_BORDA)
   doc.setLineWidth(0.6)
   doc.line(totaisX + 14, yRow - 5, totaisX + totaisW - 14, yRow - 5)
@@ -390,7 +390,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   doc.setTextColor(...COR_OK)
   doc.text(brl(total), totaisX + totaisW - 14, yRow + 14, { align: 'right' })
 
-  // ── OBSERVAÇÕES ───────────────────────────────────────────────────────
+  // â”€â”€ OBSERVAÃ‡Ã•ES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (orcamento.observacao) {
     const obsY = lastY + 16
     const obsW = totaisX - margin - 14
@@ -402,7 +402,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...COR_MUTED)
-    doc.text('OBSERVAÇÕES', margin + 12, obsY + 18)
+    doc.text('OBSERVAÃ‡Ã•ES', margin + 12, obsY + 18)
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
@@ -411,7 +411,7 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
     doc.text(linhasObs, margin + 12, obsY + 34)
   }
 
-  // ── RODAPÉ ────────────────────────────────────────────────────────────
+  // â”€â”€ RODAPÃ‰ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const rodapeY = pageHeight - 28
   doc.setDrawColor(...COR_BORDA)
   doc.setLineWidth(0.4)
@@ -421,11 +421,12 @@ export async function gerarPdfOrcamento(orcamento: Orcamento): Promise<void> {
   doc.setFontSize(8)
   doc.setTextColor(...COR_MUTED)
   doc.text(
-    `Orçamento ${orcamento.codigo}  .  gerado em ${new Date().toLocaleString('pt-BR')}`,
+    `OrÃ§amento ${orcamento.codigo}  .  gerado em ${new Date().toLocaleString('pt-BR')}`,
     margin,
     rodapeY,
   )
-  doc.text('Alma Campeira — cutelaria artesanal', pageWidth - margin, rodapeY, { align: 'right' })
+  doc.text('Alma Campeira â€” cutelaria artesanal', pageWidth - margin, rodapeY, { align: 'right' })
 
   doc.save(`orcamento-${orcamento.codigo}.pdf`)
 }
+

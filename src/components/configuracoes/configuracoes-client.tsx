@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { updateTaxasLucroConfig, type TaxasLucroConfig } from '@/lib/actions/app-config'
 import type { CategoriaFacaDB, CategoriaMateriaPrimaDB, CategoriaConsumivelDB, Empresa } from '@/types'
-import { createClient } from '@/lib/supabase/client'
 
 const SENHA_MIN_LEN = 8
 
@@ -19,7 +18,7 @@ function usuarioPodeSenhaEmail(identities: { provider: string }[] | undefined): 
   return Boolean(identities?.some((i) => i.provider === 'email'))
 }
 
-function mapearErroSenhaSupabase(message: string): string {
+function mapearErroSenhaAutenticacao(message: string): string {
   const m = message.toLowerCase()
   if (m.includes('invalid login credentials')) return 'Senha atual incorreta.'
   if (m.includes('password should be at least') || (m.includes('at least') && m.includes('character'))) {
@@ -289,8 +288,11 @@ export function ConfiguracoesClient({
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const response = await fetch('/api/auth/user', { cache: 'no-store' })
+      const body = (await response.json().catch(() => null)) as {
+        user?: { email?: string | null; identities?: { provider: string }[] } | null
+      } | null
+      const user = response.ok ? body?.user ?? null : null
       if (cancelled) return
       const emailOk = Boolean(user?.email?.trim())
       setPodeTrocarSenha(emailOk && usuarioPodeSenhaEmail(user?.identities))
@@ -311,10 +313,11 @@ export function ConfiguracoesClient({
     setSignOutError(null)
     setIsSigningOut(true)
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signOut()
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+    })
 
-    if (error) {
+    if (!response.ok) {
       setSignOutError('Nao foi possivel sair da conta. Tente novamente.')
       setIsSigningOut(false)
       return
@@ -348,30 +351,17 @@ export function ConfiguracoesClient({
 
     setPasswordPending(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const email = user?.email?.trim()
-      if (!email) {
-        setPasswordError('Não foi possível obter o e-mail da conta.')
-        return
-      }
-
-      const { error: signErr } = await supabase.auth.signInWithPassword({
-        email,
-        password: atual,
+      const response = await fetch('/api/auth/password', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: atual,
+          password: nova,
+        }),
       })
-      if (signErr) {
-        setPasswordError(
-          signErr.message === 'Invalid login credentials'
-            ? 'Senha atual incorreta.'
-            : mapearErroSenhaSupabase(signErr.message),
-        )
-        return
-      }
-
-      const { error: updErr } = await supabase.auth.updateUser({ password: nova })
-      if (updErr) {
-        setPasswordError(mapearErroSenhaSupabase(updErr.message))
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        setPasswordError(mapearErroSenhaAutenticacao(body?.error ?? 'Erro ao alterar senha.'))
         return
       }
 

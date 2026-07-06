@@ -1,9 +1,9 @@
 'use server'
 
 import { revalidateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao } from '@/lib/auth'
 import { fetchTaxasLucroConfig } from '@/lib/cache/list-data'
+import { prisma } from '@/lib/prisma'
 
 export type TaxasLucroConfig = {
   /** Valor fixo em R$ adicionado ao custo de materiais (ex.: 27.00). */
@@ -15,18 +15,7 @@ export type TaxasLucroConfig = {
 }
 
 const APP_CONFIG_MISSING_MSG =
-  'A tabela app_config ainda não existe no Supabase. Abra o SQL Editor, execute o arquivo supabase/migration_app_config_taxas_lucro.sql do repositório e, se o erro persistir, em Project Settings → API use "Reload schema" (cache do PostgREST).'
-
-/** PostgREST / Postgres quando app_config não existe ou não está no cache. */
-function isAppConfigUnavailable(error: { message?: string }): boolean {
-  const m = error.message ?? ''
-  if (!m.includes('app_config')) return false
-  return (
-    m.includes('schema cache') ||
-    m.includes('does not exist') ||
-    m.includes('Could not find the table')
-  )
-}
+  'A tabela app_config ainda não existe no banco local. Crie a estrutura correspondente antes de continuar a migração Prisma-only.'
 
 export async function getTaxasLucroConfig(): Promise<TaxasLucroConfig> {
   await assertPermissao('taxas_lucro', 'ver')
@@ -48,21 +37,21 @@ export async function updateTaxasLucroConfig(input: TaxasLucroConfig) {
     throw new Error('Taxa de comissão inválida (use 0 a 100%).')
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.from('app_config').upsert(
-    {
+  await prisma.appConfig.upsert({
+    where: { id: 1 },
+    create: {
       id: 1,
-      taxa_producao_lucro: tp,
-      margem_lucro: ml,
-      taxa_comissao_lucro: tc,
-      updated_at: new Date().toISOString(),
+      taxaProducaoLucro: tp,
+      margemLucro: ml,
+      taxaComissaoLucro: tc,
+      updatedAt: new Date(),
     },
-    { onConflict: 'id' }
-  )
-
-  if (error) {
-    if (isAppConfigUnavailable(error)) throw new Error(APP_CONFIG_MISSING_MSG)
-    throw new Error(error.message)
-  }
+    update: {
+      taxaProducaoLucro: tp,
+      margemLucro: ml,
+      taxaComissaoLucro: tc,
+      updatedAt: new Date(),
+    },
+  })
   revalidateTag('app-config-taxas-lucro', 'max')
 }

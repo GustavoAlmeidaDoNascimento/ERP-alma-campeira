@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { sections } from '@/components/layout/erp-navigation'
 import { usePermissoesVer } from '@/components/layout/permissoes-provider'
 
@@ -33,10 +32,20 @@ export function Sidebar() {
   )
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null)
-    })
+    let cancelled = false
+    ;(async () => {
+      const response = await fetch('/api/auth/user', { cache: 'no-store' })
+      if (cancelled) return
+      if (!response.ok) {
+        setUserEmail(null)
+        return
+      }
+      const body = (await response.json().catch(() => null)) as { user?: { email?: string | null } | null } | null
+      setUserEmail(body?.user?.email ?? null)
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function isItemVisible(moduloKey?: string): boolean {

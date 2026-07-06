@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { codigoBoleto, type FormaPagamento, type Movimentacao } from '@/types'
 import { listarGastos } from '@/lib/actions/gastos'
 import { listarEntradas } from '@/lib/actions/entradas'
@@ -29,25 +29,51 @@ function primeiro<T>(v: T | T[] | null | undefined): T | null {
  */
 export async function listarMovimentacoes(): Promise<Movimentacao[]> {
   await assertPermissao('gastos', 'ver')
-  const supabase = await createClient()
 
-  const [gastos, entradas, boletosRes, pedidosRes] = await Promise.all([
+  const [gastos, entradas, boletos, pedidos] = await Promise.all([
     listarGastos(),
     listarEntradas(),
-    supabase
-      .from('boletos')
-      .select('id, tipo, sequencial, contraparte_nome, parcelas:boleto_parcelas(id, numero, valor, valor_pago, pago_em)')
-      .eq('tipo', 'entrada')
-      .limit(500),
-    supabase
-      .from('pedidos')
-      .select('id, codigo, sequencial, data_pedido, status, valor_total, forma_pagamento, pago, cliente:clientes(id, nome), vendedor:usuarios_perfis(id, nome)')
-      .order('data_pedido', { ascending: false })
-      .limit(500),
+    prisma.boleto.findMany({
+      where: { tipo: 'entrada' },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        tipo: true,
+        sequencial: true,
+        contraparteNome: true,
+        parcelas: {
+          select: {
+            id: true,
+            numero: true,
+            valor: true,
+            valorPago: true,
+            pagoEm: true,
+          },
+        },
+      },
+    }),
+    prisma.pedido.findMany({
+      orderBy: { dataPedido: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        codigo: true,
+        sequencial: true,
+        dataPedido: true,
+        status: true,
+        valorTotal: true,
+        formaPagamento: true,
+        pago: true,
+        cliente: {
+          select: { id: true, nome: true },
+        },
+        vendedor: {
+          select: { id: true, nome: true },
+        },
+      },
+    }),
   ])
-
-  if (boletosRes.error) throw new Error(boletosRes.error.message)
-  if (pedidosRes.error) throw new Error(pedidosRes.error.message)
 
   const movs: Movimentacao[] = []
 
@@ -86,19 +112,19 @@ export async function listarMovimentacoes(): Promise<Movimentacao[]> {
   }
 
   // ── Entradas: parcelas pagas de boletos de entrada ──
-  for (const b of boletosRes.data ?? []) {
+  for (const b of boletos) {
     const codigo = codigoBoleto({ tipo: 'entrada', sequencial: Number(b.sequencial ?? 0) })
-    const parcelas = Array.isArray(b.parcelas) ? b.parcelas : []
+    const parcelas = b.parcelas ?? []
     for (const p of parcelas) {
-      if (!p.pago_em) continue
+      if (!p.pagoEm) continue
       movs.push({
         key: `parcela:${p.id}`,
         origem: 'boleto_entrada',
         direcao: 'entrada',
-        data: String(p.pago_em).slice(0, 10),
-        descricao: `Recebimento ${codigo} — ${b.contraparte_nome} (parcela ${p.numero})`,
+        data: String(p.pagoEm).slice(0, 10),
+        descricao: `Recebimento ${codigo} — ${b.contraparteNome} (parcela ${p.numero})`,
         categoria: 'Boleto a receber',
-        valor: Number(p.valor_pago ?? p.valor ?? 0),
+        valor: Number(p.valorPago ?? p.valor ?? 0),
         forma_pagamento: 'boleto',
         usuario_nome: null,
         refId: b.id,
@@ -108,24 +134,24 @@ export async function listarMovimentacoes(): Promise<Movimentacao[]> {
   }
 
   // ── Entradas: vendas à vista já pagas ──
-  for (const ped of pedidosRes.data ?? []) {
+  for (const ped of pedidos) {
     const status = String(ped.status ?? '')
-    const forma = ped.forma_pagamento as FormaPagamento | null
+    const forma = ped.formaPagamento as FormaPagamento | null
     if (forma === 'boleto') continue // entra pelas parcelas pagas
     if (STATUS_NAO_RECEBIDO.has(status)) continue
     // Só conta como recebido depois de marcado "pago" explicitamente.
     if (!ped.pago) continue
     const cliente = primeiro(ped.cliente) as { nome?: string } | null
     const vendedor = primeiro(ped.vendedor) as { nome?: string } | null
-    const codigo = (ped.codigo as string) ?? null
+    const codigo = ped.codigo ?? null
     movs.push({
       key: `venda:${ped.id}`,
       origem: 'venda',
       direcao: 'entrada',
-      data: String(ped.data_pedido ?? '').slice(0, 10),
+      data: String(ped.dataPedido ?? '').slice(0, 10),
       descricao: `Venda ${codigo ?? ''} — ${cliente?.nome ?? 'Sem cliente'}`.trim(),
       categoria: 'Venda',
-      valor: Number(ped.valor_total ?? 0),
+      valor: Number(ped.valorTotal ?? 0),
       forma_pagamento: forma,
       usuario_nome: vendedor?.nome ?? null,
       refId: ped.id,

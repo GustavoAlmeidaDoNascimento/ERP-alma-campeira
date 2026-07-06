@@ -1,5 +1,5 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import type { Metadata } from 'next'
+import { prisma } from '@/lib/prisma'
 import { CatalogoClient, type FacaCatalogoItem } from './catalogo-client'
 
 export async function generateMetadata({
@@ -19,19 +19,29 @@ export async function generateMetadata({
 
 async function getFacasCatalogo(mostrarPrecos: boolean): Promise<FacaCatalogoItem[]> {
   try {
-    const supabase = createAdminClient()
-    if (mostrarPrecos) {
-      const { data } = await supabase
-        .from('facas')
-        .select('id, nome, categoria, foto_url, preco_venda, estoque_atual, estoque_minimo')
-        .order('nome')
-      return (data ?? []) as FacaCatalogoItem[]
-    }
-    const { data } = await supabase
-      .from('facas')
-      .select('id, nome, categoria, foto_url, estoque_atual, estoque_minimo')
-      .order('nome')
-    return (data ?? []) as FacaCatalogoItem[]
+    const facas = await prisma.faca.findMany({
+      orderBy: { nome: 'asc' },
+      select: {
+        id: true,
+        nome: true,
+        categoria: true,
+        fotoUrl: true,
+        precoVenda: mostrarPrecos,
+        estoqueAtual: true,
+        estoqueMinimo: true,
+      },
+    })
+    return facas.map((f) => ({
+      id: f.id,
+      nome: f.nome,
+      categoria: f.categoria,
+      foto_url: f.fotoUrl,
+      preco_venda: typeof f.precoVenda === 'object' && f.precoVenda && 'toNumber' in f.precoVenda
+        ? f.precoVenda.toNumber()
+        : (f.precoVenda as number | null | undefined) ?? undefined,
+      estoque_atual: f.estoqueAtual,
+      estoque_minimo: f.estoqueMinimo,
+    })) as FacaCatalogoItem[]
   } catch {
     return []
   }

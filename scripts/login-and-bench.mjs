@@ -1,10 +1,9 @@
 /**
- * Loga via Supabase (signInWithPassword), grava cookies SSR no formato esperado
- * pelo @supabase/ssr e mede HTTP RSC nas rotas autenticadas.
+ * Faz login pelo fluxo local (/api/auth/login), reutiliza o cookie `erp-session`
+ * retornado pela API e mede HTTP RSC nas rotas autenticadas.
  *
  * Uso: node scripts/login-and-bench.mjs --label before
  */
-import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -23,8 +22,6 @@ function loadEnv() {
 }
 
 const env = loadEnv()
-const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL
-const PUB_KEY = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 const EMAIL = process.env.EMAIL ?? 'cutelariaalmacampeira1@gmail.com'
 const PASSWORD = process.env.PASSWORD ?? 'controle1'
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3000'
@@ -35,32 +32,17 @@ const label = process.argv.includes('--label')
 const ROUTES = ['/inicio', '/materias-primas', '/facas', '/fornecedores', '/clientes']
 
 async function login() {
-  const sb = createClient(SUPABASE_URL, PUB_KEY)
-  const { data, error } = await sb.auth.signInWithPassword({ email: EMAIL, password: PASSWORD })
-  if (error) throw new Error('Login: ' + error.message)
-  return data.session
-}
-
-// Formato cookie do @supabase/ssr: nome = `sb-<ref>-auth-token`
-function buildCookies(session) {
-  const ref = new URL(SUPABASE_URL).hostname.split('.')[0]
-  const cookieName = `sb-${ref}-auth-token`
-  const value = JSON.stringify({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-    expires_at: session.expires_at,
-    expires_in: session.expires_in,
-    token_type: session.token_type,
-    user: session.user,
+  const res = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
   })
-  // @supabase/ssr fatia cookies se forem grandes — testar primeiro como base64 chunked.
-  const b64 = 'base64-' + Buffer.from(value).toString('base64')
-  // chunking de 3180 chars (limite do ssr)
-  const CHUNK = 3180
-  const chunks = []
-  for (let i = 0; i < b64.length; i += CHUNK) chunks.push(b64.slice(i, i + CHUNK))
-  if (chunks.length === 1) return `${cookieName}=${chunks[0]}`
-  return chunks.map((c, i) => `${cookieName}.${i}=${c}`).join('; ')
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error('Login: ' + (body?.error ?? res.statusText))
+  const raw = res.headers.get('set-cookie')
+  if (!raw) throw new Error('Login: resposta sem cookie de sessão')
+  const cookie = raw.split(',').find((part) => part.includes('erp-session=')) ?? raw
+  return cookie.split(';')[0]
 }
 
 async function measure(path, cookie) {
@@ -77,8 +59,7 @@ async function measure(path, cookie) {
 
 async function main() {
   console.log(`\n=== Bench [${label}] ${BASE} (login: ${EMAIL}) ===`)
-  const session = await login()
-  const cookie = buildCookies(session)
+  const cookie = await login()
 
   // Simula fluxo do usuário: 1ª hit dispara ErpLayout (que prefetcha as listas).
   // Aguarda 800ms pra dar tempo do prefetch popular os caches em background.

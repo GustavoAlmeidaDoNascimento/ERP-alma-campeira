@@ -1,9 +1,9 @@
 'use server'
 
 import { revalidateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { fetchFornecedoresFullList } from '@/lib/cache/list-data'
+import { prisma } from '@/lib/prisma'
 import type { Fornecedor, OrdemCompraHistoricoResumo, StatusOC, TipoDocumento } from '@/types'
 import { apenasDigitos } from '@/lib/br/documento'
 import { validarCamposObrigatoriosFornecedor } from '@/lib/br/validar-cadastro-parceiro'
@@ -41,9 +41,49 @@ function normalizarStatusOCHistorico(row: { status?: unknown; pago?: unknown }):
   return { status: status as StatusOC, pago }
 }
 
-function embedUm<T>(v: T | T[] | null | undefined): T | null {
-  if (v == null) return null
-  return Array.isArray(v) ? (v[0] ?? null) : v
+function mapFornecedorRow(row: {
+  id: string
+  nome: string
+  telefone: string | null
+  email: string | null
+  tipoDocumento: TipoDocumento
+  documento: string | null
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  razaoSocial: string | null
+  ie: string | null
+  codigoMunicipioIbge: string | null
+  createdAt: Date
+}): Fornecedor {
+  return {
+    id: row.id,
+    nome: row.nome,
+    telefone: row.telefone,
+    email: row.email,
+    tipo_documento: row.tipoDocumento,
+    documento: row.documento,
+    cep: row.cep,
+    logradouro: row.logradouro,
+    numero: row.numero,
+    complemento: row.complemento,
+    bairro: row.bairro,
+    cidade: row.cidade,
+    uf: row.uf,
+    razao_social: row.razaoSocial,
+    ie: row.ie,
+    codigo_municipio_ibge: row.codigoMunicipioIbge,
+    created_at: row.createdAt.toISOString(),
+  }
+}
+
+function numberFrom(value: { toNumber(): number } | number | null | undefined): number {
+  if (typeof value === 'number') return value
+  return value?.toNumber() ?? 0
 }
 
 /** Ordens de compra do fornecedor — usado no modal de detalhe. */
@@ -52,54 +92,52 @@ export async function getOrdensCompraPorFornecedor(
   limit = 200,
 ): Promise<OrdemCompraHistoricoResumo[]> {
   await assertPermissao('ordens_compra', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('ordens_compra')
-    .select(`
-      id,
-      codigo,
-      sequencial_fornecedor,
-      data_geracao,
-      status,
-      pago,
-      itens:ordem_compra_itens(quantidade, preco_unitario),
-      fila_reposicao(
-        pedido:pedidos(codigo, sequencial, cliente:clientes(nome))
-      )
-    `)
-    .eq('fornecedor_id', fornecedorId)
-    .order('data_geracao', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw new Error(error.message)
+  const data = await prisma.ordemCompra.findMany({
+    where: { fornecedorId },
+    orderBy: [
+      { dataGeracao: 'desc' },
+      { createdAt: 'desc' },
+    ],
+    take: limit,
+    include: {
+      itens: {
+        select: {
+          quantidade: true,
+          precoUnitario: true,
+        },
+      },
+      filaReposicao: {
+        include: {
+          pedido: {
+            include: {
+              cliente: {
+                select: { nome: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
 
-  return (data ?? []).map((row) => {
-    const itens = (row.itens ?? []) as { quantidade: number; preco_unitario: number | null }[]
-    const valor_total = itens.reduce(
-      (s, it) => s + Number(it.quantidade) * (Number(it.preco_unitario) || 0),
+  return data.map((row) => {
+    const valor_total = row.itens.reduce(
+      (s, it) => s + numberFrom(it.quantidade) * numberFrom(it.precoUnitario),
       0,
     )
-    const fila = embedUm(
-      row.fila_reposicao as { pedido?: unknown } | { pedido?: unknown }[] | null,
-    )
-    const pedido = embedUm(
-      fila?.pedido as
-        | { codigo: string; sequencial: number | null; cliente?: { nome: string } | { nome: string }[] | null }
-        | { codigo: string; sequencial: number | null; cliente?: { nome: string } | { nome: string }[] | null }[]
-        | null,
-    )
-    const cliente = pedido?.cliente ? embedUm(pedido.cliente) : null
+    const pedido = row.filaReposicao?.pedido ?? null
+    const cliente = pedido?.cliente ?? null
     const { status, pago } = normalizarStatusOCHistorico(row)
     return {
-      id: row.id as string,
-      codigo: row.codigo as string,
-      sequencial_fornecedor: (row.sequencial_fornecedor as number | null) ?? null,
-      data_geracao: row.data_geracao as string,
+      id: row.id,
+      codigo: row.codigo,
+      sequencial_fornecedor: row.sequencialFornecedor ?? null,
+      data_geracao: row.dataGeracao.toISOString().slice(0, 10),
       status,
       pago,
       valor_total,
       pedido_codigo: pedido?.codigo ?? null,
-      pedido_sequencial: pedido?.sequencial ?? null,
+      pedido_sequencial: pedido?.sequencial ? Number(pedido.sequencial) : null,
       cliente_nome: cliente?.nome ?? null,
     }
   })
@@ -152,37 +190,66 @@ function normalizarFornecedorPayload(input: FornecedorInput) {
 
 export async function criarFornecedor(input: FornecedorInput) {
   await assertPermissao('fornecedores', 'criar')
-  const supabase = await createClient()
   const row = normalizarFornecedorPayload(input)
-  const { error } = await supabase.from('fornecedores').insert(row)
-  if (error) throw new Error(error.message)
+  await prisma.fornecedor.create({
+    data: {
+      nome: row.nome,
+      telefone: row.telefone,
+      email: row.email,
+      tipoDocumento: row.tipo_documento,
+      documento: row.documento,
+      cep: row.cep,
+      logradouro: row.logradouro,
+      numero: row.numero,
+      complemento: row.complemento,
+      bairro: row.bairro,
+      cidade: row.cidade,
+      uf: row.uf,
+      razaoSocial: row.razao_social,
+      ie: row.ie,
+      codigoMunicipioIbge: row.codigo_municipio_ibge,
+    },
+  })
   await revalidateFornecedoresList()
 }
 
 export async function atualizarFornecedor(id: string, input: FornecedorInput) {
   await assertPermissao('fornecedores', 'editar')
-  const supabase = await createClient()
   const row = normalizarFornecedorPayload(input)
-  const { error } = await supabase.from('fornecedores').update(row).eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.fornecedor.update({
+    where: { id },
+    data: {
+      nome: row.nome,
+      telefone: row.telefone,
+      email: row.email,
+      tipoDocumento: row.tipo_documento,
+      documento: row.documento,
+      cep: row.cep,
+      logradouro: row.logradouro,
+      numero: row.numero,
+      complemento: row.complemento,
+      bairro: row.bairro,
+      cidade: row.cidade,
+      uf: row.uf,
+      razaoSocial: row.razao_social,
+      ie: row.ie,
+      codigoMunicipioIbge: row.codigo_municipio_ibge,
+    },
+  })
   await revalidateFornecedoresList()
 }
 
 export async function deletarFornecedor(id: string) {
   await assertPermissao('fornecedores', 'deletar')
-  const supabase = await createClient()
+  const uso = await prisma.materiaPrima.findFirst({
+    where: { fornecedorId: id },
+    select: { id: true },
+  })
 
-  const { data: uso } = await supabase
-    .from('materias_primas')
-    .select('id')
-    .eq('fornecedor_id', id)
-    .limit(1)
-
-  if (uso && uso.length > 0) {
+  if (uso) {
     throw new Error('Este fornecedor possui matérias-primas vinculadas e não pode ser excluído.')
   }
 
-  const { error } = await supabase.from('fornecedores').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.fornecedor.delete({ where: { id } })
   await revalidateFornecedoresList()
 }

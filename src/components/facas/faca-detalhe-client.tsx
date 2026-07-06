@@ -13,7 +13,7 @@ import type { Faca, FacaMateriaPrima, MovimentacaoEstoque, PedidoItemComPedido, 
 import type { FacaDetalheData } from '@/lib/actions/facas'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useFacaDetalhe, useMateriasPrimas } from '@/lib/query/hooks'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 
@@ -27,7 +27,7 @@ type Props = {
   verPrecoVenda: boolean
   taxasLucro?: TaxasLucro
   usuarios?: { id: string; nome: string }[]
-  /** Id do utilizador em sessão (auth = perfil); usado para pré-selecionar "Registrado por". */
+  /** Id do utilizador em sessÃ£o (auth = perfil); usado para prÃ©-selecionar "Registrado por". */
   usuarioAtualId?: string
   permEditarMovAdmin?: boolean
 }
@@ -88,7 +88,7 @@ export function FacaDetalheClient({
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setEntradaErro(e instanceof Error ? e.message : 'Erro ao carregar estoque das matérias-primas.')
+          setEntradaErro(e instanceof Error ? e.message : 'Erro ao carregar estoque das matÃ©rias-primas.')
         }
       })
       .finally(() => {
@@ -100,7 +100,7 @@ export function FacaDetalheClient({
   }, [entradaModalOpen, faca.id])
 
   const fotoUrl = faca.foto_url
-    ? getOptimizedSupabaseImageUrl(faca.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
+    ? getOptimizedImageUrl(faca.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
     : ''
 
   const custoTotal = useMemo(() => {
@@ -117,13 +117,13 @@ export function FacaDetalheClient({
       if (!mp?.id || !mp?.foto_url) continue
       map.set(
         mp.id,
-        getOptimizedSupabaseImageUrl(mp.foto_url, { width: 36, height: 36, quality: 80, resize: 'cover' }),
+        getOptimizedImageUrl(mp.foto_url, { width: 36, height: 36, quality: 80, resize: 'cover' }),
       )
     }
     return map
   }, [detalhe.bom])
 
-  // Preview de consumo de MPs para entrada de estoque (usa BOM recém-buscado ao abrir o modal)
+  // Preview de consumo de MPs para entrada de estoque (usa BOM recÃ©m-buscado ao abrir o modal)
   const qtdProduzir = Number(quantidadeProduzir) || 0
   const previewConsumo = useMemo(() => {
     return bomEntrada.map((item) => {
@@ -142,7 +142,7 @@ export function FacaDetalheClient({
     })
   }, [bomEntrada, qtdProduzir])
 
-  const todosDisponíveis =
+  const todosDisponiveis =
     bomEntrada.length > 0 && previewConsumo.every((p) => p.suficiente)
 
   function usuarioRegistroPadraoId(): string {
@@ -201,7 +201,7 @@ export function FacaDetalheClient({
       return
     }
     if (!movUsuarioId) {
-      setMovSalvarErro('Selecione o usuário responsável.')
+      setMovSalvarErro('Selecione o usuÃ¡rio responsÃ¡vel.')
       return
     }
     setMovSalvarLoading(true)
@@ -229,7 +229,7 @@ export function FacaDetalheClient({
       setMovEdicao(null)
       refreshActiveTab()
     } catch (e: unknown) {
-      setMovSalvarErro(e instanceof Error ? e.message : 'Erro ao salvar movimentação.')
+      setMovSalvarErro(e instanceof Error ? e.message : 'Erro ao salvar movimentaÃ§Ã£o.')
     } finally {
       setMovSalvarLoading(false)
     }
@@ -245,7 +245,7 @@ export function FacaDetalheClient({
 
   const tipoMovLabel: Record<string, { label: string; color: string; bg: string }> = {
     entrada: { label: 'Entrada', color: '#15803d', bg: '#dcfce7' },
-    saida_producao: { label: 'Produção', color: '#b45309', bg: '#fef3c7' },
+    saida_producao: { label: 'ProduÃ§Ã£o', color: '#b45309', bg: '#fef3c7' },
     saida_venda: { label: 'Venda', color: '#1d4ed8', bg: '#dbeafe' },
     ajuste: { label: 'Ajuste', color: '#6b7280', bg: '#f3f4f6' },
   }
@@ -254,7 +254,7 @@ export function FacaDetalheClient({
     <>
       {/* Header */}
       <div className="px-8 py-6" style={{ borderBottom: '1px solid var(--ac-border)' }}>
-        {/* Botão voltar */}
+        {/* BotÃ£o voltar */}
         <button
           type="button"
           onClick={() => router.back()}
@@ -335,7 +335,7 @@ export function FacaDetalheClient({
               </div>
               {custoTotal > 0 && (
                 <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                  Preço de custo (somatório MP): {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  PreÃ§o de custo (somatÃ³rio MP): {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               )}
             </div>
@@ -376,14 +376,14 @@ export function FacaDetalheClient({
         <section>
           <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>Lista de Materiais</h3>
           {bom.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma matéria-prima cadastrada para esta faca.</p>
+            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma matÃ©ria-prima cadastrada para esta faca.</p>
           ) : (
             <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Foto</th>
-                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CÃ³digo</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd/unidade</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Custo unit.</th>
@@ -408,7 +408,7 @@ export function FacaDetalheClient({
                           {mpThumbUrl ? (
                             <img
                               src={mpThumbUrl}
-                              alt={mp?.nome ? `Foto de ${mp.nome}` : 'Foto da matéria-prima'}
+                              alt={mp?.nome ? `Foto de ${mp.nome}` : 'Foto da matÃ©ria-prima'}
                               width={32}
                               height={32}
                               loading="lazy"
@@ -425,8 +425,8 @@ export function FacaDetalheClient({
                             />
                           )}
                         </td>
-                        <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{mp?.codigo ?? '—'}</td>
-                        <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>{mp?.nome ?? '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{mp?.codigo ?? 'â€”'}</td>
+                        <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>{mp?.nome ?? 'â€”'}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>{item.quantidade}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
                           {(mp?.preco_custo ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -457,9 +457,9 @@ export function FacaDetalheClient({
           )}
         </section>
 
-        {/* ========== Histórico de Vendas ========== */}
+        {/* ========== HistÃ³rico de Vendas ========== */}
         <section>
-          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>Histórico de Vendas</h3>
+          <h3 className="text-lg font-semibold mb-3" style={{ color: 'var(--ac-text)' }}>HistÃ³rico de Vendas</h3>
           {vendas.length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma venda registrada para esta faca.</p>
           ) : (
@@ -470,7 +470,7 @@ export function FacaDetalheClient({
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Pedido</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd</th>
-                    <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Preço unit.</th>
+                    <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>PreÃ§o unit.</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Subtotal</th>
                     <th className="text-center px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Status</th>
                   </tr>
@@ -482,10 +482,10 @@ export function FacaDetalheClient({
                     return (
                       <tr key={item.id} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)' }}>
                         <td className="px-4 py-2.5 font-mono text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
-                          {pedido?.codigo ?? '—'}
+                          {pedido?.codigo ?? 'â€”'}
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-muted)' }}>
-                          {pedido?.data_pedido ? formatDate(pedido.data_pedido) : '—'}
+                          {pedido?.data_pedido ? formatDate(pedido.data_pedido) : 'â€”'}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                           {item.quantidade}
@@ -504,7 +504,7 @@ export function FacaDetalheClient({
                             >
                               {st.label}
                             </span>
-                          ) : '—'}
+                          ) : 'â€”'}
                         </td>
                       </tr>
                     )
@@ -515,16 +515,16 @@ export function FacaDetalheClient({
           )}
         </section>
 
-        {/* ========== Movimentações ========== */}
+        {/* ========== MovimentaÃ§Ãµes ========== */}
         <section>
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <h3 className="text-lg font-semibold m-0" style={{ color: 'var(--ac-text)' }}>Movimentações de Estoque</h3>
+            <h3 className="text-lg font-semibold m-0" style={{ color: 'var(--ac-text)' }}>MovimentaÃ§Ãµes de Estoque</h3>
             <Button
               type="button"
               variant="secondary"
               className="shrink-0 text-sm"
               onClick={() => refreshActiveTab()}
-              title="Atualizar lista de movimentações"
+              title="Atualizar lista de movimentaÃ§Ãµes"
             >
               <span className="inline-flex items-center gap-2">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4 shrink-0" aria-hidden>
@@ -536,7 +536,7 @@ export function FacaDetalheClient({
             </Button>
           </div>
           {movimentacoesState.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentação registrada.</p>
+            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentaÃ§Ã£o registrada.</p>
           ) : (
             <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-sm">
@@ -544,12 +544,12 @@ export function FacaDetalheClient({
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Data</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Tipo</th>
-                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Matéria-Prima</th>
-                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Usuário</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>MatÃ©ria-Prima</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>UsuÃ¡rio</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Quantidade</th>
-                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>ObservaÃ§Ã£o</th>
                     {permEditarMovAdmin && (
-                      <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Ações</th>
+                      <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>AÃ§Ãµes</th>
                     )}
                   </tr>
                 </thead>
@@ -570,16 +570,16 @@ export function FacaDetalheClient({
                           </span>
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
-                          {mov.materia_prima ? `${mov.materia_prima.codigo} — ${mov.materia_prima.nome}` : '—'}
+                          {mov.materia_prima ? `${mov.materia_prima.codigo} â€” ${mov.materia_prima.nome}` : 'â€”'}
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
-                          {mov.usuario?.nome ?? '—'}
+                          {mov.usuario?.nome ?? 'â€”'}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
                           {mov.quantidade}
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-muted)' }}>
-                          {mov.observacao ?? '—'}
+                          {mov.observacao ?? 'â€”'}
                         </td>
                         {permEditarMovAdmin && mov.tipo === 'entrada' && (
                           <td className="px-4 py-2.5 text-center">
@@ -596,7 +596,7 @@ export function FacaDetalheClient({
                                 e.currentTarget.style.color = 'var(--ac-muted)'
                                 e.currentTarget.style.borderColor = 'var(--ac-border)'
                               }}
-                              title="Editar movimentação"
+                              title="Editar movimentaÃ§Ã£o"
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3.5">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -607,7 +607,7 @@ export function FacaDetalheClient({
                         )}
                         {permEditarMovAdmin && mov.tipo !== 'entrada' && (
                           <td className="px-4 py-2.5 text-center text-xs" style={{ color: 'var(--ac-muted)' }}>
-                            —
+                            â€”
                           </td>
                         )}
                       </tr>
@@ -635,13 +635,13 @@ export function FacaDetalheClient({
       <Modal
         open={entradaModalOpen}
         onClose={() => setEntradaModalOpen(false)}
-        title={`Entrada de Estoque — ${faca.codigo}`}
+        title={`Entrada de Estoque â€” ${faca.codigo}`}
         width="560px"
       >
         <div className="flex flex-col gap-4">
           <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
             Informe quantas unidades de <strong style={{ color: 'var(--ac-text)' }}>{faca.nome}</strong> foram produzidas.
-            O sistema descontará automaticamente as matérias-primas do estoque.
+            O sistema descontarÃ¡ automaticamente as matÃ©rias-primas do estoque.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
@@ -678,7 +678,7 @@ export function FacaDetalheClient({
                   onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
                 >
-                  <option value="">— Usuário atual —</option>
+                  <option value="">â€” UsuÃ¡rio atual â€”</option>
                   {usuarios.map((u) => (
                     <option key={u.id} value={u.id}>{u.nome}</option>
                   ))}
@@ -690,7 +690,7 @@ export function FacaDetalheClient({
           {/* Preview de consumo (estoque das MPs recarregado ao abrir o modal) */}
           {bomEntradaLoading && (
             <p className="text-sm text-center py-4" style={{ color: 'var(--ac-muted)' }}>
-              Atualizando quantidades disponíveis no estoque…
+              Atualizando quantidades disponÃ­veis no estoqueâ€¦
             </p>
           )}
           {!bomEntradaLoading && qtdProduzir > 0 && bomEntrada.length > 0 && (
@@ -698,9 +698,9 @@ export function FacaDetalheClient({
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
-                    <th className="text-left px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Matéria-Prima</th>
-                    <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Necessário</th>
-                    <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Disponível</th>
+                    <th className="text-left px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>MatÃ©ria-Prima</th>
+                    <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>NecessÃ¡rio</th>
+                    <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>DisponÃ­vel</th>
                     <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Restante</th>
                   </tr>
                 </thead>
@@ -729,9 +729,9 @@ export function FacaDetalheClient({
             </div>
           )}
 
-          {!bomEntradaLoading && !todosDisponíveis && qtdProduzir > 0 && (
+          {!bomEntradaLoading && !todosDisponiveis && qtdProduzir > 0 && (
             <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>
-              Matérias-primas insuficientes para produzir {qtdProduzir} unidades.
+              MatÃ©rias-primas insuficientes para produzir {qtdProduzir} unidades.
             </p>
           )}
 
@@ -752,9 +752,9 @@ export function FacaDetalheClient({
             <Button
               onClick={handleEntrada}
               loading={entradaLoading}
-              disabled={bomEntradaLoading || !todosDisponíveis || qtdProduzir <= 0}
+              disabled={bomEntradaLoading || !todosDisponiveis || qtdProduzir <= 0}
             >
-              Confirmar Produção
+              Confirmar ProduÃ§Ã£o
             </Button>
           </div>
         </div>
@@ -763,7 +763,7 @@ export function FacaDetalheClient({
       <Modal
         open={!!movEdicao}
         onClose={() => !movSalvarLoading && setMovEdicao(null)}
-        title="Editar movimentação de estoque"
+        title="Editar movimentaÃ§Ã£o de estoque"
         width="560px"
       >
         <div className="flex flex-col gap-4">
@@ -779,7 +779,7 @@ export function FacaDetalheClient({
             />
             <div className="flex flex-col gap-1.5">
               <label htmlFor="mov-usuario" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-                Usuário responsável
+                UsuÃ¡rio responsÃ¡vel
               </label>
               <select
                 id="mov-usuario"
@@ -807,7 +807,7 @@ export function FacaDetalheClient({
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="mov-obs" className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-              Observação
+              ObservaÃ§Ã£o
             </label>
             <textarea
               id="mov-obs"
@@ -838,3 +838,4 @@ export function FacaDetalheClient({
     </>
   )
 }
+

@@ -1,7 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { resolveUploadsBase } from '@/lib/uploads-path'
 
-const UPLOADS_BASE = process.env.UPLOADS_DIR ?? '/var/www/erp-uploads'
+const UPLOADS_BASE = resolveUploadsBase()
 const PUBLIC_BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
 function bucketPath(bucket: string): string {

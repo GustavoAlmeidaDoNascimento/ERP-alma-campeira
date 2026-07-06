@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -13,7 +13,7 @@ import type { MPDetalheData, MPEditModalData } from '@/lib/actions/materias-prim
 import type { MovimentacaoEstoque } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useMPDetalhe } from '@/lib/query/hooks'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 import { formatarDocumento } from '@/lib/br/documento'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -27,7 +27,7 @@ type Props = {
 
 const tipoMovLabel: Record<string, { label: string; color: string; bg: string }> = {
   entrada:      { label: 'Entrada',   color: '#15803d', bg: '#dcfce7' },
-  saida_producao: { label: 'Produção', color: '#b45309', bg: '#fef3c7' },
+  saida_producao: { label: 'ProduÃ§Ã£o', color: '#b45309', bg: '#fef3c7' },
   saida_venda:  { label: 'Venda',     color: '#1d4ed8', bg: '#dbeafe' },
   ajuste:       { label: 'Ajuste',    color: '#6b7280', bg: '#f3f4f6' },
 }
@@ -48,7 +48,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
   const [entradaLoading, setEntradaLoading] = useState(false)
   const [entradaErro, setEntradaErro] = useState('')
 
-  // Edição de movimentação existente
+  // EdiÃ§Ã£o de movimentaÃ§Ã£o existente
   const [movEditando, setMovEditando] = useState<MovimentacaoEstoque | null>(null)
   const [movEditQtd, setMovEditQtd] = useState('1')
   const [movEditObs, setMovEditObs] = useState('')
@@ -72,7 +72,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
       return
     }
     if (!movEditUserId) {
-      setMovEditErro('Selecione o usuário responsável.')
+      setMovEditErro('Selecione o usuÃ¡rio responsÃ¡vel.')
       return
     }
     setMovEditErro('')
@@ -87,14 +87,14 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
       setMovEditando(null)
       refreshActiveTab()
     } catch (e: unknown) {
-      setMovEditErro(e instanceof Error ? e.message : 'Erro ao salvar movimentação.')
+      setMovEditErro(e instanceof Error ? e.message : 'Erro ao salvar movimentaÃ§Ã£o.')
     } finally {
       setMovEditLoading(false)
     }
   }
 
   const fotoUrl = mp.foto_url
-    ? getOptimizedSupabaseImageUrl(mp.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
+    ? getOptimizedImageUrl(mp.foto_url, { width: 200, height: 200, quality: 80, resize: 'cover' })
     : ''
 
   const qtd =
@@ -105,7 +105,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
   async function handleEntrada() {
     if (qtd <= 0) return
     if (!usuarioRegistroId) {
-      setEntradaErro('Selecione quem está registrando a entrada.')
+      setEntradaErro('Selecione quem estÃ¡ registrando a entrada.')
       return
     }
     setEntradaErro('')
@@ -144,7 +144,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
     <>
       {/* Header */}
       <div className="px-8 py-6" style={{ borderBottom: '1px solid var(--ac-border)' }}>
-        {/* Botão voltar */}
+        {/* BotÃ£o voltar */}
         <button
           type="button"
           onClick={() => router.back()}
@@ -195,7 +195,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                 onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ac-accent)')}
                 onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ac-muted)')}
               >
-                Matérias-Primas
+                MatÃ©rias-Primas
               </button>
               <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>/</span>
               <span className="text-xs font-mono" style={{ color: 'var(--ac-muted)' }}>{mp.codigo}</span>
@@ -220,12 +220,12 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                     </span>
                   ) : null}
                   {mp.fornecedor.cidade && mp.fornecedor.uf ? (
-                    <span className="ml-1">— {mp.fornecedor.cidade}/{mp.fornecedor.uf}</span>
+                    <span className="ml-1">â€” {mp.fornecedor.cidade}/{mp.fornecedor.uf}</span>
                   ) : null}
                 </span>
               )}
               <span className="text-sm" style={{ color: 'var(--ac-text)' }}>
-                Preço custo: <strong>
+                PreÃ§o custo: <strong>
                   {mp.preco_custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </strong>
               </span>
@@ -294,7 +294,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
-                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Código</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>CÃ³digo</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Nome</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Categoria</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Qtd/unidade</th>
@@ -333,19 +333,19 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
           )}
         </section>
 
-        {/* ========== Movimentações ========== */}
+        {/* ========== MovimentaÃ§Ãµes ========== */}
         {permVerMov && (
         <section>
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <h3 className="text-lg font-semibold m-0" style={{ color: 'var(--ac-text)' }}>
-              Movimentações de Estoque
+              MovimentaÃ§Ãµes de Estoque
             </h3>
             <Button
               type="button"
               variant="secondary"
               className="shrink-0 text-sm"
               onClick={() => refreshActiveTab()}
-              title="Atualizar lista de movimentações"
+              title="Atualizar lista de movimentaÃ§Ãµes"
             >
               <span className="inline-flex items-center gap-2">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4 shrink-0" aria-hidden>
@@ -357,7 +357,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
             </Button>
           </div>
           {movimentacoes.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentação registrada.</p>
+            <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Nenhuma movimentaÃ§Ã£o registrada.</p>
           ) : (
             <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
               <table className="w-full text-sm">
@@ -368,9 +368,9 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Faca</th>
                     <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Registrado por</th>
                     <th className="text-right px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Quantidade</th>
-                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</th>
+                    <th className="text-left px-4 py-2.5 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>ObservaÃ§Ã£o</th>
                     {permEditarMov && (
-                      <th className="text-center px-4 py-2.5 font-semibold text-xs uppercase tracking-wide w-16" style={{ color: 'var(--ac-muted)' }}>Ações</th>
+                      <th className="text-center px-4 py-2.5 font-semibold text-xs uppercase tracking-wide w-16" style={{ color: 'var(--ac-muted)' }}>AÃ§Ãµes</th>
                     )}
                   </tr>
                 </thead>
@@ -394,10 +394,10 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                           </span>
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
-                          {mov.faca ? `${mov.faca.codigo} — ${mov.faca.nome}` : '—'}
+                          {mov.faca ? `${mov.faca.codigo} â€” ${mov.faca.nome}` : 'â€”'}
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-text)' }}>
-                          {mov.usuario?.nome ?? '—'}
+                          {mov.usuario?.nome ?? 'â€”'}
                         </td>
                         <td
                           className="px-4 py-2.5 text-right tabular-nums font-semibold"
@@ -407,7 +407,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                           {Number(mov.quantidade).toLocaleString('pt-BR')}
                         </td>
                         <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--ac-muted)' }}>
-                          {mov.observacao ?? '—'}
+                          {mov.observacao ?? 'â€”'}
                         </td>
                         {permEditarMov && (
                           <td className="px-4 py-2.5 text-center">
@@ -424,7 +424,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                                 e.currentTarget.style.color = 'var(--ac-muted)'
                                 e.currentTarget.style.borderColor = 'var(--ac-border)'
                               }}
-                              title="Editar movimentação"
+                              title="Editar movimentaÃ§Ã£o"
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-3.5">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -458,14 +458,14 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
       <Modal
         open={entradaModalOpen}
         onClose={() => setEntradaModalOpen(false)}
-        title={`Entrada de Estoque — ${mp.codigo}`}
+        title={`Entrada de Estoque â€” ${mp.codigo}`}
         width="440px"
       >
         <div className="flex flex-col gap-4">
           <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
             Informe a quantidade recebida de{' '}
             <strong style={{ color: 'var(--ac-text)' }}>{mp.nome}</strong>.
-            O estoque atual será atualizado e o registro aparecerá no histórico.
+            O estoque atual serÃ¡ atualizado e o registro aparecerÃ¡ no histÃ³rico.
           </p>
 
           <div className="rounded-lg px-4 py-3 text-sm flex items-center gap-3" style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}>
@@ -473,7 +473,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
             <strong style={{ color: 'var(--ac-text)' }}>{Number(mp.estoque_atual).toLocaleString('pt-BR')}</strong>
             {qtd > 0 && (
               <>
-                <span style={{ color: 'var(--ac-muted)' }}>→</span>
+                <span style={{ color: 'var(--ac-muted)' }}>â†’</span>
                 <strong style={{ color: '#15803d' }}>
                   {(Number(mp.estoque_atual) + qtd).toLocaleString('pt-BR')}
                 </strong>
@@ -527,7 +527,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
               onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
               onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
             >
-              <option value="">Selecione um usuário...</option>
+              <option value="">Selecione um usuÃ¡rio...</option>
               {usuariosRegistro.map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
@@ -536,7 +536,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-              Observação (opcional)
+              ObservaÃ§Ã£o (opcional)
             </label>
             <input
               type="text"
@@ -573,17 +573,17 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
         </div>
       </Modal>
 
-      {/* Modal Editar Movimentação */}
+      {/* Modal Editar MovimentaÃ§Ã£o */}
       <Modal
         open={movEditando !== null}
         onClose={() => setMovEditando(null)}
-        title={movEditando ? `Editar Movimentação — ${tipoMovLabel[movEditando.tipo]?.label ?? 'Ajuste'}` : 'Editar Movimentação'}
+        title={movEditando ? `Editar MovimentaÃ§Ã£o â€” ${tipoMovLabel[movEditando.tipo]?.label ?? 'Ajuste'}` : 'Editar MovimentaÃ§Ã£o'}
         width="440px"
       >
         {movEditando && (
           <div className="flex flex-col gap-4">
             <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-              Alterações serão aplicadas ao estoque em tempo real.
+              AlteraÃ§Ãµes serÃ£o aplicadas ao estoque em tempo real.
             </p>
 
             <Input
@@ -625,7 +625,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
               >
-                <option value="">Selecione um usuário...</option>
+                <option value="">Selecione um usuÃ¡rio...</option>
                 {usuariosRegistro.map((u) => (
                   <option key={u.id} value={u.id}>{u.nome}</option>
                 ))}
@@ -634,7 +634,7 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-                Observação (opcional)
+                ObservaÃ§Ã£o (opcional)
               </label>
               <input
                 type="text"
@@ -673,3 +673,4 @@ export function MPDetalheClient({ detalhe: initialDetalhe, perm, permEditarMov =
     </>
   )
 }
+

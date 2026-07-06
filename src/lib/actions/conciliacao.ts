@@ -1,7 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { Prisma } from '@prisma/client'
 import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -81,43 +82,67 @@ export type ResultadoConciliacao = {
 export async function getConciliacao(): Promise<ResultadoConciliacao> {
   await requireAuthenticatedUserId()
   await assertPermissao('metricas', 'ver')
-  const supabase = await createClient()
 
   // Busca tudo em paralelo
-  const [
-    { data: facas },
-    { data: movimentacoes },
-    { data: bom },
-    { data: pedidosEntregues },
-    { data: pedidoItens },
-  ] = await Promise.all([
-    supabase.from('facas').select('id, codigo, nome, estoque_atual'),
-    supabase.from('movimentacoes_estoque').select('faca_id, materia_prima_id, pedido_id, tipo, quantidade'),
-    supabase.from('faca_materias_primas').select('faca_id, materia_prima_id, quantidade, materia_prima:materias_primas(id, codigo, nome)'),
-    supabase.from('pedidos').select('id, codigo').eq('status', 'entregue'),
-    supabase.from('pedido_itens').select('pedido_id, faca_id, quantidade, faca:facas(id, codigo, nome)'),
+  const [facas, movimentacoes, bom, pedidosEntregues, pedidoItens] = await Promise.all([
+    prisma.faca.findMany({
+      select: { id: true, codigo: true, nome: true, estoqueAtual: true },
+    }),
+    prisma.movimentacaoEstoque.findMany({
+      select: {
+        facaId: true,
+        materiaPrimaId: true,
+        pedidoId: true,
+        tipo: true,
+        quantidade: true,
+      },
+    }),
+    prisma.facaMateriaPrima.findMany({
+      select: {
+        facaId: true,
+        materiaPrimaId: true,
+        quantidade: true,
+        materiaPrima: {
+          select: { id: true, codigo: true, nome: true },
+        },
+      },
+    }),
+    prisma.pedido.findMany({
+      where: { status: 'entregue' },
+      select: { id: true, codigo: true },
+    }),
+    prisma.pedidoItem.findMany({
+      select: {
+        pedidoId: true,
+        facaId: true,
+        quantidade: true,
+        faca: {
+          select: { id: true, codigo: true, nome: true },
+        },
+      },
+    }),
   ])
 
-  const movs = movimentacoes ?? []
-  const bomItems = bom ?? []
-  const pedidos = pedidosEntregues ?? []
-  const itens = pedidoItens ?? []
+  const movs = movimentacoes
+  const bomItems = bom
+  const pedidos = pedidosEntregues
+  const itens = pedidoItens
 
   // ── 1. Integridade de estoque por faca ──────────────────────────────────────
 
-  const resultFacas: ConciliacaoFaca[] = (facas ?? []).map((faca) => {
-    const movsFaca = movs.filter((m) => m.faca_id === faca.id)
+  const resultFacas: ConciliacaoFaca[] = facas.map((faca) => {
+    const movsFaca = movs.filter((m) => m.facaId === faca.id)
 
     const totalProduzido = movsFaca
       .filter((m) => m.tipo === 'entrada')
-      .reduce((s, m) => s + m.quantidade, 0)
+      .reduce((s, m) => s + Number(m.quantidade), 0)
 
     const totalVendido = movsFaca
       .filter((m) => m.tipo === 'saida_venda')
-      .reduce((s, m) => s + m.quantidade, 0)
+      .reduce((s, m) => s + Number(m.quantidade), 0)
 
     const saldoMovimentos = totalProduzido - totalVendido
-    const estoqueInicialImplicito = faca.estoque_atual - saldoMovimentos
+    const estoqueInicialImplicito = Number(faca.estoqueAtual) - saldoMovimentos
     const divergencia = estoqueInicialImplicito  // deve ser >= 0
 
     const nivel: NivelAlerta = divergencia < 0 ? 'divergencia' : 'ok'
@@ -131,7 +156,7 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
       facaId: faca.id,
       facaCodigo: faca.codigo,
       facaNome: faca.nome,
-      estoqueAtual: faca.estoque_atual,
+      estoqueAtual: Number(faca.estoqueAtual),
       totalProduzido,
       totalVendido,
       saldoMovimentos,
@@ -146,29 +171,29 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
 
   const resultProducao: ConciliacaoProducao[] = []
 
-  for (const faca of facas ?? []) {
+  for (const faca of facas) {
     const totalProduzidoFaca = movs
-      .filter((m) => m.faca_id === faca.id && m.tipo === 'entrada')
-      .reduce((s, m) => s + m.quantidade, 0)
+      .filter((m) => m.facaId === faca.id && m.tipo === 'entrada')
+      .reduce((s, m) => s + Number(m.quantidade), 0)
 
     if (totalProduzidoFaca === 0) continue  // faca sem produção registrada — skip
 
-    const bomFaca = bomItems.filter((b) => b.faca_id === faca.id)
+    const bomFaca = bomItems.filter((b) => b.facaId === faca.id)
 
     for (const bomItem of bomFaca) {
-      const mp = Array.isArray(bomItem.materia_prima) ? bomItem.materia_prima[0] : bomItem.materia_prima
+      const mp = bomItem.materiaPrima
       if (!mp) continue
 
-      const consumoEsperado = Math.round(totalProduzidoFaca * bomItem.quantidade * 1000) / 1000
+      const consumoEsperado = Math.round(totalProduzidoFaca * Number(bomItem.quantidade) * 1000) / 1000
 
       const consumoRegistrado = movs
         .filter(
           (m) =>
-            m.faca_id === faca.id &&
-            m.materia_prima_id === bomItem.materia_prima_id &&
+            m.facaId === faca.id &&
+            m.materiaPrimaId === bomItem.materiaPrimaId &&
             m.tipo === 'saida_producao',
         )
-        .reduce((s, m) => s + m.quantidade, 0)
+        .reduce((s, m) => s + Number(m.quantidade), 0)
 
       const divergencia = Math.round((consumoRegistrado - consumoEsperado) * 1000) / 1000
       const nivel: NivelAlerta = divergencia !== 0 ? 'divergencia' : 'ok'
@@ -182,7 +207,7 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
         facaId: faca.id,
         facaCodigo: faca.codigo,
         facaNome: faca.nome,
-        mpId: bomItem.materia_prima_id,
+        mpId: bomItem.materiaPrimaId,
         mpCodigo: mp.codigo,
         mpNome: mp.nome,
         totalProduzidoFaca,
@@ -200,21 +225,21 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
   const resultVendas: ConciliacaoVenda[] = []
 
   for (const pedido of pedidos) {
-    const itensPedido = itens.filter((i) => i.pedido_id === pedido.id)
+    const itensPedido = itens.filter((i) => i.pedidoId === pedido.id)
 
     for (const item of itensPedido) {
-      const faca = Array.isArray(item.faca) ? item.faca[0] : item.faca
+      const faca = item.faca
 
       const quantidadeMovimento = movs
         .filter(
           (m) =>
-            m.pedido_id === pedido.id &&
-            m.faca_id === item.faca_id &&
+            m.pedidoId === pedido.id &&
+            m.facaId === item.facaId &&
             m.tipo === 'saida_venda',
         )
-        .reduce((s, m) => s + m.quantidade, 0)
+        .reduce((s, m) => s + Number(m.quantidade), 0)
 
-      const divergencia = quantidadeMovimento - item.quantidade
+      const divergencia = quantidadeMovimento - Number(item.quantidade)
       const nivel: NivelAlerta = divergencia !== 0 ? 'divergencia' : 'ok'
       const detalhe = divergencia < 0
         ? `Pedido ${pedido.codigo}: ${Math.abs(divergencia)} unidade(s) entregue(s) sem movimentação de saída registrada.`
@@ -226,10 +251,10 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
         resultVendas.push({
           pedidoId: pedido.id,
           pedidoCodigo: pedido.codigo,
-          facaId: item.faca_id,
+          facaId: item.facaId,
           facaCodigo: faca?.codigo ?? '?',
           facaNome: faca?.nome ?? '?',
-          quantidadePedido: item.quantidade,
+          quantidadePedido: Number(item.quantidade),
           quantidadeMovimento,
           divergencia,
           nivel,
@@ -259,63 +284,62 @@ export async function getConciliacao(): Promise<ResultadoConciliacao> {
 
 export async function corrigirDivergenciaVenda(pedidoId: string, facaId: string): Promise<{ corrigido: number }> {
   await assertPermissao('vendas', 'editar')
-  const supabase = await createClient()
-
-  const [{ data: pedido }, { data: item }, { data: movs }] = await Promise.all([
-    supabase.from('pedidos').select('id, status').eq('id', pedidoId).maybeSingle(),
-    supabase
-      .from('pedido_itens')
-      .select('pedido_id, faca_id, quantidade')
-      .eq('pedido_id', pedidoId)
-      .eq('faca_id', facaId)
-      .maybeSingle(),
-    supabase
-      .from('movimentacoes_estoque')
-      .select('quantidade')
-      .eq('pedido_id', pedidoId)
-      .eq('faca_id', facaId)
-      .eq('tipo', 'saida_venda'),
+  const [pedido, item, movs] = await Promise.all([
+    prisma.pedido.findUnique({
+      where: { id: pedidoId },
+      select: { id: true, status: true },
+    }),
+    prisma.pedidoItem.findFirst({
+      where: { pedidoId, facaId },
+      select: { pedidoId: true, facaId: true, quantidade: true },
+    }),
+    prisma.movimentacaoEstoque.findMany({
+      where: { pedidoId, facaId, tipo: 'saida_venda' },
+      select: { quantidade: true },
+    }),
   ])
 
   if (!pedido) throw new Error('Pedido não encontrado.')
   if (pedido.status !== 'entregue') throw new Error('Somente pedidos entregues podem ser conciliados.')
   if (!item) throw new Error('Item do pedido não encontrado para esta faca.')
 
-  const quantidadeMovimentoAtual = (movs ?? []).reduce((s, m) => s + Number(m.quantidade ?? 0), 0)
+  const quantidadeMovimentoAtual = movs.reduce((s, m) => s + Number(m.quantidade ?? 0), 0)
   const faltante = Number(item.quantidade) - quantidadeMovimentoAtual
 
   if (faltante <= 0) {
     throw new Error('Não há baixa faltante para este item.')
   }
 
-  const { data: faca } = await supabase
-    .from('facas')
-    .select('id, nome, estoque_atual')
-    .eq('id', facaId)
-    .maybeSingle()
+  const faca = await prisma.faca.findUnique({
+    where: { id: facaId },
+    select: { id: true, nome: true, estoqueAtual: true },
+  })
 
   if (!faca) throw new Error('Faca não encontrada.')
-  if (faca.estoque_atual < faltante) {
-    throw new Error(`Estoque insuficiente para corrigir (${faca.nome}): precisa ${faltante}, tem ${faca.estoque_atual}.`)
+  if (Number(faca.estoqueAtual) < faltante) {
+    throw new Error(`Estoque insuficiente para corrigir (${faca.nome}): precisa ${faltante}, tem ${faca.estoqueAtual}.`)
   }
 
   const user = await getAuthenticatedUser()
 
-  const { error: movErr } = await supabase.from('movimentacoes_estoque').insert({
-    tipo: 'saida_venda',
-    faca_id: facaId,
-    pedido_id: pedidoId,
-    quantidade: faltante,
-    usuario_id: user?.id ?? null,
+  await prisma.$transaction(async (tx) => {
+    await tx.movimentacaoEstoque.create({
+      data: {
+        tipo: 'saida_venda',
+        facaId,
+        pedidoId,
+        quantidade: faltante,
+        usuarioId: user?.id ?? null,
+      },
+    })
+
+    await tx.faca.update({
+      where: { id: facaId },
+      data: {
+        estoqueAtual: Number(faca.estoqueAtual) - faltante,
+      },
+    })
   })
-  if (movErr) throw new Error(`Erro ao registrar baixa: ${movErr.message}`)
-
-  const { error: estoqueErr } = await supabase
-    .from('facas')
-    .update({ estoque_atual: faca.estoque_atual - faltante })
-    .eq('id', facaId)
-  if (estoqueErr) throw new Error(`Erro ao atualizar estoque: ${estoqueErr.message}`)
-
 
   return { corrigido: faltante }
 }

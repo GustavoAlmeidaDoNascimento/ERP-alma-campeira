@@ -5,10 +5,10 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { salvarMPComFoto } from '@/lib/actions/materias-primas'
+import { salvarMPComFoto } from '@/lib/actions/materias-primas-upload'
 import Link from 'next/link'
 import type { MateriaPrima, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Props = {
   open: boolean
@@ -59,7 +59,7 @@ export function MPModal({
   const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
 
   const fotoPreviewAtual = editando?.foto_url
-    ? getOptimizedSupabaseImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
+    ? getOptimizedImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
     : ''
 
   useEffect(() => {
@@ -113,9 +113,9 @@ export function MPModal({
     e.preventDefault()
     setErro('')
 
-    if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
-    if (!form.categoria.trim()) { setErro('Categoria é obrigatória.'); return }
-    if (!form.preco_custo || isNaN(Number(form.preco_custo))) { setErro('Preço de custo inválido.'); return }
+    if (!form.nome.trim()) { setErro('Nome Ã© obrigatÃ³rio.'); return }
+    if (!form.categoria.trim()) { setErro('Categoria Ã© obrigatÃ³ria.'); return }
+    if (!form.preco_custo || isNaN(Number(form.preco_custo))) { setErro('PreÃ§o de custo invÃ¡lido.'); return }
 
     setLoading(true)
     try {
@@ -143,19 +143,19 @@ export function MPModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={editando ? `Editar — ${editando.codigo}` : 'Nova Matéria-Prima'}
+      title={editando ? `Editar â€” ${editando.codigo}` : 'Nova MatÃ©ria-Prima'}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {loadingReferencias && (
           <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-            Carregando fornecedores e categorias…
+            Carregando fornecedores e categoriasâ€¦
           </p>
         )}
         <Input
           id="nome"
           label="Nome *"
           disabled={loadingReferencias}
-          placeholder="Ex: Lâmina Aço Inox 420"
+          placeholder="Ex: LÃ¢mina AÃ§o Inox 420"
           value={form.nome}
           onChange={(e) => set('nome', e.target.value)}
         />
@@ -216,7 +216,7 @@ export function MPModal({
             value={form.fornecedor_id}
             onChange={(e) => set('fornecedor_id', e.target.value)}
           >
-            <option value="">— Sem fornecedor —</option>
+            <option value="">â€” Sem fornecedor â€”</option>
             {fornecedores.map((f) => (
               <option key={f.id} value={f.id}>{f.nome}</option>
             ))}
@@ -226,7 +226,7 @@ export function MPModal({
         <div className="grid grid-cols-3 gap-3">
           <Input
             id="preco_custo"
-            label="Preço de Custo (R$) *"
+            label="PreÃ§o de Custo (R$) *"
             type="number"
             min="0"
             step="0.01"
@@ -245,7 +245,7 @@ export function MPModal({
           />
           <Input
             id="estoque_minimo"
-            label="Estoque Mínimo"
+            label="Estoque MÃ­nimo"
             type="number"
             min="0"
             step="0.001"
@@ -287,11 +287,11 @@ export function MPModal({
                       background: 'transparent',
                       cursor: 'zoom-in',
                     }}
-                    aria-label="Expandir foto da matéria-prima"
+                    aria-label="Expandir foto da matÃ©ria-prima"
                   >
                     <img
                       src={src}
-                      alt="Foto da matéria-prima"
+                      alt="Foto da matÃ©ria-prima"
                       width={64}
                       height={64}
                       style={{ objectFit: 'cover', borderRadius: 12 }}
@@ -416,12 +416,12 @@ export function MPModal({
             Cancelar
           </Button>
           <Button type="submit" loading={loading}>
-            {editando ? 'Salvar alterações' : 'Criar matéria-prima'}
+            {editando ? 'Salvar alteraÃ§Ãµes' : 'Criar matÃ©ria-prima'}
           </Button>
         </div>
       </form>
 
-      <Modal open={fotoLightboxOpen} onClose={closeFotoLightbox} title="Foto da matéria-prima" width="520px">
+      <Modal open={fotoLightboxOpen} onClose={closeFotoLightbox} title="Foto da matÃ©ria-prima" width="520px">
         <div className="flex flex-col gap-3">
           <div
             style={{
@@ -435,7 +435,7 @@ export function MPModal({
             {fotoLightboxSrc ? (
               <img
                 src={fotoLightboxSrc}
-                alt="Foto da matéria-prima"
+                alt="Foto da matÃ©ria-prima"
                 style={{ width: '100%', height: 'auto', display: 'block' }}
               />
             ) : null}
@@ -451,3 +451,4 @@ export function MPModal({
     </Modal>
   )
 }
+

@@ -1,7 +1,7 @@
 /**
  * Wrapper simples para medir latência de Server Actions / queries em dev.
  *
- * Uso: `return withTiming('getMatériasPrimas', () => supabase.from(...).select(...))`
+ * Uso: `return withTiming('getMatériasPrimas', () => prisma.materiaPrima.findMany())`
  *
  * Em produção é no-op (zero overhead). Em dev imprime a latência no stdout
  * com indicador visual quando passa de 100ms (alvo p95 da Fase 3 do plano).

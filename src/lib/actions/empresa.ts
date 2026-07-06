@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import type { Empresa } from '@/types'
 import { apenasDigitos, validarCnpj } from '@/lib/br/documento'
 
@@ -24,21 +24,63 @@ export type EmpresaInput = {
   email: string
 }
 
+type EmpresaRow = {
+  id: string
+  razaoSocial: string
+  nomeFantasia: string | null
+  cnpj: string
+  ie: string | null
+  im: string | null
+  crt: number
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  codigoMunicipioIbge: string | null
+  telefone: string | null
+  email: string | null
+  createdAt: Date | string
+  updatedAt: Date | string
+}
+
+function iso(value: Date | string | null | undefined): string {
+  if (!value) return ''
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+}
+
+function mapEmpresaRow(row: EmpresaRow): Empresa {
+  return {
+    id: row.id,
+    razao_social: row.razaoSocial,
+    nome_fantasia: row.nomeFantasia,
+    cnpj: row.cnpj,
+    ie: row.ie,
+    im: row.im,
+    crt: Number(row.crt),
+    cep: row.cep,
+    logradouro: row.logradouro,
+    numero: row.numero,
+    complemento: row.complemento,
+    bairro: row.bairro,
+    cidade: row.cidade,
+    uf: row.uf,
+    codigo_municipio_ibge: row.codigoMunicipioIbge,
+    telefone: row.telefone,
+    email: row.email,
+    created_at: iso(row.createdAt),
+    updated_at: iso(row.updatedAt),
+  }
+}
+
 export async function getEmpresa(): Promise<Empresa | null> {
   await assertPermissao('taxas_lucro', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('empresa')
-    .select('*')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (error) {
-    // Se a tabela ainda não existe, devolver null em vez de quebrar a página.
-    if (/relation .* does not exist/i.test(error.message)) return null
-    throw new Error(error.message)
-  }
-  return (data as Empresa | null) ?? null
+  const row = await prisma.empresaConfig.findFirst({
+    orderBy: { createdAt: 'asc' },
+  })
+  return row ? mapEmpresaRow(row) : null
 }
 
 function normalizarEmpresa(input: EmpresaInput) {
@@ -84,21 +126,57 @@ function normalizarEmpresa(input: EmpresaInput) {
 export async function salvarEmpresa(input: EmpresaInput): Promise<void> {
   // Reusa a permissão administrativa já existente.
   await assertPermissao('taxas_lucro', 'editar')
-  const supabase = await createClient()
   const row = normalizarEmpresa(input)
 
-  const { data: atual } = await supabase
-    .from('empresa')
-    .select('id')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const atual = await prisma.empresaConfig.findFirst({
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  })
 
   if (atual?.id) {
-    const { error } = await supabase.from('empresa').update(row).eq('id', atual.id)
-    if (error) throw new Error(error.message)
-  } else {
-    const { error } = await supabase.from('empresa').insert(row)
-    if (error) throw new Error(error.message)
+    await prisma.empresaConfig.update({
+      where: { id: atual.id },
+      data: {
+        razaoSocial: row.razao_social,
+        nomeFantasia: row.nome_fantasia,
+        cnpj: row.cnpj,
+        ie: row.ie,
+        im: row.im,
+        crt: row.crt,
+        cep: row.cep,
+        logradouro: row.logradouro,
+        numero: row.numero,
+        complemento: row.complemento,
+        bairro: row.bairro,
+        cidade: row.cidade,
+        uf: row.uf,
+        codigoMunicipioIbge: row.codigo_municipio_ibge,
+        telefone: row.telefone,
+        email: row.email,
+        updatedAt: new Date(),
+      },
+    })
+    return
   }
+
+  await prisma.empresaConfig.create({
+    data: {
+      razaoSocial: row.razao_social,
+      nomeFantasia: row.nome_fantasia,
+      cnpj: row.cnpj,
+      ie: row.ie,
+      im: row.im,
+      crt: row.crt,
+      cep: row.cep,
+      logradouro: row.logradouro,
+      numero: row.numero,
+      complemento: row.complemento,
+      bairro: row.bairro,
+      cidade: row.cidade,
+      uf: row.uf,
+      codigoMunicipioIbge: row.codigo_municipio_ibge,
+      telefone: row.telefone,
+      email: row.email,
+    },
+  })
 }

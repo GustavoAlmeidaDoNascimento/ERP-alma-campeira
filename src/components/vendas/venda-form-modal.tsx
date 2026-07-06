@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useMemo, type KeyboardEvent } from 'react'
 import Link from 'next/link'
@@ -10,7 +10,7 @@ import { criarVenda, atualizarVenda } from '@/lib/actions/vendas'
 import type { ParcelaInput } from '@/lib/actions/boletos'
 import { STATUS_PEDIDO, FORMAS_PAGAMENTO_OC } from '@/types'
 import type { Pedido, Cliente, Faca, StatusPedido, FormaPagamentoOC } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Props = {
   open: boolean
@@ -19,7 +19,7 @@ type Props = {
   clientes: Cliente[]
   facas: Faca[]
   usuarios: { id: string; nome: string }[]
-  /** Pré-seleciona o vendedor em nova venda quando o usuário logado está na lista. */
+  /** PrÃ©-seleciona o vendedor em nova venda quando o usuÃ¡rio logado estÃ¡ na lista. */
   usuarioLogadoId: string | null
   onSaved?: () => void
 }
@@ -40,7 +40,7 @@ function moeda2(n: number) {
   return Math.round(n * 100) / 100
 }
 
-/** Setas ↑/↓: passo inteiro (1); step=0.01 no HTML continua válido para digitação decimal. */
+/** Setas â†‘/â†“: passo inteiro (1); step=0.01 no HTML continua vÃ¡lido para digitaÃ§Ã£o decimal. */
 /** Linhas com quantidade total por faca acima do estoque_atual do cadastro. */
 function listarEstoqueInsuficiente(
   itens: { faca_id: string; quantidade: number }[],
@@ -57,7 +57,7 @@ function listarEstoqueInsuficiente(
     const faca = facas.find((f) => f.id === facaId)
     const estoqueAtual = Number(faca?.estoque_atual ?? 0)
     if (!faca || qtdTotal > estoqueAtual) {
-      insuficientes.push(`${faca?.codigo ?? 'Faca'} — solicitado: ${qtdTotal}, disponível: ${estoqueAtual}`)
+      insuficientes.push(`${faca?.codigo ?? 'Faca'} â€” solicitado: ${qtdTotal}, disponÃ­vel: ${estoqueAtual}`)
     }
   }
   return insuficientes
@@ -96,16 +96,16 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
   const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
-  /** Detalhes do aviso de estoque; quando preenchido, exige confirmação na UI antes de salvar. */
+  /** Detalhes do aviso de estoque; quando preenchido, exige confirmaÃ§Ã£o na UI antes de salvar. */
   const [avisoEstoqueInsuficiente, setAvisoEstoqueInsuficiente] = useState<string[] | null>(null)
 
   const opcoesFaca = useMemo<SearchableSelectOption[]>(
     () =>
       facas.map((f) => ({
         value: f.id,
-        label: `${f.codigo} — ${f.nome}`,
+        label: `${f.codigo} â€” ${f.nome}`,
         imageUrl: f.foto_url
-          ? getOptimizedSupabaseImageUrl(f.foto_url, {
+          ? getOptimizedImageUrl(f.foto_url, {
               width: 40,
               height: 40,
               quality: 60,
@@ -399,7 +399,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
               onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
             >
-              <option value="">Selecione um cliente…</option>
+              <option value="">Selecione um clienteâ€¦</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
@@ -415,7 +415,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               onFocus={(e) => e.currentTarget.style.borderColor = 'var(--ac-accent)'}
               onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
             >
-              <option value="">Selecione um vendedor…</option>
+              <option value="">Selecione um vendedorâ€¦</option>
               {usuarios.map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
@@ -454,13 +454,13 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
           </div>
         </div>
 
-        {/* Observação */}
+        {/* ObservaÃ§Ã£o */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Observação</label>
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>ObservaÃ§Ã£o</label>
           <textarea
             value={observacao}
             onChange={(e) => setObservacao(e.target.value)}
-            placeholder="Prazo de entrega, condições especiais..."
+            placeholder="Prazo de entrega, condiÃ§Ãµes especiais..."
             rows={2}
             className="px-3 py-2.5 rounded-lg text-sm outline-none transition-all resize-none"
             style={inputStyle}
@@ -469,9 +469,9 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
           />
         </div>
 
-        {/* Natureza da operação (NF-e) */}
+        {/* Natureza da operaÃ§Ã£o (NF-e) */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Natureza da operação (NF-e)</label>
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Natureza da operaÃ§Ã£o (NF-e)</label>
           <input
             type="text"
             value={naturezaOperacao}
@@ -507,8 +507,8 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
             style={{ gridTemplateColumns: '1fr 70px 110px 180px 90px 32px', color: 'var(--ac-muted)' }}>
             <span>Faca</span>
             <span className="text-center">Qtd</span>
-            <span className="text-right">Preço unit.</span>
-            <span className="text-center">Desconto unitário</span>
+            <span className="text-right">PreÃ§o unit.</span>
+            <span className="text-center">Desconto unitÃ¡rio</span>
             <span className="text-right">Subtotal</span>
             <span></span>
           </div>
@@ -535,7 +535,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                     value={item.faca_id}
                     onChange={(v) => updateItem(idx, 'faca_id', v)}
                     options={opcoesFaca}
-                    placeholder="Pesquisar por código ou nome…"
+                    placeholder="Pesquisar por cÃ³digo ou nomeâ€¦"
                     emptyMessage="Nenhuma faca encontrada"
                   />
 
@@ -551,7 +551,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                     onBlur={(e) => e.currentTarget.style.borderColor = 'var(--ac-border)'}
                   />
 
-                  {/* Preço unitário */}
+                  {/* PreÃ§o unitÃ¡rio */}
                   <input
                     type="number"
                     min={0}
@@ -646,7 +646,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                     {acimaDoEstoque && (
                       <span>
                         {' '}
-                        · total neste pedido: {qtdTotalFacaNoPedido}
+                        Â· total neste pedido: {qtdTotalFacaNoPedido}
                       </span>
                     )}
                   </p>
@@ -674,7 +674,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                 onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--ac-accent)')}
                 onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--ac-border)')}
               >
-                <option value="">— Selecione —</option>
+                <option value="">â€” Selecione â€”</option>
                 {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
                 ))}
@@ -699,7 +699,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
               )}
             </div>
 
-            {/* Parcelas do boleto — aparece quando forma = boleto */}
+            {/* Parcelas do boleto â€” aparece quando forma = boleto */}
             {formaPagamento === 'boleto' && (
               <div
                 className="flex flex-col gap-3 rounded-lg p-3"
@@ -815,7 +815,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                 )}
                 {editando && (
                   <p className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                    O boleto só é criado se a venda ainda não tiver um vinculado.
+                    O boleto sÃ³ Ã© criado se a venda ainda nÃ£o tiver um vinculado.
                   </p>
                 )}
               </div>
@@ -936,7 +936,7 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
                 Estoque insuficiente
               </p>
               <p className="text-xs mt-1" style={{ color: '#b45309' }}>
-                A venda pode ser registrada mesmo assim — a produção pode ocorrer depois do pedido.
+                A venda pode ser registrada mesmo assim â€” a produÃ§Ã£o pode ocorrer depois do pedido.
               </p>
               <ul className="mt-2 text-xs list-disc pl-4 space-y-0.5" style={{ color: '#92400e' }}>
                 {avisoEstoqueInsuficiente.map((linha) => (
@@ -971,3 +971,4 @@ export function VendaFormModal({ open, onClose, editando, clientes, facas, usuar
     </Modal>
   )
 }
+

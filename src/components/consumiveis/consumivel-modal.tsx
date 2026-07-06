@@ -5,10 +5,10 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { salvarConsumivelComFoto } from '@/lib/actions/consumiveis'
+import { salvarConsumivelComFoto } from '@/lib/actions/consumiveis-upload'
 import Link from 'next/link'
 import type { Consumivel, Fornecedor, CategoriaConsumivelDB } from '@/types'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Props = {
   open: boolean
@@ -50,7 +50,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
   const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
 
   const fotoPreviewAtual = editando?.foto_url
-    ? getOptimizedSupabaseImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
+    ? getOptimizedImageUrl(editando.foto_url, { width: 120, height: 120, quality: 70, resize: 'cover', fallbackUrl: '' })
     : ''
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
     } else {
       setForm({
         ...formVazio,
-        categoria: categoriasConsumivel[0]?.nome ?? 'Escritório',
+        categoria: categoriasConsumivel[0]?.nome ?? 'EscritÃ³rio',
       })
     }
     setErro('')
@@ -104,9 +104,9 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
     e.preventDefault()
     setErro('')
 
-    if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return }
-    if (!form.categoria.trim()) { setErro('Categoria é obrigatória.'); return }
-    if (!form.preco_custo || isNaN(Number(form.preco_custo))) { setErro('Preço de custo inválido.'); return }
+    if (!form.nome.trim()) { setErro('Nome Ã© obrigatÃ³rio.'); return }
+    if (!form.categoria.trim()) { setErro('Categoria Ã© obrigatÃ³ria.'); return }
+    if (!form.preco_custo || isNaN(Number(form.preco_custo))) { setErro('PreÃ§o de custo invÃ¡lido.'); return }
 
     setLoading(true)
     try {
@@ -134,7 +134,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
     <Modal
       open={open}
       onClose={onClose}
-      title={editando ? `Editar — ${editando.codigo}` : 'Novo Consumível'}
+      title={editando ? `Editar â€” ${editando.codigo}` : 'Novo ConsumÃ­vel'}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <Input
@@ -201,7 +201,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
             value={form.fornecedor_id}
             onChange={(e) => set('fornecedor_id', e.target.value)}
           >
-            <option value="">— Sem fornecedor —</option>
+            <option value="">â€” Sem fornecedor â€”</option>
             {fornecedores.map((f) => (
               <option key={f.id} value={f.id}>{f.nome}</option>
             ))}
@@ -211,7 +211,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
         <div className="grid grid-cols-3 gap-3">
           <Input
             id="preco_custo"
-            label="Preço de Custo (R$) *"
+            label="PreÃ§o de Custo (R$) *"
             type="number"
             min="0"
             step="0.01"
@@ -230,7 +230,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
           />
           <Input
             id="estoque_minimo"
-            label="Estoque Mínimo"
+            label="Estoque MÃ­nimo"
             type="number"
             min="0"
             step="0.001"
@@ -272,11 +272,11 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
                       background: 'transparent',
                       cursor: 'zoom-in',
                     }}
-                    aria-label="Expandir foto do consumível"
+                    aria-label="Expandir foto do consumÃ­vel"
                   >
                     <img
                       src={src}
-                      alt="Foto do consumível"
+                      alt="Foto do consumÃ­vel"
                       width={64}
                       height={64}
                       style={{ objectFit: 'cover', borderRadius: 12 }}
@@ -401,12 +401,12 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
             Cancelar
           </Button>
           <Button type="submit" loading={loading}>
-            {editando ? 'Salvar alterações' : 'Criar consumível'}
+            {editando ? 'Salvar alteraÃ§Ãµes' : 'Criar consumÃ­vel'}
           </Button>
         </div>
       </form>
 
-      <Modal open={fotoLightboxOpen} onClose={closeFotoLightbox} title="Foto do consumível" width="520px">
+      <Modal open={fotoLightboxOpen} onClose={closeFotoLightbox} title="Foto do consumÃ­vel" width="520px">
         <div className="flex flex-col gap-3">
           <div
             style={{
@@ -420,7 +420,7 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
             {fotoLightboxSrc ? (
               <img
                 src={fotoLightboxSrc}
-                alt="Foto do consumível"
+                alt="Foto do consumÃ­vel"
                 style={{ width: '100%', height: 'auto', display: 'block' }}
               />
             ) : null}
@@ -436,3 +436,4 @@ export function ConsumivelModal({ open, onClose, fornecedores, categoriasConsumi
     </Modal>
   )
 }
+

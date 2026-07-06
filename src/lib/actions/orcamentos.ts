@@ -1,161 +1,403 @@
-'use server'
+"use server";
 
-import { createClient } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import { gerarCodigoForte } from '@/lib/utils/codigo'
-import type { Orcamento, StatusPedido } from '@/types'
+import { Prisma } from "@prisma/client";
+import { assertPermissao } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { gerarCodigoForte } from "@/lib/utils/codigo";
+import type { Orcamento, StatusPedido, TipoCliente } from "@/types";
+
+type OrcamentoRow = {
+  id: string;
+  codigo: string;
+  clienteId: string | null;
+  vendedorId: string | null;
+  dataOrcamento: string;
+  observacao: string | null;
+  frete: Prisma.Decimal | number | string | null;
+  descontoTotal: Prisma.Decimal | number | string | null;
+  valorTotal: Prisma.Decimal | number | string | null;
+  convertidoPedidoId: string | null;
+  convertidoAt: Date | string | null;
+  createdAt: Date | string;
+  cliente: {
+    id: string;
+    nome: string;
+    tipo: TipoCliente | string;
+    tipoDocumento: "cpf" | "cnpj";
+    documento: string | null;
+    cidade: string | null;
+    estado: string | null;
+  } | null;
+  vendedor: {
+    id: string;
+    nome: string;
+  } | null;
+};
+
+type OrcamentoItemRow = {
+  id: string;
+  orcamentoId: string;
+  facaId: string;
+  quantidade: number;
+  precoUnitario: Prisma.Decimal | number | string;
+  subtotal: Prisma.Decimal | number | string | null;
+  createdAt?: Date | string;
+  faca?: {
+    id: string;
+    codigo: string;
+    nome: string;
+    precoVenda: Prisma.Decimal | number | string;
+    fotoUrl: string | null;
+  } | null;
+};
+
+function numberFrom(value: Prisma.Decimal | number | string | null | undefined): number {
+  if (value == null) return 0;
+  if (typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+    return value.toNumber();
+  }
+  return Number(value) || 0;
+}
+
+function decimal(value: number): Prisma.Decimal {
+  return new Prisma.Decimal(Number.isFinite(value) ? value : 0);
+}
+
+function isoFrom(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function mapOrcamentoItem(row: OrcamentoItemRow) {
+  const precoUnitario = numberFrom(row.precoUnitario);
+  const subtotal = row.subtotal == null ? row.quantidade * precoUnitario : numberFrom(row.subtotal);
+  return {
+    id: row.id,
+    orcamento_id: row.orcamentoId,
+    faca_id: row.facaId,
+    quantidade: Number(row.quantidade) || 0,
+    preco_unitario: precoUnitario,
+    subtotal,
+    faca: row.faca
+      ? {
+          id: row.faca.id,
+          codigo: row.faca.codigo,
+          nome: row.faca.nome,
+          preco_venda: numberFrom(row.faca.precoVenda),
+          foto_url: row.faca.fotoUrl ?? null,
+        }
+      : undefined,
+  };
+}
+
+function mapOrcamento(row: OrcamentoRow, itens: ReturnType<typeof mapOrcamentoItem>[]): Orcamento {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    cliente_id: row.clienteId,
+    vendedor_id: row.vendedorId,
+    data_orcamento: row.dataOrcamento,
+    observacao: row.observacao,
+    frete: numberFrom(row.frete),
+    desconto_total: numberFrom(row.descontoTotal),
+    valor_total: row.valorTotal == null ? null : numberFrom(row.valorTotal),
+    convertido_pedido_id: row.convertidoPedidoId,
+    convertido_at: isoFrom(row.convertidoAt),
+    created_at: isoFrom(row.createdAt) ?? "",
+    cliente: row.cliente
+      ? {
+          id: row.cliente.id,
+          nome: row.cliente.nome ?? "",
+          tipo: (row.cliente.tipo as TipoCliente | null) ?? "Pessoa Física",
+          tipo_documento: row.cliente.tipoDocumento ?? "cpf",
+          documento: row.cliente.documento ?? "",
+          cidade: row.cliente.cidade ?? "",
+          estado: row.cliente.estado ?? "",
+        }
+      : null,
+    vendedor: row.vendedor
+      ? {
+          id: row.vendedor.id,
+          nome: row.vendedor.nome ?? "",
+        }
+      : null,
+    itens,
+  };
+}
+
+async function fetchOrcamentoItens(
+  db: Prisma.TransactionClient | typeof prisma,
+  orcamentoIds: string[],
+  includeFaca = false,
+): Promise<OrcamentoItemRow[]> {
+  if (orcamentoIds.length === 0) return [];
+  if (includeFaca) {
+    return db.orcamentoItem.findMany({
+      where: { orcamentoId: { in: orcamentoIds } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        orcamentoId: true,
+        facaId: true,
+        quantidade: true,
+        precoUnitario: true,
+        subtotal: true,
+        createdAt: true,
+        faca: {
+          select: {
+            id: true,
+            codigo: true,
+            nome: true,
+            precoVenda: true,
+            fotoUrl: true,
+          },
+        },
+      },
+    });
+  }
+
+  return db.orcamentoItem.findMany({
+    where: { orcamentoId: { in: orcamentoIds } },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      orcamentoId: true,
+      facaId: true,
+      quantidade: true,
+      precoUnitario: true,
+      subtotal: true,
+      createdAt: true,
+    },
+  });
+}
+
+function agruparItens(rows: OrcamentoItemRow[]) {
+  const grouped = new Map<string, ReturnType<typeof mapOrcamentoItem>[]>();
+  for (const row of rows) {
+    const current = grouped.get(row.orcamentoId) ?? [];
+    current.push(mapOrcamentoItem(row));
+    grouped.set(row.orcamentoId, current);
+  }
+  return grouped;
+}
 
 export async function getOrcamentos(limit = 80): Promise<Orcamento[]> {
-  await assertPermissao('orcamentos', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('orcamentos')
-    .select(`
-      *,
-      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
-      vendedor:usuarios_perfis(id, nome),
-      itens:orcamento_itens(*)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw new Error(error.message)
-  return data as Orcamento[]
+  await assertPermissao("orcamentos", "ver");
+  const rows = await prisma.orcamento.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      codigo: true,
+      clienteId: true,
+      vendedorId: true,
+      dataOrcamento: true,
+      observacao: true,
+      frete: true,
+      descontoTotal: true,
+      valorTotal: true,
+      convertidoPedidoId: true,
+      convertidoAt: true,
+      createdAt: true,
+      cliente: {
+        select: {
+          id: true,
+          nome: true,
+          tipo: true,
+          tipoDocumento: true,
+          documento: true,
+          cidade: true,
+          estado: true,
+        },
+      },
+      vendedor: {
+        select: {
+          id: true,
+          nome: true,
+        },
+      },
+    },
+  });
+
+  const itensRows = await fetchOrcamentoItens(
+    prisma,
+    rows.map((row) => row.id),
+  );
+  const itensPorOrcamento = agruparItens(itensRows);
+
+  return rows.map((row) => mapOrcamento(row, itensPorOrcamento.get(row.id) ?? []));
 }
 
 export async function getOrcamentoDetalhe(id: string): Promise<Orcamento> {
-  await assertPermissao('orcamentos', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('orcamentos')
-    .select(`
-      *,
-      cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado),
-      vendedor:usuarios_perfis(id, nome),
-      itens:orcamento_itens(*, faca:facas(id, codigo, nome, preco_venda, foto_url)),
-      pedido_convertido:pedidos!orcamentos_convertido_pedido_id_fkey(id, codigo, status, data_pedido)
-    `)
-    .eq('id', id)
-    .single()
+  await assertPermissao("orcamentos", "ver");
+  const row = await prisma.orcamento.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      codigo: true,
+      clienteId: true,
+      vendedorId: true,
+      dataOrcamento: true,
+      observacao: true,
+      frete: true,
+      descontoTotal: true,
+      valorTotal: true,
+      convertidoPedidoId: true,
+      convertidoAt: true,
+      createdAt: true,
+      cliente: {
+        select: {
+          id: true,
+          nome: true,
+          tipo: true,
+          tipoDocumento: true,
+          documento: true,
+          cidade: true,
+          estado: true,
+        },
+      },
+      vendedor: {
+        select: {
+          id: true,
+          nome: true,
+        },
+      },
+    },
+  });
+  if (!row) throw new Error("Orçamento não encontrado.");
 
-  if (error || !data) throw new Error(error?.message ?? 'Orçamento não encontrado.')
-  return data as Orcamento
+  const itensRows = await fetchOrcamentoItens(prisma, [id], true);
+  const detalhe = mapOrcamento(row, itensRows.map(mapOrcamentoItem));
+
+  if (row.convertidoPedidoId) {
+    const pedido = await prisma.pedido.findUnique({
+      where: { id: row.convertidoPedidoId },
+      select: {
+        id: true,
+        codigo: true,
+        status: true,
+        dataPedido: true,
+      },
+    });
+    detalhe.pedido_convertido = pedido
+      ? {
+          id: pedido.id,
+          codigo: pedido.codigo,
+          status: pedido.status as StatusPedido,
+          data_pedido: pedido.dataPedido,
+        }
+      : null;
+  }
+
+  return detalhe;
 }
 
 export type OrcamentoItemInput = {
-  faca_id: string
-  quantidade: number
-  preco_unitario: number
-}
+  faca_id: string;
+  quantidade: number;
+  preco_unitario: number;
+};
 
 export type OrcamentoInput = {
-  cliente_id: string | null
-  vendedor_id: string | null
-  data_orcamento: string
-  observacao: string
-  frete: number
-  desconto_total: number
-  itens: OrcamentoItemInput[]
-}
+  cliente_id: string | null;
+  vendedor_id: string | null;
+  data_orcamento: string;
+  observacao: string;
+  frete: number;
+  desconto_total: number;
+  itens: OrcamentoItemInput[];
+};
 
 function calcularTotal(input: OrcamentoInput) {
-  const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0)
-  const frete = Math.max(0, input.frete || 0)
-  const bruto = subtotalItens + frete
-  const desconto_total = Math.min(Math.max(0, input.desconto_total || 0), bruto)
-  const valor_total = bruto - desconto_total
-  return { frete, desconto_total, valor_total }
+  const subtotalItens = input.itens.reduce((s, i) => s + i.quantidade * i.preco_unitario, 0);
+  const frete = Math.max(0, input.frete || 0);
+  const bruto = subtotalItens + frete;
+  const desconto_total = Math.min(Math.max(0, input.desconto_total || 0), bruto);
+  const valor_total = bruto - desconto_total;
+  return { frete, desconto_total, valor_total };
+}
+
+function normalizarOrcamentoTexto(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function montarOrcamentoData(input: OrcamentoInput) {
+  const { frete, desconto_total, valor_total } = calcularTotal(input);
+  return {
+    clienteId: input.cliente_id || null,
+    vendedorId: input.vendedor_id || null,
+    dataOrcamento: input.data_orcamento,
+    observacao: normalizarOrcamentoTexto(input.observacao),
+    frete: decimal(frete),
+    descontoTotal: decimal(desconto_total),
+    valorTotal: decimal(valor_total),
+  };
 }
 
 async function inserirItensOrcamento(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  tx: Prisma.TransactionClient,
   orcamentoId: string,
-  itens: OrcamentoItemInput[]
+  itens: OrcamentoItemInput[],
 ) {
-  for (const item of itens) {
-    const { error } = await supabase.from('orcamento_itens').insert({
-      orcamento_id: orcamentoId,
-      faca_id: item.faca_id,
+  if (itens.length === 0) return;
+  await tx.orcamentoItem.createMany({
+    data: itens.map((item) => ({
+      orcamentoId,
+      facaId: item.faca_id,
       quantidade: item.quantidade,
-      preco_unitario: item.preco_unitario,
-    })
-    if (error) throw new Error(error.message)
-  }
+      precoUnitario: decimal(item.preco_unitario),
+      subtotal: decimal(item.quantidade * item.preco_unitario),
+    })),
+  });
 }
 
 export async function criarOrcamento(input: OrcamentoInput): Promise<{ id: string }> {
-  await assertPermissao('orcamentos', 'criar')
-  const supabase = await createClient()
+  await assertPermissao("orcamentos", "criar");
+  if (input.itens.length === 0) throw new Error("Adicione ao menos um item ao orçamento.");
 
-  if (input.itens.length === 0) throw new Error('Adicione ao menos um item ao orçamento.')
+  const codigo = gerarCodigoForte("OR");
+  const data = montarOrcamentoData(input);
 
-  const codigo = gerarCodigoForte('OR')
-  const { frete, desconto_total, valor_total } = calcularTotal(input)
+  const result = await prisma.$transaction(async (tx) => {
+    const inserted = await tx.orcamento.create({
+      data: {
+        codigo,
+        ...data,
+      },
+      select: { id: true },
+    });
 
-  const { data: orcamento, error } = await supabase
-    .from('orcamentos')
-    .insert({
-      codigo,
-      cliente_id: input.cliente_id || null,
-      vendedor_id: input.vendedor_id || null,
-      data_orcamento: input.data_orcamento,
-      observacao: input.observacao.trim() || null,
-      frete,
-      desconto_total,
-      valor_total,
-    })
-    .select('id')
-    .single()
+    const orcamentoId = inserted.id;
 
-  if (error) throw new Error(error.message)
-  if (!orcamento?.id) throw new Error('Não foi possível criar o orçamento (ID não retornado).')
+    await inserirItensOrcamento(tx, orcamentoId, input.itens);
+    return { id: orcamentoId };
+  });
 
-  try {
-    await inserirItensOrcamento(supabase, orcamento.id, input.itens)
-  } catch (e) {
-    // Evita orçamento órfão
-    await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamento.id)
-    await supabase.from('orcamentos').delete().eq('id', orcamento.id)
-    throw e
-  }
-
-
-  return { id: orcamento.id }
+  return result;
 }
 
 export async function atualizarOrcamento(id: string, input: OrcamentoInput) {
-  await assertPermissao('orcamentos', 'editar')
-  const supabase = await createClient()
+  await assertPermissao("orcamentos", "editar");
+  if (input.itens.length === 0) throw new Error("Adicione ao menos um item ao orçamento.");
 
-  if (input.itens.length === 0) throw new Error('Adicione ao menos um item ao orçamento.')
+  const data = montarOrcamentoData(input);
+  await prisma.$transaction(async (tx) => {
+    const atual = await tx.orcamento.findUnique({
+      where: { id },
+      select: { convertidoPedidoId: true },
+    });
+    if (atual?.convertidoPedidoId) {
+      throw new Error("Este orçamento já foi convertido em venda e não pode ser editado.");
+    }
 
-  // Bloqueia edição de orçamento já convertido em venda — manteria desalinhado com o pedido gerado.
-  const { data: atual } = await supabase
-    .from('orcamentos')
-    .select('convertido_pedido_id')
-    .eq('id', id)
-    .single()
-  if (atual?.convertido_pedido_id) {
-    throw new Error('Este orçamento já foi convertido em venda e não pode ser editado.')
-  }
+    await tx.orcamento.update({
+      where: { id },
+      data,
+    });
 
-  const { frete, desconto_total, valor_total } = calcularTotal(input)
-
-  const { error } = await supabase
-    .from('orcamentos')
-    .update({
-      cliente_id: input.cliente_id || null,
-      vendedor_id: input.vendedor_id || null,
-      data_orcamento: input.data_orcamento,
-      observacao: input.observacao.trim() || null,
-      frete,
-      desconto_total,
-      valor_total,
-    })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-
-  await sincronizarItensOrcamento(supabase, id, input.itens)
-
+    await sincronizarItensOrcamento(tx, id, input.itens);
+  });
 }
 
 /**
@@ -166,65 +408,66 @@ export async function atualizarOrcamento(id: string, input: OrcamentoInput) {
  * gera 1 UPDATE no log, e mais nada.
  */
 async function sincronizarItensOrcamento(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  tx: Prisma.TransactionClient,
   orcamentoId: string,
   novos: OrcamentoItemInput[],
 ) {
-  const { data: atuais, error: errFetch } = await supabase
-    .from('orcamento_itens')
-    .select('id, faca_id, quantidade, preco_unitario')
-    .eq('orcamento_id', orcamentoId)
-    .order('created_at', { ascending: true })
-  if (errFetch) throw new Error(errFetch.message)
-
-  const atuaisArr = atuais ?? []
-  const max = Math.max(atuaisArr.length, novos.length)
+  const atuaisArr = await tx.orcamentoItem.findMany({
+    where: { orcamentoId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      facaId: true,
+      quantidade: true,
+      precoUnitario: true,
+    },
+  });
+  const max = Math.max(atuaisArr.length, novos.length);
 
   for (let i = 0; i < max; i++) {
-    const atual = atuaisArr[i]
-    const novo = novos[i]
+    const atual = atuaisArr[i];
+    const novo = novos[i];
 
     if (atual && novo) {
       const mudou =
-        atual.faca_id !== novo.faca_id ||
+        atual.facaId !== novo.faca_id ||
         Number(atual.quantidade) !== Number(novo.quantidade) ||
-        Number(atual.preco_unitario) !== Number(novo.preco_unitario)
+        Number(atual.precoUnitario) !== Number(novo.preco_unitario);
       if (mudou) {
-        const { error } = await supabase
-          .from('orcamento_itens')
-          .update({
-            faca_id: novo.faca_id,
+        await tx.orcamentoItem.update({
+          where: { id: atual.id },
+          data: {
+            facaId: novo.faca_id,
             quantidade: novo.quantidade,
-            preco_unitario: novo.preco_unitario,
-          })
-          .eq('id', atual.id)
-        if (error) throw new Error(error.message)
+            precoUnitario: decimal(novo.preco_unitario),
+            subtotal: decimal(novo.quantidade * novo.preco_unitario),
+          },
+        });
       }
     } else if (novo) {
-      const { error } = await supabase.from('orcamento_itens').insert({
-        orcamento_id: orcamentoId,
-        faca_id: novo.faca_id,
-        quantidade: novo.quantidade,
-        preco_unitario: novo.preco_unitario,
-      })
-      if (error) throw new Error(error.message)
+      await tx.orcamentoItem.create({
+        data: {
+          orcamentoId,
+          facaId: novo.faca_id,
+          quantidade: novo.quantidade,
+          precoUnitario: decimal(novo.preco_unitario),
+          subtotal: decimal(novo.quantidade * novo.preco_unitario),
+        },
+      });
     } else if (atual) {
-      const { error } = await supabase
-        .from('orcamento_itens')
-        .delete()
-        .eq('id', atual.id)
-      if (error) throw new Error(error.message)
+      await tx.orcamentoItem.delete({
+        where: { id: atual.id },
+      });
     }
   }
 }
 
 export async function deletarOrcamento(id: string) {
-  await assertPermissao('orcamentos', 'deletar')
-  const supabase = await createClient()
-
+  await assertPermissao("orcamentos", "deletar");
   // Em orçamentos qualquer pode ser excluído (ao contrário de pedidos, não há lock por status).
-  const { error } = await supabase.from('orcamentos').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.orcamento.deleteMany({
+    where: { id },
+  });
 }
 
 /**
@@ -237,102 +480,102 @@ export async function deletarOrcamento(id: string) {
  */
 export async function transformarOrcamentoEmVenda(
   id: string,
-  statusInicial: Extract<StatusPedido, 'em_espera' | 'em_producao'>
+  statusInicial: Extract<StatusPedido, "em_espera" | "em_producao">,
 ): Promise<{ pedido_id: string; pedido_codigo: string }> {
   // Precisa de criar venda E editar orçamento (para marcar conversão).
-  await assertPermissao('vendas', 'criar')
-  await assertPermissao('orcamentos', 'editar')
-  const supabase = await createClient()
-
-  const { data: orc, error: orcErr } = await supabase
-    .from('orcamentos')
-    .select(`
-      id, cliente_id, vendedor_id, data_orcamento, observacao, frete, desconto_total, valor_total, convertido_pedido_id,
-      itens:orcamento_itens(faca_id, quantidade, preco_unitario)
-    `)
-    .eq('id', id)
-    .single()
-
-  if (orcErr || !orc) throw new Error(orcErr?.message ?? 'Orçamento não encontrado.')
-  if (orc.convertido_pedido_id) {
-    throw new Error('Este orçamento já foi convertido em venda.')
-  }
-
-  const itens = (orc.itens ?? []) as { faca_id: string; quantidade: number; preco_unitario: number }[]
-  if (itens.length === 0) throw new Error('Orçamento sem itens não pode virar venda.')
-  if (!orc.cliente_id?.trim()) {
-    throw new Error('O orçamento precisa ter um cliente cadastrado para virar venda.')
-  }
-  if (!orc.vendedor_id?.trim()) {
-    throw new Error('O orçamento precisa ter um vendedor cadastrado para virar venda.')
-  }
-
-  // Validação de estoque para o status pretendido — só faz sentido em em_producao,
-  // mas em_espera também não consome; mantemos a validação leve apenas se houver
-  // facas inexistentes para evitar FK errado mais à frente.
-  const facaIds = [...new Set(itens.map((i) => i.faca_id))]
-  const { data: facasExistentes } = await supabase
-    .from('facas')
-    .select('id')
-    .in('id', facaIds)
-  const existentes = new Set((facasExistentes ?? []).map((f) => f.id))
-  const ausentes = facaIds.filter((fid) => !existentes.has(fid))
-  if (ausentes.length > 0) {
-    throw new Error('O orçamento contém facas que não existem mais. Edite o orçamento antes de convertê-lo.')
-  }
-
-  const codigoPedido = gerarCodigoForte('PD')
-
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .insert({
-      codigo: codigoPedido,
-      cliente_id: orc.cliente_id,
-      vendedor_id: orc.vendedor_id,
-      data_pedido: orc.data_orcamento,
-      observacao: orc.observacao,
-      status: statusInicial,
-      frete: orc.frete ?? 0,
-      desconto_total: orc.desconto_total ?? 0,
-      valor_total: orc.valor_total ?? 0,
-    })
-    .select('id, codigo')
-    .single()
-
-  if (pedidoErr || !pedido) throw new Error(pedidoErr?.message ?? 'Erro ao criar venda a partir do orçamento.')
-
-  // Copia itens
-  for (const item of itens) {
-    const { error: itemErr } = await supabase.from('pedido_itens').insert({
-      pedido_id: pedido.id,
-      faca_id: item.faca_id,
-      quantidade: item.quantidade,
-      preco_unitario: item.preco_unitario,
-    })
-    if (itemErr) {
-      // rollback básico
-      await supabase.from('pedido_itens').delete().eq('pedido_id', pedido.id)
-      await supabase.from('pedidos').delete().eq('id', pedido.id)
-      throw new Error(itemErr.message)
+  await assertPermissao("vendas", "criar");
+  await assertPermissao("orcamentos", "editar");
+  const result = await prisma.$transaction(async (tx) => {
+    const orc = await tx.orcamento.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        clienteId: true,
+        vendedorId: true,
+        dataOrcamento: true,
+        observacao: true,
+        frete: true,
+        descontoTotal: true,
+        valorTotal: true,
+        convertidoPedidoId: true,
+        itens: {
+          select: {
+            facaId: true,
+            quantidade: true,
+            precoUnitario: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+    if (!orc) throw new Error("Orçamento não encontrado.");
+    if (orc.convertidoPedidoId) {
+      throw new Error("Este orçamento já foi convertido em venda.");
     }
-  }
 
-  // Marca orçamento como convertido (a auditoria registra o UPDATE com os campos)
-  const { error: updErr } = await supabase
-    .from('orcamentos')
-    .update({
-      convertido_pedido_id: pedido.id,
-      convertido_at: new Date().toISOString(),
-    })
-    .eq('id', id)
+    const itens = orc.itens;
 
-  if (updErr) {
-    // Rollback do pedido criado
-    await supabase.from('pedido_itens').delete().eq('pedido_id', pedido.id)
-    await supabase.from('pedidos').delete().eq('id', pedido.id)
-    throw new Error(`Falha ao marcar orçamento como convertido: ${updErr.message}`)
-  }
+    if (itens.length === 0) throw new Error("Orçamento sem itens não pode virar venda.");
+    if (!orc.clienteId?.trim()) {
+      throw new Error("O orçamento precisa ter um cliente cadastrado para virar venda.");
+    }
+    if (!orc.vendedorId?.trim()) {
+      throw new Error("O orçamento precisa ter um vendedor cadastrado para virar venda.");
+    }
 
+    const facaIds = [...new Set(itens.map((i) => i.facaId))];
+    const facasExistentes = await tx.faca.findMany({
+      where: { id: { in: facaIds } },
+      select: { id: true },
+    });
+    const existentes = new Set(facasExistentes.map((f) => f.id));
+    const ausentes = facaIds.filter((fid) => !existentes.has(fid));
+    if (ausentes.length > 0) {
+      throw new Error(
+        "O orçamento contém facas que não existem mais. Edite o orçamento antes de convertê-lo.",
+      );
+    }
 
-  return { pedido_id: pedido.id, pedido_codigo: pedido.codigo }
+    const codigoPedido = gerarCodigoForte("PD");
+    const pedido = await tx.pedido.create({
+      data: {
+        codigo: codigoPedido,
+        clienteId: orc.clienteId,
+        vendedorId: orc.vendedorId,
+        dataPedido: orc.dataOrcamento,
+        observacao: orc.observacao,
+        status: statusInicial,
+        frete: decimal(numberFrom(orc.frete)),
+        descontoTotal: decimal(numberFrom(orc.descontoTotal)),
+        valorTotal: decimal(numberFrom(orc.valorTotal)),
+        itens: {
+          create: itens.map((item) => {
+            const precoUnitario = numberFrom(item.precoUnitario);
+            return {
+              facaId: item.facaId,
+              quantidade: item.quantidade,
+              precoUnitario: decimal(precoUnitario),
+              subtotal: decimal(item.quantidade * precoUnitario),
+            };
+          }),
+        },
+      },
+      select: {
+        id: true,
+        codigo: true,
+      },
+    });
+
+    await tx.orcamento.update({
+      where: { id },
+      data: {
+        convertidoPedidoId: pedido.id,
+        convertidoAt: new Date(),
+      },
+    });
+
+    return { pedido_id: pedido.id, pedido_codigo: pedido.codigo };
+  });
+
+  return result;
 }

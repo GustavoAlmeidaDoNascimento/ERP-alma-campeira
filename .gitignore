@@ -61,6 +61,8 @@ tmp/
 temp/
 *.pid
 
+
 # project docs (local-only)
+docs/
 architecture.md
 CLAUDE.md

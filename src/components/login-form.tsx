@@ -1,6 +1,5 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -16,17 +15,22 @@ export function LoginForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const supabase = createClient();
-    const { error: signError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+      }),
     });
     setLoading(false);
-    if (signError) {
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      const message = body?.error ?? "Erro ao autenticar.";
       setError(
-        signError.message === "Invalid login credentials"
+        message === "Invalid login credentials"
           ? "E-mail ou senha incorretos."
-          : signError.message
+          : message
       );
       return;
     }

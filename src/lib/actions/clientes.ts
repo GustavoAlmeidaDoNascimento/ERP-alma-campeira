@@ -1,9 +1,10 @@
 'use server'
 
 import { revalidateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { fetchClientesList } from '@/lib/cache/list-data'
+import { prisma } from '@/lib/prisma'
+import { mapPedidoHistoricoResumo } from '@/lib/prisma-auth-mappers'
 import type { Cliente, PedidoHistoricoResumo, StatusPedido, TipoDocumento } from '@/types'
 import { apenasDigitos } from '@/lib/br/documento'
 import { validarCamposObrigatoriosCliente } from '@/lib/br/validar-cadastro-parceiro'
@@ -32,29 +33,27 @@ function normalizeStatusPedidoHistorico(status: string): StatusPedido {
 /** Vendas (pedidos) vinculadas ao cliente — usado no modal de detalhe. */
 export async function getPedidosPorCliente(clienteId: string, limit = 200): Promise<PedidoHistoricoResumo[]> {
   await assertPermissao('vendas', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('pedidos')
-    .select('id, codigo, sequencial, data_pedido, status, valor_total, vendedor:usuarios_perfis(nome)')
-    .eq('cliente_id', clienteId)
-    .order('data_pedido', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw new Error(error.message)
-
-  return (data ?? []).map((row) => {
-    const vendedor = row.vendedor as { nome: string } | { nome: string }[] | null
-    const vendedorNome = Array.isArray(vendedor) ? vendedor[0]?.nome : vendedor?.nome
-    return {
-      id: row.id as string,
-      codigo: row.codigo as string,
-      sequencial: (row.sequencial as number | null) ?? null,
-      data_pedido: row.data_pedido as string,
-      status: normalizeStatusPedidoHistorico(String(row.status)),
-      valor_total: (row.valor_total as number | null) ?? null,
-      vendedor_nome: vendedorNome ?? null,
-    }
+  const data = await prisma.pedido.findMany({
+    where: { clienteId },
+    select: {
+      id: true,
+      codigo: true,
+      sequencial: true,
+      dataPedido: true,
+      status: true,
+      valorTotal: true,
+      vendedor: {
+        select: { nome: true },
+      },
+    },
+    orderBy: [{ dataPedido: 'desc' }, { createdAt: 'desc' }],
+    take: limit,
   })
+
+  return data.map((pedido) => ({
+    ...mapPedidoHistoricoResumo(pedido),
+    status: normalizeStatusPedidoHistorico(String(pedido.status)),
+  }))
 }
 
 type ClienteInput = {
@@ -127,37 +126,70 @@ function normalizarClientePayload(input: ClienteInput) {
 
 export async function criarCliente(input: ClienteInput) {
   await assertPermissao('clientes', 'criar')
-  const supabase = await createClient()
   const row = normalizarClientePayload(input)
-  const { error } = await supabase.from('clientes').insert(row)
-  if (error) throw new Error(error.message)
+  await prisma.cliente.create({
+    data: {
+      nome: row.nome,
+      tipo: row.tipo,
+      telefone: row.telefone || null,
+      email: row.email || null,
+      tipoDocumento: row.tipo_documento,
+      documento: row.documento || null,
+      cep: row.cep || null,
+      logradouro: row.logradouro || null,
+      numero: row.numero || null,
+      complemento: row.complemento,
+      bairro: row.bairro || null,
+      cidade: row.cidade || null,
+      estado: row.estado || null,
+      razaoSocial: row.razao_social,
+      ie: row.ie || null,
+      indicadorIe: row.indicador_ie,
+      codigoMunicipioIbge: row.codigo_municipio_ibge || null,
+    },
+  })
   await revalidateClientesList()
 }
 
 export async function atualizarCliente(id: string, input: ClienteInput) {
   await assertPermissao('clientes', 'editar')
-  const supabase = await createClient()
   const row = normalizarClientePayload(input)
-  const { error } = await supabase.from('clientes').update(row).eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.cliente.update({
+    where: { id },
+    data: {
+      nome: row.nome,
+      tipo: row.tipo,
+      telefone: row.telefone || null,
+      email: row.email || null,
+      tipoDocumento: row.tipo_documento,
+      documento: row.documento || null,
+      cep: row.cep || null,
+      logradouro: row.logradouro || null,
+      numero: row.numero || null,
+      complemento: row.complemento,
+      bairro: row.bairro || null,
+      cidade: row.cidade || null,
+      estado: row.estado || null,
+      razaoSocial: row.razao_social,
+      ie: row.ie || null,
+      indicadorIe: row.indicador_ie,
+      codigoMunicipioIbge: row.codigo_municipio_ibge || null,
+    },
+  })
   await revalidateClientesList()
 }
 
 export async function deletarCliente(id: string) {
   await assertPermissao('clientes', 'deletar')
-  const supabase = await createClient()
+  const uso = await prisma.pedido.findFirst({
+    where: { clienteId: id },
+    select: { id: true },
+  })
 
-  const { data: uso } = await supabase
-    .from('pedidos')
-    .select('id')
-    .eq('cliente_id', id)
-    .limit(1)
-
-  if (uso && uso.length > 0) {
+  if (uso) {
     throw new Error('Este cliente possui vendas vinculadas e não pode ser excluído.')
   }
 
-  const { error } = await supabase.from('clientes').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.cliente.delete({ where: { id } })
   await revalidateClientesList()
 }

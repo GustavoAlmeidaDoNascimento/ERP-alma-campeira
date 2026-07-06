@@ -8,8 +8,7 @@ const LOG = process.env.NODE_ENV === 'development'
 /**
  * Mantém os dados do app atualizados por polling a cada 30 segundos.
  *
- * Substitui o Supabase Realtime (WebSocket postgres_changes) por um modelo
- * mais simples: invalida todas as queries ativas do TanStack Query
+ * Usa um modelo simples: invalida todas as queries ativas do TanStack Query
  * periodicamente. O intervalo de 30s é suficiente para um ERP interno onde
  * atualizações em tempo real não são críticas ao milissegundo.
  *

@@ -1,8 +1,9 @@
 'use server'
 
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { Prisma } from '@prisma/client'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { fetchTaxasLucroConfig } from '@/lib/cache/list-data'
+import { prisma } from '@/lib/prisma'
 import type { StatusPedido, StatusOC, TipoGasto, FormaPagamento } from '@/types'
 import { type DateRange, defaultDateRange } from '@/lib/metricas-periodos'
 
@@ -201,44 +202,102 @@ function mesLabel(yyyymm: string): string {
   return `${meses[parseInt(m, 10) - 1]}/${y.slice(2)}`
 }
 
+function numberFrom(value: Prisma.Decimal | number | string | null | undefined): number {
+  if (value == null) return 0
+  if (typeof value === 'object' && 'toNumber' in value && typeof value.toNumber === 'function') {
+    return value.toNumber()
+  }
+  return Number(value) || 0
+}
+
+type MovimentacaoRecenteRow = {
+  id: string
+  tipo: string
+  quantidade: number
+  createdAt: Date | string
+  usuarioId: string | null
+  materiaPrima: {
+    codigo: string
+    nome: string
+  } | null
+  faca: {
+    codigo: string
+    nome: string
+  } | null
+}
+
 // ── Vendas Queries ────────────────────────────────────────────────────────────
 
 export async function getMetricasVendas(dateRange: DateRange = defaultDateRange()): Promise<MetricasVendasData> {
   await requireAuthenticatedUserId()
   await assertPermissao('metricas', 'ver')
 
-  return withSupabaseCookieContext(async () => {
-    const supabase = await createClient()
-    const admin = createAdminClient()
+  const [pedidos, taxasConfig] = await Promise.all([
+    prisma.pedido.findMany({
+      where: {
+        dataPedido: {
+          gte: dateRange.desde,
+          lte: dateRange.ate,
+        },
+      },
+      select: {
+        id: true,
+        codigo: true,
+        clienteId: true,
+        vendedorId: true,
+        dataPedido: true,
+        status: true,
+        valorTotal: true,
+        entregueAt: true,
+        createdAt: true,
+        cliente: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true,
+            tipoDocumento: true,
+            documento: true,
+            cidade: true,
+            estado: true,
+          },
+        },
+        vendedor: {
+          select: {
+            id: true,
+            nome: true,
+          },
+        },
+      },
+    }),
+    fetchTaxasLucroConfig(),
+  ])
 
-    // ate é inclusivo: vamos até o fim do dia (usa lte com a data)
-    let pedidosQuery = supabase
-      .from('pedidos')
-      .select('id, codigo, cliente_id, vendedor_id, data_pedido, status, valor_total, entregue_at, created_at, cliente:clientes(id, nome, tipo, tipo_documento, documento, cidade, estado), vendedor:usuarios_perfis(id, nome)')
-      .gte('data_pedido', dateRange.desde)
-      .lte('data_pedido', dateRange.ate)
+  const pedidoIds = pedidos.map((p) => p.id)
+  const itens = pedidoIds.length
+    ? await prisma.pedidoItem.findMany({
+        where: { pedidoId: { in: pedidoIds } },
+        select: {
+          id: true,
+          pedidoId: true,
+          facaId: true,
+          quantidade: true,
+          precoUnitario: true,
+          subtotal: true,
+          faca: {
+            select: {
+              id: true,
+              codigo: true,
+              nome: true,
+            },
+          },
+        },
+      })
+    : []
 
-    const [pedidosRes, itensRes, configRes] = await Promise.all([
-      pedidosQuery,
-      supabase
-        .from('pedido_itens')
-        .select('id, pedido_id, faca_id, quantidade, preco_unitario, subtotal, faca:facas(id, codigo, nome)'),
-      admin.from('app_config').select('taxa_comissao_lucro').limit(1).maybeSingle(),
-    ])
-
-    if (pedidosRes.error) throw new Error(pedidosRes.error.message)
-    if (itensRes.error) throw new Error(itensRes.error.message)
-
-    const pedidos = pedidosRes.data ?? []
-    const allItens = itensRes.data ?? []
-    const taxaComissao = Number(configRes.data?.taxa_comissao_lucro ?? 0)
-
-    // Filter itens to only those belonging to fetched pedidos
-    const pedidoIds = new Set(pedidos.map((p) => p.id))
-    const itens = allItens.filter((i) => pedidoIds.has(i.pedido_id))
+  const taxaComissao = numberFrom(taxasConfig.taxa_comissao)
 
     // ── KPIs ──
-    const faturamentoTotal = pedidos.reduce((s, p) => s + Number(p.valor_total ?? 0), 0)
+    const faturamentoTotal = pedidos.reduce((s, p) => s + numberFrom(p.valorTotal), 0)
     const totalPedidos = pedidos.length
     const ticketMedio = totalPedidos > 0 ? faturamentoTotal / totalPedidos : 0
     const pedidosEntregues = pedidos.filter((p) => p.status === 'entregue').length
@@ -250,12 +309,12 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
     const mesMap = new Map<string, { totalValor: number; totalPedidos: number; totalItens: number }>()
 
     for (const p of pedidos) {
-      const d = new Date(p.data_pedido)
+      const d = new Date(p.dataPedido)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const entry = mesMap.get(key) ?? { totalValor: 0, totalPedidos: 0, totalItens: 0 }
-      entry.totalValor += Number(p.valor_total ?? 0)
+      entry.totalValor += numberFrom(p.valorTotal)
       entry.totalPedidos += 1
-      const pedidoItens = itens.filter((i) => i.pedido_id === p.id)
+      const pedidoItens = itens.filter((i) => i.pedidoId === p.id)
       entry.totalItens += pedidoItens.reduce((s, i) => s + Number(i.quantidade), 0)
       mesMap.set(key, entry)
     }
@@ -267,15 +326,15 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
     // ── Ranking Clientes ──
     const clienteMap = new Map<string, { nome: string; tipo: string; totalValor: number; totalPedidos: number }>()
     for (const p of pedidos) {
-      const cid = p.cliente_id ?? '__sem_cliente__'
-      const cli = Array.isArray(p.cliente) ? p.cliente[0] : p.cliente
+      const cid = p.clienteId ?? '__sem_cliente__'
+      const cli = p.cliente
       const entry = clienteMap.get(cid) ?? {
-        nome: (cli as any)?.nome ?? 'Sem cliente',
-        tipo: (cli as any)?.tipo ?? '-',
+        nome: cli?.nome ?? 'Sem cliente',
+        tipo: cli?.tipo ?? '-',
         totalValor: 0,
         totalPedidos: 0,
       }
-      entry.totalValor += Number(p.valor_total ?? 0)
+      entry.totalValor += numberFrom(p.valorTotal)
       entry.totalPedidos += 1
       clienteMap.set(cid, entry)
     }
@@ -295,14 +354,14 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
     // ── Ranking Vendedores ──
     const vendedorMap = new Map<string, { nome: string; totalValor: number; totalPedidos: number }>()
     for (const p of pedidos) {
-      const vid = (p as any).vendedor_id ?? '__sem_vendedor__'
-      const vend = Array.isArray((p as any).vendedor) ? (p as any).vendedor[0] : (p as any).vendedor
+      const vid = p.vendedorId ?? '__sem_vendedor__'
+      const vend = p.vendedor
       const entry = vendedorMap.get(vid) ?? {
-        nome: (vend as any)?.nome ?? 'Sem vendedor',
+        nome: vend?.nome ?? 'Sem vendedor',
         totalValor: 0,
         totalPedidos: 0,
       }
-      entry.totalValor += Number(p.valor_total ?? 0)
+      entry.totalValor += numberFrom(p.valorTotal)
       entry.totalPedidos += 1
       vendedorMap.set(vid, entry)
     }
@@ -325,18 +384,17 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
     }>()
 
     for (const p of pedidos) {
-      const vid = (p as any).vendedor_id ?? '__sem_vendedor__'
-      const vend = Array.isArray((p as any).vendedor) ? (p as any).vendedor[0] : (p as any).vendedor
-      const nome = (vend as any)?.nome ?? 'Sem vendedor'
+      const vid = p.vendedorId ?? '__sem_vendedor__'
+      const nome = p.vendedor?.nome ?? 'Sem vendedor'
 
       if (!relatorioMap.has(vid)) {
         relatorioMap.set(vid, { nome, meses: new Map() })
       }
       const entry = relatorioMap.get(vid)!
-      const d = new Date(p.data_pedido)
+      const d = new Date(p.dataPedido)
       const mesKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const mesEntry = entry.meses.get(mesKey) ?? { totalValor: 0, totalPedidos: 0 }
-      mesEntry.totalValor += Number(p.valor_total ?? 0)
+      mesEntry.totalValor += numberFrom(p.valorTotal)
       mesEntry.totalPedidos += 1
       entry.meses.set(mesKey, mesEntry)
     }
@@ -370,17 +428,17 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
 
     // ── Ranking Produtos ──
     const produtoMap = new Map<string, { codigo: string; nome: string; totalValor: number; totalQuantidade: number }>()
-    const totalItensValor = itens.reduce((s, i) => s + Number(i.subtotal ?? 0), 0)
+    const totalItensValor = itens.reduce((s, i) => s + numberFrom(i.subtotal), 0)
     for (const item of itens) {
-      const faca = Array.isArray(item.faca) ? item.faca[0] : item.faca
-      const fid = item.faca_id
+      const faca = item.faca
+      const fid = item.facaId
       const entry = produtoMap.get(fid) ?? {
-        codigo: (faca as any)?.codigo ?? '-',
-        nome: (faca as any)?.nome ?? 'Desconhecida',
+        codigo: faca?.codigo ?? '-',
+        nome: faca?.nome ?? 'Desconhecida',
         totalValor: 0,
         totalQuantidade: 0,
       }
-      entry.totalValor += Number(item.subtotal ?? 0)
+      entry.totalValor += numberFrom(item.subtotal)
       entry.totalQuantidade += Number(item.quantidade)
       produtoMap.set(fid, entry)
     }
@@ -403,7 +461,7 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
       const st = p.status as StatusPedido
       const entry = statusMap.get(st) ?? { quantidade: 0, valorTotal: 0 }
       entry.quantidade += 1
-      entry.valorTotal += Number(p.valor_total ?? 0)
+      entry.valorTotal += numberFrom(p.valorTotal)
       statusMap.set(st, entry)
     }
 
@@ -419,10 +477,9 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
     // ── Vendas por Tipo de Cliente ──
     const tipoMap = new Map<string, { totalValor: number; totalPedidos: number }>()
     for (const p of pedidos) {
-      const cli = Array.isArray(p.cliente) ? p.cliente[0] : p.cliente
-      const tipo = (cli as any)?.tipo ?? 'Sem tipo'
+      const tipo = p.cliente?.tipo ?? 'Sem tipo'
       const entry = tipoMap.get(tipo) ?? { totalValor: 0, totalPedidos: 0 }
-      entry.totalValor += Number(p.valor_total ?? 0)
+      entry.totalValor += numberFrom(p.valorTotal)
       entry.totalPedidos += 1
       tipoMap.set(tipo, entry)
     }
@@ -435,19 +492,18 @@ export async function getMetricasVendas(dateRange: DateRange = defaultDateRange(
       }))
       .sort((a, b) => b.totalValor - a.totalValor)
 
-    return {
-      kpi,
-      vendasPorMes,
-      rankingClientes,
-      rankingProdutos,
-      pipeline,
-      vendasPorTipo,
-      rankingVendedores,
-      relatorioVendedores,
-      taxaComissao,
-      dateRange,
-    }
-  })
+  return {
+    kpi,
+    vendasPorMes,
+    rankingClientes,
+    rankingProdutos,
+    pipeline,
+    vendasPorTipo,
+    rankingVendedores,
+    relatorioVendedores,
+    taxaComissao,
+    dateRange,
+  }
 }
 
 // ── Estoque Queries ───────────────────────────────────────────────────────────
@@ -456,144 +512,183 @@ export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange
   await requireAuthenticatedUserId()
   await assertPermissao('metricas', 'ver')
 
-  return withSupabaseCookieContext(async () => {
-    const supabase = await createClient()
-    const admin = createAdminClient()
+  const [facas, mps, movs, boms, ocs, usuarios] = await Promise.all([
+    prisma.faca.findMany({
+      select: {
+        id: true,
+        codigo: true,
+        nome: true,
+        estoqueAtual: true,
+        estoqueMinimo: true,
+        precoVenda: true,
+      },
+    }),
+    prisma.materiaPrima.findMany({
+      select: {
+        id: true,
+        codigo: true,
+        nome: true,
+        estoqueAtual: true,
+        estoqueMinimo: true,
+        precoCusto: true,
+        fornecedor: {
+          select: { nome: true },
+        },
+      },
+    }),
+    prisma.movimentacaoEstoque.findMany({
+      where: {
+        createdAt: {
+          gte: new Date(`${dateRange.desde}T00:00:00.000Z`),
+          lte: new Date(`${dateRange.ate}T23:59:59.999Z`),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        tipo: true,
+        quantidade: true,
+        createdAt: true,
+        usuarioId: true,
+        materiaPrima: {
+          select: {
+            codigo: true,
+            nome: true,
+          },
+        },
+        faca: {
+          select: {
+            codigo: true,
+            nome: true,
+          },
+        },
+      },
+    }),
+    prisma.facaMateriaPrima.findMany({
+      include: {
+        faca: {
+          select: { id: true, codigo: true, nome: true },
+        },
+        materiaPrima: {
+          select: { id: true, codigo: true, nome: true, precoCusto: true },
+        },
+      },
+    }),
+    prisma.ordemCompra.findMany({
+      where: {
+        createdAt: {
+          gte: new Date(dateRange.desde),
+          lte: new Date(`${dateRange.ate}T23:59:59.999Z`),
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        itens: {
+          select: {
+            quantidade: true,
+            precoUnitario: true,
+          },
+        },
+      },
+    }),
+    prisma.usuarioPerfil.findMany({
+      where: { ativo: true },
+      select: { id: true, nome: true },
+      orderBy: { nome: 'asc' },
+    }),
+  ])
 
-    // Movimentações filtradas por período
-    const movQuery = admin
-      .from('movimentacoes_estoque')
-      .select(
-        'id, tipo, quantidade, created_at, usuario_id, materia_prima:materias_primas(codigo, nome), faca:facas(codigo, nome)',
-      )
-      .order('created_at', { ascending: false })
-      .gte('created_at', dateRange.desde)
-      .lte('created_at', dateRange.ate + 'T23:59:59.999Z')
-
-    // OCs filtradas por período
-    const ocQuery = supabase
-      .from('ordens_compra')
-      .select('id, status, created_at, itens:ordem_compra_itens(quantidade, preco_unitario)')
-      .gte('created_at', dateRange.desde)
-      .lte('created_at', dateRange.ate + 'T23:59:59.999Z')
-
-    const [facasRes, mpRes, movRes, bomRes, ocRes, usuariosRes] = await Promise.all([
-      supabase.from('facas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_venda'),
-      supabase.from('materias_primas').select('id, codigo, nome, estoque_atual, estoque_minimo, preco_custo, fornecedor:fornecedores(nome)'),
-      movQuery.limit(500),
-      supabase.from('faca_materias_primas').select('faca_id, materia_prima_id, quantidade, faca:facas(id, codigo, nome), mp:materias_primas(id, codigo, nome, preco_custo)'),
-      ocQuery,
-      admin.from('usuarios_perfis').select('id, nome').order('nome'),
-    ])
-
-    if (facasRes.error) throw new Error(facasRes.error.message)
-    if (mpRes.error) throw new Error(mpRes.error.message)
-    if (movRes.error) throw new Error(movRes.error.message)
-    if (bomRes.error) throw new Error(bomRes.error.message)
-    if (ocRes.error) throw new Error(ocRes.error.message)
-
-    const facas = facasRes.data ?? []
-    const mps = mpRes.data ?? []
-    const usuariosMap = new Map<string, string>(
-      (usuariosRes.data ?? []).map((u: { id: string; nome: string }) => [u.id, u.nome] as [string, string])
-    )
-    const movs = movRes.data ?? []
-    const boms = bomRes.data ?? []
-    const ocs = ocRes.data ?? []
+  const usuariosMap = new Map<string, string>(
+    usuarios.map((u) => [u.id, u.nome] as [string, string]),
+  )
 
     // ── KPIs (estoque atual é sempre snapshot, não depende de período) ──
-    const facasCriticas = facas.filter((f) => f.estoque_atual === 0).length
-    const facasAtencao = facas.filter((f) => f.estoque_atual > 0 && f.estoque_atual <= f.estoque_minimo).length
-    const mpCriticas = mps.filter((m) => m.estoque_atual === 0).length
-    const mpAtencao = mps.filter((m) => m.estoque_atual > 0 && m.estoque_atual <= m.estoque_minimo).length
+  const facasCriticas = facas.filter((f) => f.estoqueAtual === 0).length
+  const facasAtencao = facas.filter((f) => f.estoqueAtual > 0 && f.estoqueAtual <= f.estoqueMinimo).length
+  const mpCriticas = mps.filter((m) => numberFrom(m.estoqueAtual) === 0).length
+  const mpAtencao = mps.filter((m) => numberFrom(m.estoqueAtual) > 0 && numberFrom(m.estoqueAtual) <= numberFrom(m.estoqueMinimo)).length
 
-    const kpi: KpiEstoque = {
-      totalSkusFacas: facas.length,
-      totalSkusMp: mps.length,
-      facasCriticas,
-      facasAtencao,
-      mpCriticas,
-      mpAtencao,
-    }
+  const kpi: KpiEstoque = {
+    totalSkusFacas: facas.length,
+    totalSkusMp: mps.length,
+    facasCriticas,
+    facasAtencao,
+    mpCriticas,
+    mpAtencao,
+  }
 
     // ── Saúde Estoque Facas ──
-    const saudeFacas: SaudeEstoqueFaca[] = facas
-      .map((f) => ({
-        id: f.id,
-        codigo: f.codigo,
-        nome: f.nome,
-        estoqueAtual: Number(f.estoque_atual),
-        estoqueMinimo: Number(f.estoque_minimo),
-        status: estoqueStatus(Number(f.estoque_atual), Number(f.estoque_minimo)),
-        coberturaDias: null,
-      }))
-      .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
+  const saudeFacas: SaudeEstoqueFaca[] = facas
+    .map((f) => ({
+      id: f.id,
+      codigo: f.codigo,
+      nome: f.nome,
+      estoqueAtual: Number(f.estoqueAtual),
+      estoqueMinimo: Number(f.estoqueMinimo),
+      status: estoqueStatus(Number(f.estoqueAtual), Number(f.estoqueMinimo)),
+      coberturaDias: null,
+    }))
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
 
     // ── Saúde Estoque MP ──
-    const saudeMp: SaudeEstoqueMp[] = mps
-      .map((m) => {
-        const forn = Array.isArray(m.fornecedor) ? m.fornecedor[0] : m.fornecedor
-        return {
-          id: m.id,
-          codigo: m.codigo,
-          nome: m.nome,
-          fornecedorNome: (forn as any)?.nome ?? null,
-          estoqueAtual: Number(m.estoque_atual),
-          estoqueMinimo: Number(m.estoque_minimo),
-          status: estoqueStatus(Number(m.estoque_atual), Number(m.estoque_minimo)),
-        }
-      })
-      .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
+  const saudeMp: SaudeEstoqueMp[] = mps
+    .map((m) => ({
+      id: m.id,
+      codigo: m.codigo,
+      nome: m.nome,
+      fornecedorNome: m.fornecedor?.nome ?? null,
+      estoqueAtual: numberFrom(m.estoqueAtual),
+      estoqueMinimo: numberFrom(m.estoqueMinimo),
+      status: estoqueStatus(numberFrom(m.estoqueAtual), numberFrom(m.estoqueMinimo)),
+    }))
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
 
     // ── Movimentações (já filtradas pelo período na query) ──
-    const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m: any) => {
-      const mp = Array.isArray(m.materia_prima) ? m.materia_prima[0] : m.materia_prima
-      const faca = Array.isArray(m.faca) ? m.faca[0] : m.faca
-      const item = (mp as { nome?: string; codigo?: string } | null) ??
-        (faca as { nome?: string; codigo?: string } | null)
-      return {
-        id: m.id,
-        tipo: m.tipo,
-        itemNome: item?.nome ?? '-',
-        itemCodigo: item?.codigo ?? '-',
-        quantidade: Number(m.quantidade),
-        createdAt: m.created_at,
-        usuarioNome: (m as any).usuario_id ? (usuariosMap.get((m as any).usuario_id) ?? null) : null,
-      }
-    })
+  const movimentacoesRecentes: MovimentacaoRecente[] = movs.map((m) => ({
+    id: m.id,
+    tipo: m.tipo,
+    itemNome: m.materiaPrima?.nome ?? m.faca?.nome ?? '-',
+    itemCodigo: m.materiaPrima?.codigo ?? m.faca?.codigo ?? '-',
+    quantidade: Number(m.quantidade),
+    createdAt: m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt),
+    usuarioNome: m.usuarioId ? (usuariosMap.get(m.usuarioId) ?? null) : null,
+  }))
 
     // ── Consumo BOM ──
-    const bomMap = new Map<string, ConsumoBom>()
-    for (const b of boms) {
-      const faca = Array.isArray(b.faca) ? b.faca[0] : b.faca
-      const mp = Array.isArray(b.mp) ? b.mp[0] : b.mp
-      if (!faca || !mp) continue
-      const fid = (faca as any).id as string
-      if (!bomMap.has(fid)) {
-        bomMap.set(fid, {
-          facaId: fid,
-          facaCodigo: (faca as any).codigo,
-          facaNome: (faca as any).nome,
-          materiais: [],
-          custoTotalFaca: 0,
-        })
-      }
-      const entry = bomMap.get(fid)!
-      const custoUnit = Number((mp as any).preco_custo ?? 0)
-      const qtd = Number(b.quantidade)
-      const custoTotal = custoUnit * qtd
-      entry.materiais.push({
-        mpId: (mp as any).id,
-        mpCodigo: (mp as any).codigo,
-        mpNome: (mp as any).nome,
-        quantidade: qtd,
-        custoUnitario: custoUnit,
-        custoTotal,
+  const bomMap = new Map<string, ConsumoBom>()
+  for (const b of boms) {
+    const faca = b.faca
+    const mp = b.materiaPrima
+    if (!faca || !mp) continue
+    const fid = faca.id
+    if (!bomMap.has(fid)) {
+      bomMap.set(fid, {
+        facaId: fid,
+        facaCodigo: faca.codigo,
+        facaNome: faca.nome,
+        materiais: [],
+        custoTotalFaca: 0,
       })
-      entry.custoTotalFaca += custoTotal
     }
+    const entry = bomMap.get(fid)!
+    const custoUnit = numberFrom(mp.precoCusto)
+    const qtd = numberFrom(b.quantidade)
+    const custoTotal = custoUnit * qtd
+    entry.materiais.push({
+      mpId: mp.id,
+      mpCodigo: mp.codigo,
+      mpNome: mp.nome,
+      quantidade: qtd,
+      custoUnitario: custoUnit,
+      custoTotal,
+    })
+    entry.custoTotalFaca += custoTotal
+  }
 
-    const consumoBom = Array.from(bomMap.values()).sort((a, b) => a.facaNome.localeCompare(b.facaNome))
+  const consumoBom = Array.from(bomMap.values()).sort((a, b) => a.facaNome.localeCompare(b.facaNome))
 
     // ── Resumo OC ──
     const ocMap = new Map<StatusOC, { quantidade: number; valorTotal: number }>()
@@ -606,58 +701,57 @@ export async function getMetricasEstoque(dateRange: DateRange = defaultDateRange
       entry.quantidade += 1
       const ocItens = Array.isArray(oc.itens) ? oc.itens : []
       entry.valorTotal += ocItens.reduce(
-        (s: number, i: any) => s + Number(i.quantidade ?? 0) * Number(i.preco_unitario ?? 0),
+        (s: number, i: any) => s + Number(i.quantidade?.toNumber?.() ?? i.quantidade ?? 0) * Number(i.precoUnitario?.toNumber?.() ?? i.precoUnitario ?? 0),
         0,
       )
       ocMap.set(stFinal, entry)
     }
 
-    const resumoOC: ResumoOC[] = (['pendente', 'enviada', 'recebida'] as StatusOC[]).map((status) => ({
-      status,
-      ...(ocMap.get(status) ?? { quantidade: 0, valorTotal: 0 }),
-    }))
+  const resumoOC: ResumoOC[] = (['pendente', 'enviada', 'recebida'] as StatusOC[]).map((status) => ({
+    status,
+    ...(ocMap.get(status) ?? { quantidade: 0, valorTotal: 0 }),
+  }))
 
     // ── Alertas ──
-    const alertas: AlertaEstoque[] = []
-    for (const f of saudeFacas) {
-      if (f.status === 'critico') {
-        alertas.push({ tipo: 'zero', itemTipo: 'faca', itemId: f.id, itemCodigo: f.codigo, itemNome: f.nome, detalhe: 'Estoque zerado' })
-      } else if (f.status === 'atencao') {
-        alertas.push({ tipo: 'abaixo_minimo', itemTipo: 'faca', itemId: f.id, itemCodigo: f.codigo, itemNome: f.nome, detalhe: `${f.estoqueAtual} unid. (min: ${f.estoqueMinimo})` })
-      }
+  const alertas: AlertaEstoque[] = []
+  for (const f of saudeFacas) {
+    if (f.status === 'critico') {
+      alertas.push({ tipo: 'zero', itemTipo: 'faca', itemId: f.id, itemCodigo: f.codigo, itemNome: f.nome, detalhe: 'Estoque zerado' })
+    } else if (f.status === 'atencao') {
+      alertas.push({ tipo: 'abaixo_minimo', itemTipo: 'faca', itemId: f.id, itemCodigo: f.codigo, itemNome: f.nome, detalhe: `${f.estoqueAtual} unid. (min: ${f.estoqueMinimo})` })
     }
-    for (const m of saudeMp) {
-      if (m.status === 'critico') {
-        alertas.push({ tipo: 'zero', itemTipo: 'materia_prima', itemId: m.id, itemCodigo: m.codigo, itemNome: m.nome, detalhe: 'Estoque zerado' })
-      } else if (m.status === 'atencao') {
-        alertas.push({ tipo: 'abaixo_minimo', itemTipo: 'materia_prima', itemId: m.id, itemCodigo: m.codigo, itemNome: m.nome, detalhe: `${m.estoqueAtual} unid. (min: ${m.estoqueMinimo})` })
-      }
+  }
+  for (const m of saudeMp) {
+    if (m.status === 'critico') {
+      alertas.push({ tipo: 'zero', itemTipo: 'materia_prima', itemId: m.id, itemCodigo: m.codigo, itemNome: m.nome, detalhe: 'Estoque zerado' })
+    } else if (m.status === 'atencao') {
+      alertas.push({ tipo: 'abaixo_minimo', itemTipo: 'materia_prima', itemId: m.id, itemCodigo: m.codigo, itemNome: m.nome, detalhe: `${m.estoqueAtual} unid. (min: ${m.estoqueMinimo})` })
     }
+  }
 
-    // ── Ranking de usuários por movimentações de estoque ──
-    const usuarioMovMap = new Map<string, { nome: string; total: number; entradas: number; saidas: number }>()
-    for (const m of movs) {
-      const uid = (m as any).usuario_id as string | null
-      if (!uid) continue
-      const nome = usuariosMap.get(uid) ?? 'Desconhecido'
-      const entry = usuarioMovMap.get(uid) ?? { nome, total: 0, entradas: 0, saidas: 0 }
-      entry.total += 1
-      if ((m as any).tipo === 'entrada') entry.entradas += 1
-      else entry.saidas += 1
-      usuarioMovMap.set(uid, entry)
-    }
-    const rankingUsuarios: RankingUsuarioEstoque[] = Array.from(usuarioMovMap.entries())
-      .map(([uid, v]) => ({
-        usuarioId: uid,
-        usuarioNome: v.nome,
-        totalMovimentacoes: v.total,
-        entradas: v.entradas,
-        saidas: v.saidas,
-      }))
-      .sort((a, b) => b.totalMovimentacoes - a.totalMovimentacoes)
+  // ── Ranking de usuários por movimentações de estoque ──
+  const usuarioMovMap = new Map<string, { nome: string; total: number; entradas: number; saidas: number }>()
+  for (const m of movs) {
+    const uid = m.usuarioId
+    if (!uid) continue
+    const nome = usuariosMap.get(uid) ?? 'Desconhecido'
+    const entry = usuarioMovMap.get(uid) ?? { nome, total: 0, entradas: 0, saidas: 0 }
+    entry.total += 1
+    if (m.tipo === 'entrada') entry.entradas += 1
+    else entry.saidas += 1
+    usuarioMovMap.set(uid, entry)
+  }
+  const rankingUsuarios: RankingUsuarioEstoque[] = Array.from(usuarioMovMap.entries())
+    .map(([uid, v]) => ({
+      usuarioId: uid,
+      usuarioNome: v.nome,
+      totalMovimentacoes: v.total,
+      entradas: v.entradas,
+      saidas: v.saidas,
+    }))
+    .sort((a, b) => b.totalMovimentacoes - a.totalMovimentacoes)
 
-    return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas, dateRange }
-  })
+  return { kpi, saudeFacas, saudeMp, movimentacoesRecentes, rankingUsuarios, consumoBom, resumoOC, alertas, dateRange }
 }
 
 // ── Financeiro ──────────────────────────────────────────────────────────────
@@ -707,90 +801,98 @@ export async function getMetricasFinanceiro(
   await requireAuthenticatedUserId()
   await assertPermissao('metricas', 'ver')
 
-  return withSupabaseCookieContext(async () => {
-    const supabase = await createClient()
+  const [pedidos, gastos] = await Promise.all([
+    prisma.pedido.findMany({
+      where: {
+        dataPedido: {
+          gte: dateRange.desde,
+          lte: dateRange.ate,
+        },
+      },
+      select: {
+        dataPedido: true,
+        valorTotal: true,
+      },
+    }),
+    prisma.gasto.findMany({
+      where: {
+        dataGasto: {
+          gte: new Date(dateRange.desde),
+          lte: new Date(`${dateRange.ate}T23:59:59.999Z`),
+        },
+      },
+      select: {
+        id: true,
+        tipo: true,
+        descricao: true,
+        valor: true,
+        formaPagamento: true,
+        dataGasto: true,
+        ordemCompra: {
+          select: { codigo: true },
+        },
+      },
+    }),
+  ])
 
-    const [pedidosRes, gastosRes] = await Promise.all([
-      supabase
-        .from('pedidos')
-        .select('data_pedido, valor_total')
-        .gte('data_pedido', dateRange.desde)
-        .lte('data_pedido', dateRange.ate),
-      supabase
-        .from('gastos')
-        .select('id, tipo, descricao, valor, forma_pagamento, data_gasto, ordem_compra:ordens_compra(codigo)')
-        .gte('data_gasto', dateRange.desde)
-        .lte('data_gasto', dateRange.ate),
-    ])
+  const receitaTotal = pedidos.reduce((s, p) => s + numberFrom(p.valorTotal), 0)
+  const despesaTotal = gastos.reduce((s, g) => s + numberFrom(g.valor), 0)
+  const lucroLiquido = receitaTotal - despesaTotal
+  const margemLiquida = receitaTotal > 0 ? (lucroLiquido / receitaTotal) * 100 : 0
 
-    if (pedidosRes.error) throw new Error(pedidosRes.error.message)
-    if (gastosRes.error) throw new Error(gastosRes.error.message)
+  const tipoMap = new Map<TipoGasto, { total: number; quantidade: number }>()
+  for (const g of gastos) {
+    const t = g.tipo as TipoGasto
+    const entry = tipoMap.get(t) ?? { total: 0, quantidade: 0 }
+    entry.total += numberFrom(g.valor)
+    entry.quantidade += 1
+    tipoMap.set(t, entry)
+  }
 
-    const pedidos = pedidosRes.data ?? []
-    const gastos = gastosRes.data ?? []
+  const despesasPorTipo: DespesaPorTipo[] = Array.from(tipoMap.entries())
+    .map(([tipo, v]) => ({
+      tipo,
+      total: v.total,
+      quantidade: v.quantidade,
+      percentual: despesaTotal > 0 ? (v.total / despesaTotal) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
 
-    const receitaTotal = pedidos.reduce((s, p) => s + Number(p.valor_total ?? 0), 0)
-    const despesaTotal = gastos.reduce((s, g) => s + Number(g.valor ?? 0), 0)
-    const lucroLiquido = receitaTotal - despesaTotal
-    const margemLiquida = receitaTotal > 0 ? (lucroLiquido / receitaTotal) * 100 : 0
+  const mesMap = new Map<string, { receita: number; despesa: number }>()
+  for (const p of pedidos) {
+    const d = new Date(p.dataPedido)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const e = mesMap.get(key) ?? { receita: 0, despesa: 0 }
+    e.receita += numberFrom(p.valorTotal)
+    mesMap.set(key, e)
+  }
+  for (const g of gastos) {
+    const d = new Date(g.dataGasto)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const e = mesMap.get(key) ?? { receita: 0, despesa: 0 }
+    e.despesa += numberFrom(g.valor)
+    mesMap.set(key, e)
+  }
 
-    const tipoMap = new Map<TipoGasto, { total: number; quantidade: number }>()
-    for (const g of gastos) {
-      const t = g.tipo as TipoGasto
-      const entry = tipoMap.get(t) ?? { total: 0, quantidade: 0 }
-      entry.total += Number(g.valor ?? 0)
-      entry.quantidade += 1
-      tipoMap.set(t, entry)
-    }
+  const serieMensal: DespesaPorMes[] = Array.from(mesMap.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([mes, v]) => ({ mes, mesLabel: mesLabel(mes), ...v }))
 
-    const despesasPorTipo: DespesaPorTipo[] = Array.from(tipoMap.entries())
-      .map(([tipo, v]) => ({
-        tipo,
-        total: v.total,
-        quantidade: v.quantidade,
-        percentual: despesaTotal > 0 ? (v.total / despesaTotal) * 100 : 0,
-      }))
-      .sort((a, b) => b.total - a.total)
+  const topGastos: GastoTopo[] = gastos
+    .slice()
+    .sort((a, b) => numberFrom(b.valor) - numberFrom(a.valor))
+    .slice(0, 10)
+    .map((g) => ({
+      id: g.id,
+      data: g.dataGasto.toISOString().slice(0, 10),
+      tipo: g.tipo as TipoGasto,
+      descricao: g.descricao,
+      valor: numberFrom(g.valor),
+      forma_pagamento: g.formaPagamento as FormaPagamento,
+      ordem_compra_codigo: g.ordemCompra?.codigo ?? null,
+    }))
 
-    const mesMap = new Map<string, { receita: number; despesa: number }>()
-    for (const p of pedidos) {
-      const d = new Date(p.data_pedido)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const e = mesMap.get(key) ?? { receita: 0, despesa: 0 }
-      e.receita += Number(p.valor_total ?? 0)
-      mesMap.set(key, e)
-    }
-    for (const g of gastos) {
-      const d = new Date(g.data_gasto)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      const e = mesMap.get(key) ?? { receita: 0, despesa: 0 }
-      e.despesa += Number(g.valor ?? 0)
-      mesMap.set(key, e)
-    }
+  const kpi: KpiFinanceiro = { receitaTotal, despesaTotal, lucroLiquido, margemLiquida }
 
-    const serieMensal: DespesaPorMes[] = Array.from(mesMap.entries())
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([mes, v]) => ({ mes, mesLabel: mesLabel(mes), ...v }))
-
-    const topGastos: GastoTopo[] = gastos
-      .slice()
-      .sort((a, b) => Number(b.valor ?? 0) - Number(a.valor ?? 0))
-      .slice(0, 10)
-      .map((g) => {
-        const oc = Array.isArray(g.ordem_compra) ? g.ordem_compra[0] : g.ordem_compra
-        return {
-          id: g.id,
-          data: g.data_gasto,
-          tipo: g.tipo as TipoGasto,
-          descricao: g.descricao,
-          valor: Number(g.valor ?? 0),
-          forma_pagamento: g.forma_pagamento as FormaPagamento,
-          ordem_compra_codigo: oc?.codigo ?? null,
-        }
-      })
-
-    const kpi: KpiFinanceiro = { receitaTotal, despesaTotal, lucroLiquido, margemLiquida }
-
-    return { kpi, despesasPorTipo, serieMensal, topGastos, dateRange }
-  })
+  return { kpi, despesasPorTipo, serieMensal, topGastos, dateRange }
 }

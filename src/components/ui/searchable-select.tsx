@@ -1,11 +1,11 @@
-'use client'
+﻿'use client'
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 export type SearchableSelectOption = {
   value: string
   label: string
-  /** URL já otimizada (ex.: `getOptimizedSupabaseImageUrl`); se ausente ou vazio, mostra placeholder */
+  /** URL jÃ¡ otimizada (ex.: `getOptimizedImageUrl`); se ausente ou vazio, mostra placeholder */
   imageUrl?: string | null
 }
 
@@ -14,7 +14,7 @@ function OptionThumb({ src, title }: { src?: string | null; title: string }) {
   if (src) {
     return (
       <span className={box} style={{ borderColor: 'var(--ac-border)' }}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- miniatura pequena, URL já otimizada */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- miniatura pequena, URL jÃ¡ otimizada */}
         <img src={src} alt="" className="size-full object-cover" title={title} />
       </span>
     )
@@ -56,7 +56,7 @@ type Props = {
   emptyMessage?: string
   className?: string
   inputClassName?: string
-  /** Se false, não exibe miniaturas (útil para listas só texto, ex.: usuários). Default: true. */
+  /** Se false, nÃ£o exibe miniaturas (Ãºtil para listas sÃ³ texto, ex.: usuÃ¡rios). Default: true. */
   showThumbnails?: boolean
 }
 
@@ -65,7 +65,7 @@ export function SearchableSelect({
   value,
   onChange,
   options,
-  placeholder = 'Pesquisar…',
+  placeholder = 'Pesquisarâ€¦',
   disabled,
   loading,
   emptyMessage = 'Nenhum resultado',
@@ -215,7 +215,7 @@ export function SearchableSelect({
 
       {loading && (
         <p className="mt-1 text-xs" style={{ color: 'var(--ac-muted)' }}>
-          Carregando…
+          Carregandoâ€¦
         </p>
       )}
 
@@ -266,3 +266,4 @@ export function SearchableSelect({
     </div>
   )
 }
+

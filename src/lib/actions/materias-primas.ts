@@ -1,14 +1,14 @@
 'use server'
 
+import { Prisma } from '@prisma/client'
 import { revalidateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
 import {
   fetchCategoriasMateriaPrimaList,
   fetchFornecedoresSelect,
   fetchMatériasPrimasList,
 } from '@/lib/cache/list-data'
+import { prisma } from '@/lib/prisma'
 import type { MateriaPrima, MovimentacaoEstoque, Faca, Fornecedor, CategoriaMateriaPrimaDB } from '@/types'
 import { gerarCodigoForte } from '@/lib/utils/codigo'
 import { withTiming } from '@/lib/perf/timing'
@@ -35,6 +35,141 @@ export async function gerarCodigoMP(): Promise<string> {
   return gerarCodigoForte('MP')
 }
 
+function numberFrom(value: Prisma.Decimal | number | string | null | undefined): number {
+  if (value == null) return 0
+  if (typeof value === 'object' && 'toNumber' in value && typeof value.toNumber === 'function') {
+    return value.toNumber()
+  }
+  return Number(value) || 0
+}
+
+function decimal(value: number): Prisma.Decimal {
+  return new Prisma.Decimal(Number.isFinite(value) ? value : 0)
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
+function mapFornecedorDetalhe(row: {
+  id: string
+  nome: string
+  telefone: string | null
+  email: string | null
+  tipoDocumento: 'cnpj' | 'cpf'
+  documento: string | null
+  cep: string | null
+  logradouro: string | null
+  numero: string | null
+  complemento: string | null
+  bairro: string | null
+  cidade: string | null
+  uf: string | null
+  razaoSocial: string | null
+  ie: string | null
+  codigoMunicipioIbge: string | null
+  createdAt: Date
+} | null): Fornecedor | null {
+  if (!row) return null
+  return {
+    id: row.id,
+    nome: row.nome,
+    telefone: row.telefone,
+    email: row.email,
+    tipo_documento: row.tipoDocumento,
+    documento: row.documento,
+    cep: row.cep,
+    logradouro: row.logradouro,
+    numero: row.numero,
+    complemento: row.complemento,
+    bairro: row.bairro,
+    cidade: row.cidade,
+    uf: row.uf,
+    razao_social: row.razaoSocial,
+    ie: row.ie,
+    codigo_municipio_ibge: row.codigoMunicipioIbge,
+    created_at: row.createdAt.toISOString(),
+  }
+}
+
+function mapMateriaPrimaDetalhe(row: {
+  id: string
+  codigo: string
+  nome: string
+  categoria: string
+  fornecedorId: string | null
+  fotoUrl: string | null
+  precoCusto: Prisma.Decimal
+  estoqueAtual: Prisma.Decimal
+  estoqueMinimo: Prisma.Decimal
+  createdAt: Date
+  fornecedor: {
+    id: string
+    nome: string
+    telefone: string | null
+    email: string | null
+    tipoDocumento: 'cnpj' | 'cpf'
+    documento: string | null
+    cep: string | null
+    logradouro: string | null
+    numero: string | null
+    complemento: string | null
+    bairro: string | null
+    cidade: string | null
+    uf: string | null
+    razaoSocial: string | null
+    ie: string | null
+    codigoMunicipioIbge: string | null
+    createdAt: Date
+  } | null
+}): MateriaPrima {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    nome: row.nome,
+    categoria: row.categoria,
+    fornecedor_id: row.fornecedorId,
+    foto_url: row.fotoUrl,
+    preco_custo: numberFrom(row.precoCusto),
+    estoque_atual: numberFrom(row.estoqueAtual),
+    estoque_minimo: numberFrom(row.estoqueMinimo),
+    created_at: row.createdAt.toISOString(),
+    fornecedor: mapFornecedorDetalhe(row.fornecedor),
+  }
+}
+
+function mapMovimentacaoDetalhe(
+  row: {
+    id: string
+    tipo: string
+    materiaPrimaId: string | null
+    facaId: string | null
+    consumivelId: string | null
+    pedidoId: string | null
+    quantidade: number
+    observacao: string | null
+    usuarioId: string | null
+    createdAt: Date
+  },
+  facasMap: Map<string, Pick<Faca, 'id' | 'codigo' | 'nome'>>,
+  usuariosMap: Map<string, { id: string; nome: string }>
+): MovimentacaoEstoque {
+  return {
+    id: row.id,
+    tipo: row.tipo as MovimentacaoEstoque['tipo'],
+    materia_prima_id: row.materiaPrimaId,
+    faca_id: row.facaId,
+    consumivel_id: row.consumivelId,
+    pedido_id: row.pedidoId,
+    quantidade: row.quantidade,
+    observacao: row.observacao,
+    usuario_id: row.usuarioId,
+    created_at: row.createdAt.toISOString(),
+    faca: row.facaId ? (facasMap.get(row.facaId) ?? null) : null,
+    usuario: row.usuarioId ? (usuariosMap.get(row.usuarioId) ?? null) : null,
+  }
+}
+
 type MPInput = {
   nome: string
   categoria: string
@@ -46,168 +181,51 @@ type MPInput = {
 
 export async function criarMateriaPrima(input: MPInput) {
   await assertPermissao('materias_primas', 'criar')
-  const supabase = await createClient()
   const codigo = await gerarCodigoMP()
 
-  const { error } = await supabase.from('materias_primas').insert({
-    codigo,
-    nome: input.nome.trim(),
-    categoria: input.categoria.trim(),
-    fornecedor_id: input.fornecedor_id || null,
-    preco_custo: input.preco_custo,
-    estoque_atual: input.estoque_atual,
-    estoque_minimo: input.estoque_minimo,
+  await prisma.materiaPrima.create({
+    data: {
+      codigo,
+      nome: input.nome.trim(),
+      categoria: input.categoria.trim(),
+      fornecedorId: input.fornecedor_id || null,
+      precoCusto: decimal(input.preco_custo),
+      estoqueAtual: decimal(input.estoque_atual),
+      estoqueMinimo: decimal(input.estoque_minimo),
+    },
   })
-
-  if (error) throw new Error(error.message)
   await revalidateMPLists()
 }
 
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
   await assertPermissao('materias_primas', 'editar')
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('materias_primas')
-    .update({
+  await prisma.materiaPrima.update({
+    where: { id },
+    data: {
       nome: input.nome.trim(),
       categoria: input.categoria.trim(),
-      fornecedor_id: input.fornecedor_id || null,
-      preco_custo: input.preco_custo,
-      estoque_atual: input.estoque_atual,
-      estoque_minimo: input.estoque_minimo,
-    })
-    .eq('id', id)
-
-  if (error) throw new Error(error.message)
-  await revalidateMPLists()
-}
-
-const FOTO_BUCKET_MP = 'materias-primas-fotos'
-
-function extFromFile(file: { type?: string; name?: string }): string {
-  const mime = file.type ?? ''
-  const n = file.name ?? ''
-  if (mime.includes('png')) return 'png'
-  if (mime.includes('webp')) return 'webp'
-  if (mime.includes('jpeg') || mime.includes('jpg') || mime.includes('pjpeg')) return 'jpg'
-  const m = n.match(/\.([a-zA-Z0-9]+)$/)
-  return (m?.[1]?.toLowerCase() ?? 'jpg') === 'jpeg' ? 'jpg' : (m?.[1]?.toLowerCase() ?? 'jpg')
-}
-
-function isFileLike(v: unknown): v is Blob & { type?: string; name?: string } {
-  return typeof v === 'object' && v !== null && typeof (v as Blob).arrayBuffer === 'function'
-}
-
-export async function salvarMPComFoto(formData: FormData) {
-  const id = formData.get('id')
-  const nome = String(formData.get('nome') ?? '').trim()
-  const categoria = String(formData.get('categoria') ?? '').trim()
-  const fornecedor_id = formData.get('fornecedor_id')
-  const preco_custo = Number(formData.get('preco_custo'))
-  const estoque_atual = Number(formData.get('estoque_atual'))
-  const estoque_minimo = Number(formData.get('estoque_minimo'))
-  const foto = formData.get('foto')
-
-  if (!nome) throw new Error('Nome é obrigatório.')
-  if (!categoria) throw new Error('Categoria é obrigatória.')
-  if (!Number.isFinite(preco_custo)) throw new Error('Preço de custo inválido.')
-
-  const supabase = await createClient()
-  const isEdit = typeof id === 'string' && id.length > 0
-
-  await assertPermissao('materias_primas', isEdit ? 'editar' : 'criar')
-
-  let mpId: string
-
-  if (isEdit) {
-    mpId = id as string
-    const { error } = await supabase.from('materias_primas').update({
-      nome,
-      categoria,
-      fornecedor_id: fornecedor_id ? String(fornecedor_id) : null,
-      preco_custo,
-      estoque_atual: estoque_atual || 0,
-      estoque_minimo: estoque_minimo || 0,
-    }).eq('id', mpId)
-    if (error) throw new Error(error.message)
-  } else {
-    const codigo = await gerarCodigoMP()
-    const { data, error } = await supabase
-      .from('materias_primas')
-      .insert({
-        codigo,
-        nome,
-        categoria,
-        fornecedor_id: fornecedor_id ? String(fornecedor_id) : null,
-        preco_custo,
-        estoque_atual: estoque_atual || 0,
-        estoque_minimo: estoque_minimo || 0,
-      })
-      .select('id')
-      .single()
-    if (error) throw new Error(error.message)
-    if (!data?.id) throw new Error('Falha ao criar matéria-prima.')
-    mpId = data.id
-  }
-
-  // Upload de foto (opcional)
-  if (foto && isFileLike(foto)) {
-    const admin = createAdminClient()
-
-    const { data: buckets, error: listErr } = await admin.storage.listBuckets()
-    if (listErr) throw new Error(listErr.message)
-
-    const exists = (buckets ?? []).some((b: { name: string }) => b.name === FOTO_BUCKET_MP)
-    if (!exists) {
-      const { error: createErr } = await admin.storage.createBucket(FOTO_BUCKET_MP, {
-        public: true,
-        allowedMimeTypes: ['image/*'],
-      })
-      if (createErr) throw new Error(createErr.message)
-    }
-
-    const fileExt = extFromFile(foto as unknown as { type?: string; name?: string })
-    const filePath = `${mpId}/foto.${fileExt}`
-
-    const { error: upErr } = await admin.storage
-      .from(FOTO_BUCKET_MP)
-      .upload(filePath, foto, {
-        upsert: true,
-        contentType: foto.type ?? 'image/jpeg',
-        cacheControl: '3600',
-      })
-    if (upErr) throw new Error(upErr.message)
-
-    const { data: pub } = admin.storage.from(FOTO_BUCKET_MP).getPublicUrl(filePath)
-    if (pub?.publicUrl) {
-      const { error: fotoUpdateErr } = await supabase
-        .from('materias_primas')
-        .update({ foto_url: pub.publicUrl })
-        .eq('id', mpId)
-      if (fotoUpdateErr) throw new Error(fotoUpdateErr.message)
-    }
-  }
+      fornecedorId: input.fornecedor_id || null,
+      precoCusto: decimal(input.preco_custo),
+      estoqueAtual: decimal(input.estoque_atual),
+      estoqueMinimo: decimal(input.estoque_minimo),
+    },
+  })
 
   await revalidateMPLists()
 }
 
 export async function deletarMateriaPrima(id: string) {
   await assertPermissao('materias_primas', 'deletar')
-  const supabase = await createClient()
+  const uso = await prisma.facaMateriaPrima.findFirst({
+    where: { materiaPrimaId: id },
+    select: { id: true },
+  })
 
-  const { data: uso } = await supabase
-    .from('faca_materias_primas')
-    .select('id')
-    .eq('materia_prima_id', id)
-    .limit(1)
-
-  if (uso && uso.length > 0) {
+  if (uso) {
     throw new Error('Esta matéria-prima está vinculada a uma ou mais facas e não pode ser excluída.')
   }
 
-  const { error } = await supabase.from('materias_primas').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.materiaPrima.delete({ where: { id } })
   await revalidateMPLists()
 }
 
@@ -226,59 +244,77 @@ export type MPDetalheData = {
 
 export async function getMPDetalhe(mpId: string): Promise<MPDetalheData> {
   await assertPermissao('materias_primas', 'ver')
-  const supabase = await createClient()
-  const admin = createAdminClient()
-
-  const [mpRes, bomRes, movRes, usuariosRes] = await Promise.all([
-    supabase
-      .from('materias_primas')
-      .select(
-        '*, fornecedor:fornecedores(id, nome, telefone, email, created_at, tipo_documento, documento, cep, logradouro, numero, complemento, bairro, cidade, uf)'
-      )
-      .eq('id', mpId)
-      .single(),
-    supabase
-      .from('faca_materias_primas')
-      .select('quantidade, faca:facas(id, codigo, nome, categoria, estoque_atual)')
-      .eq('materia_prima_id', mpId)
-      .order('faca_id'),
-    // Não usa join para usuario_id → usuarios_perfis para evitar falha silenciosa
-    // caso a FK não esteja declarada no banco. O merge é feito manualmente abaixo.
-    admin
-      .from('movimentacoes_estoque')
-      .select('*, faca:facas(id, codigo, nome)')
-      .eq('materia_prima_id', mpId)
-      .order('created_at', { ascending: false })
-      .limit(100),
-    supabase
-      .from('usuarios_perfis')
-      .select('id, nome')
-      .eq('ativo', true)
-      .order('nome'),
+  const [mp, bomRows, movRows, usuariosRows] = await Promise.all([
+    prisma.materiaPrima.findUnique({
+      where: { id: mpId },
+      include: {
+        fornecedor: true,
+      },
+    }),
+    prisma.facaMateriaPrima.findMany({
+      where: { materiaPrimaId: mpId },
+      orderBy: { facaId: 'asc' },
+      include: {
+        faca: {
+          select: {
+            id: true,
+            codigo: true,
+            nome: true,
+            categoria: true,
+            estoqueAtual: true,
+          },
+        },
+      },
+    }),
+    prisma.movimentacaoEstoque.findMany({
+      where: { materiaPrimaId: mpId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.usuarioPerfil.findMany({
+      where: { ativo: true },
+      orderBy: { nome: 'asc' },
+      select: { id: true, nome: true },
+    }),
   ])
 
-  if (mpRes.error) throw new Error(mpRes.error.message)
-  if (!mpRes.data) throw new Error('Matéria-prima não encontrada.')
-  if (movRes.error) throw new Error(`Erro ao buscar movimentações: ${movRes.error.message}`)
+  if (!mp) throw new Error('Matéria-prima não encontrada.')
 
-  const facasQueUsam: FacaComQuantidade[] = (bomRes.data ?? []).map((row) => {
-    const faca = (Array.isArray(row.faca) ? row.faca[0] : row.faca) as Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'>
+  const facasQueUsam: FacaComQuantidade[] = bomRows.map((row) => {
+    const faca: Pick<Faca, 'id' | 'codigo' | 'nome' | 'categoria' | 'estoque_atual'> = {
+      id: row.faca.id,
+      codigo: row.faca.codigo,
+      nome: row.faca.nome,
+      categoria: row.faca.categoria,
+      estoque_atual: Number(row.faca.estoqueAtual),
+    }
     return { ...faca, quantidade: Number(row.quantidade) || 0 }
   })
 
-  const usuariosMap = new Map(
-    (usuariosRes.data ?? []).map((u) => [u.id, { id: u.id, nome: u.nome }])
+  const facasRelacionadasIds = [...new Set(movRows.map((mov) => mov.facaId).filter((id): id is string => Boolean(id)))]
+  const facasRelacionadas = facasRelacionadasIds.length
+    ? await prisma.faca.findMany({
+        where: { id: { in: facasRelacionadasIds } },
+        select: { id: true, codigo: true, nome: true },
+      })
+    : []
+
+  const facasMap = new Map(
+    facasRelacionadas.map((faca) => [
+      faca.id,
+      { id: faca.id, codigo: faca.codigo, nome: faca.nome } as Pick<Faca, 'id' | 'codigo' | 'nome'>,
+    ])
   )
-  const movimentacoes = (movRes.data ?? []).map((mov: any) => ({
-    ...mov,
-    usuario: mov.usuario_id ? (usuariosMap.get(mov.usuario_id) ?? null) : null,
-  })) as MovimentacaoEstoque[]
+  const usuariosMap = new Map(
+    usuariosRows.map((u) => [u.id, { id: u.id, nome: u.nome }])
+  )
+  const movimentacoes = movRows.map((mov) => mapMovimentacaoDetalhe(mov, facasMap, usuariosMap))
 
   return {
-    mp: mpRes.data as MateriaPrima,
+    mp: mapMateriaPrimaDetalhe(mp),
     facasQueUsam,
     movimentacoes,
-    usuariosRegistro: (usuariosRes.data ?? []) as { id: string; nome: string }[],
+    usuariosRegistro: usuariosRows,
   }
 }
 
@@ -321,47 +357,47 @@ export async function entradaEstoqueMP(
   if (!Number.isFinite(quantidade) || quantidade <= 0) {
     throw new Error('Quantidade deve ser maior que zero.')
   }
+  if (!Number.isInteger(quantidade)) {
+    throw new Error('Quantidade deve ser um número inteiro.')
+  }
   if (!usuarioRegistroId) {
     throw new Error('Selecione o usuário que está registrando a entrada.')
   }
 
-  const supabase = await createClient()
-  const admin = createAdminClient()
+  await prisma.$transaction(async (tx) => {
+    const [mp, usuarioRegistro] = await Promise.all([
+      tx.materiaPrima.findUnique({
+        where: { id: mpId },
+        select: { id: true, estoqueAtual: true },
+      }),
+      tx.usuarioPerfil.findFirst({
+        where: { id: usuarioRegistroId, ativo: true },
+        select: { id: true },
+      }),
+    ])
 
-  const { data: mp, error: mpErr } = await supabase
-    .from('materias_primas')
-    .select('id, estoque_atual')
-    .eq('id', mpId)
-    .single()
-  if (mpErr) throw new Error(mpErr.message)
-  if (!mp) throw new Error('Matéria-prima não encontrada.')
+    if (!mp) throw new Error('Matéria-prima não encontrada.')
+    if (!usuarioRegistro) throw new Error('Usuário selecionado não encontrado ou inativo.')
 
-  const novoEstoque = Math.round((Number(mp.estoque_atual) + quantidade) * 1000) / 1000
+    const novoEstoque = round3(numberFrom(mp.estoqueAtual) + quantidade)
 
-  const { data: usuarioRegistro, error: usuarioErr } = await admin
-    .from('usuarios_perfis')
-    .select('id')
-    .eq('id', usuarioRegistroId)
-    .eq('ativo', true)
-    .single()
-  if (usuarioErr) throw new Error(usuarioErr.message)
-  if (!usuarioRegistro) throw new Error('Usuário selecionado não encontrado ou inativo.')
+    await tx.movimentacaoEstoque.create({
+      data: {
+        tipo: 'entrada',
+        materiaPrimaId: mpId,
+        quantidade,
+        observacao: observacao?.trim() || null,
+        usuarioId: usuarioRegistroId,
+      },
+    })
 
-  const { error: movErr } = await admin.from('movimentacoes_estoque').insert({
-    tipo: 'entrada',
-    materia_prima_id: mpId,
-    quantidade,
-    observacao: observacao?.trim() || null,
-    usuario_id: usuarioRegistroId,
+    await tx.materiaPrima.update({
+      where: { id: mpId },
+      data: { estoqueAtual: decimal(novoEstoque) },
+    })
   })
-  if (movErr) throw new Error(movErr.message)
 
-  const { error: updErr } = await admin
-    .from('materias_primas')
-    .update({ estoque_atual: novoEstoque })
-    .eq('id', mpId)
-  if (updErr) throw new Error(updErr.message)
-
+  await revalidateMPLists()
 }
 
 // ============================================================
@@ -396,82 +432,75 @@ export async function atualizarMovimentacaoMP(input: AtualizarMovInput): Promise
   if (!Number.isFinite(quantidade) || quantidade <= 0) {
     throw new Error('Quantidade deve ser maior que zero.')
   }
+  if (!Number.isInteger(quantidade)) {
+    throw new Error('Quantidade deve ser um número inteiro.')
+  }
   if (!usuarioId) throw new Error('Selecione o usuário responsável.')
 
-  const admin = createAdminClient()
-
-  // 1. Busca movimentação atual
-  const { data: movAtual, error: movErr } = await admin
-    .from('movimentacoes_estoque')
-    .select('id, tipo, quantidade, materia_prima_id')
-    .eq('id', movimentacaoId)
-    .single()
-  if (movErr) throw new Error(movErr.message)
-  if (!movAtual) throw new Error('Movimentação não encontrada.')
-  if (!movAtual.materia_prima_id) {
-    throw new Error('Esta movimentação não está ligada a uma matéria-prima.')
-  }
-
-  // 2. Valida usuário
-  const { data: usuario, error: userErr } = await admin
-    .from('usuarios_perfis')
-    .select('id')
-    .eq('id', usuarioId)
-    .single()
-  if (userErr) throw new Error(userErr.message)
-  if (!usuario) throw new Error('Usuário não encontrado.')
-
-  // 3. Busca estoque atual da MP
-  const { data: mp, error: mpErr } = await admin
-    .from('materias_primas')
-    .select('id, estoque_atual')
-    .eq('id', movAtual.materia_prima_id)
-    .single()
-  if (mpErr) throw new Error(mpErr.message)
-  if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
-
-  // 4. Calcula delta e novo estoque de acordo com o tipo
-  const quantidadeAntiga = Number(movAtual.quantidade)
-  const delta = quantidade - quantidadeAntiga
-
-  let novoEstoque: number
-  const tipo = movAtual.tipo as string
-  if (tipo === 'entrada' || tipo === 'ajuste') {
-    novoEstoque = Number(mp.estoque_atual) + delta
-  } else if (tipo.startsWith('saida')) {
-    novoEstoque = Number(mp.estoque_atual) - delta
-  } else {
-    // tipo desconhecido — mantém o estoque, só altera a movimentação
-    novoEstoque = Number(mp.estoque_atual)
-  }
-
-  novoEstoque = Math.round(novoEstoque * 1000) / 1000
-  if (novoEstoque < 0) {
-    throw new Error(
-      `Operação inválida: o novo estoque ficaria negativo (${novoEstoque}). ` +
-        `Ajuste antes o estoque manualmente ou corrija outra movimentação primeiro.`
-    )
-  }
-
-  // 5. Atualiza a movimentação
-  const { error: updMovErr } = await admin
-    .from('movimentacoes_estoque')
-    .update({
-      quantidade,
-      usuario_id: usuarioId,
-      observacao: observacao?.trim() || null,
+  await prisma.$transaction(async (tx) => {
+    const movAtual = await tx.movimentacaoEstoque.findUnique({
+      where: { id: movimentacaoId },
+      select: {
+        id: true,
+        tipo: true,
+        quantidade: true,
+        materiaPrimaId: true,
+      },
     })
-    .eq('id', movimentacaoId)
-  if (updMovErr) throw new Error(updMovErr.message)
+    if (!movAtual) throw new Error('Movimentação não encontrada.')
+    if (!movAtual.materiaPrimaId) {
+      throw new Error('Esta movimentação não está ligada a uma matéria-prima.')
+    }
 
-  // 6. Atualiza o estoque (se houve delta)
-  if (delta !== 0 && novoEstoque !== Number(mp.estoque_atual)) {
-    const { error: updMpErr } = await admin
-      .from('materias_primas')
-      .update({ estoque_atual: novoEstoque })
-      .eq('id', mp.id)
-    if (updMpErr) throw new Error(updMpErr.message)
-  }
+    const usuario = await tx.usuarioPerfil.findUnique({
+      where: { id: usuarioId },
+      select: { id: true },
+    })
+    if (!usuario) throw new Error('Usuário não encontrado.')
 
-  // 7. Invalida caches relacionados
+    const mp = await tx.materiaPrima.findUnique({
+      where: { id: movAtual.materiaPrimaId },
+      select: { id: true, estoqueAtual: true },
+    })
+    if (!mp) throw new Error('Matéria-prima vinculada não encontrada.')
+
+    const quantidadeAntiga = Number(movAtual.quantidade)
+    const delta = quantidade - quantidadeAntiga
+
+    let novoEstoque: number
+    const tipo = movAtual.tipo
+    if (tipo === 'entrada' || tipo === 'ajuste') {
+      novoEstoque = numberFrom(mp.estoqueAtual) + delta
+    } else if (tipo.startsWith('saida')) {
+      novoEstoque = numberFrom(mp.estoqueAtual) - delta
+    } else {
+      novoEstoque = numberFrom(mp.estoqueAtual)
+    }
+
+    novoEstoque = round3(novoEstoque)
+    if (novoEstoque < 0) {
+      throw new Error(
+        `Operação inválida: o novo estoque ficaria negativo (${novoEstoque}). ` +
+          'Ajuste antes o estoque manualmente ou corrija outra movimentação primeiro.'
+      )
+    }
+
+    await tx.movimentacaoEstoque.update({
+      where: { id: movimentacaoId },
+      data: {
+        quantidade,
+        usuarioId,
+        observacao: observacao?.trim() || null,
+      },
+    })
+
+    if (delta !== 0 && novoEstoque !== numberFrom(mp.estoqueAtual)) {
+      await tx.materiaPrima.update({
+        where: { id: mp.id },
+        data: { estoqueAtual: decimal(novoEstoque) },
+      })
+    }
+  })
+
+  await revalidateMPLists()
 }

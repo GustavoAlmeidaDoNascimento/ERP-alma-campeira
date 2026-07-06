@@ -1,7 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { Prisma } from '@prisma/client'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import type { Entrada, FormaPagamento } from '@/types'
 
 const FORMAS_VALIDAS: FormaPagamento[] = [
@@ -24,6 +25,65 @@ export type EntradaInput = {
   categoria?: string | null
   observacao?: string | null
   usuario_id?: string | null
+}
+
+type EntradaRow = {
+  id: string
+  descricao: string
+  valor: Prisma.Decimal | number | string | null
+  formaPagamento: string
+  dataEntrada: Date | string
+  categoria: string | null
+  observacao: string | null
+  usuarioId: string | null
+  createdAt: Date | string
+  usuario: { id: string; nome: string } | null
+}
+
+function numberFrom(value: Prisma.Decimal | number | string | null | undefined): number {
+  if (value == null) return 0
+  if (typeof value === 'object' && 'toNumber' in value && typeof value.toNumber === 'function') {
+    return value.toNumber()
+  }
+  return Number(value) || 0
+}
+
+function dateOnly(value: Date | string | null | undefined): string {
+  if (!value) return ''
+  return (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10)
+}
+
+function iso(value: Date | string | null | undefined): string {
+  if (!value) return ''
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+}
+
+function parseDateOnly(value: string): Date {
+  const date = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(date.getTime())) {
+    throw new Error('Data da entrada inválida.')
+  }
+  return date
+}
+
+function mapEntradaRow(row: EntradaRow): Entrada {
+  return {
+    id: row.id,
+    descricao: row.descricao,
+    valor: numberFrom(row.valor),
+    forma_pagamento: row.formaPagamento as FormaPagamento,
+    data_entrada: dateOnly(row.dataEntrada),
+    categoria: row.categoria,
+    observacao: row.observacao,
+    usuario_id: row.usuarioId,
+    created_at: iso(row.createdAt),
+    usuario: row.usuarioId && row.usuario
+      ? {
+          id: row.usuario.id,
+          nome: row.usuario.nome,
+        }
+      : null,
+  }
 }
 
 function normalizarEntradaPayload(input: EntradaInput) {
@@ -49,42 +109,69 @@ function normalizarEntradaPayload(input: EntradaInput) {
 
 export async function listarEntradas(): Promise<Entrada[]> {
   await assertPermissao('gastos', 'ver')
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('entradas')
-    .select('*, usuario:usuarios_perfis(id, nome)')
-    .order('data_entrada', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(500)
-  if (error) throw new Error(error.message)
-  return (data ?? []) as Entrada[]
+  const rows = await prisma.entrada.findMany({
+    include: {
+      usuario: {
+        select: { id: true, nome: true },
+      },
+    },
+    orderBy: [{ dataEntrada: 'desc' }, { createdAt: 'desc' }],
+    take: 500,
+  })
+  return rows.map(mapEntradaRow)
 }
 
 export async function criarEntrada(input: EntradaInput) {
   await assertPermissao('gastos', 'criar')
-  const supabase = await createClient()
   const usuario_id =
     input.usuario_id ?? (await requireAuthenticatedUserId().catch(() => null))
   const payload = normalizarEntradaPayload(input)
-  const { error } = await supabase.from('entradas').insert({ ...payload, usuario_id })
-  if (error) throw new Error(error.message)
+  await prisma.entrada.create({
+    data: {
+      descricao: payload.descricao,
+      valor: payload.valor,
+      formaPagamento: payload.forma_pagamento,
+      dataEntrada: parseDateOnly(payload.data_entrada),
+      categoria: payload.categoria,
+      observacao: payload.observacao,
+      usuarioId: usuario_id,
+    },
+  })
 }
 
 export async function atualizarEntrada(id: string, input: EntradaInput) {
   await assertPermissao('gastos', 'editar')
-  const supabase = await createClient()
   const payload = normalizarEntradaPayload(input)
-  const row = {
-    ...payload,
-    ...(input.usuario_id !== undefined ? { usuario_id: input.usuario_id } : {}),
+  const data: {
+    descricao: string
+    valor: number
+    formaPagamento: FormaPagamento
+    dataEntrada: Date
+    categoria: string | null
+    observacao: string | null
+    usuarioId?: string | null
+  } = {
+    descricao: payload.descricao,
+    valor: payload.valor,
+    formaPagamento: payload.forma_pagamento,
+    dataEntrada: parseDateOnly(payload.data_entrada),
+    categoria: payload.categoria,
+    observacao: payload.observacao,
   }
-  const { error } = await supabase.from('entradas').update(row).eq('id', id)
-  if (error) throw new Error(error.message)
+
+  if (input.usuario_id !== undefined) {
+    data.usuarioId = input.usuario_id
+  }
+
+  await prisma.entrada.updateMany({
+    where: { id },
+    data,
+  })
 }
 
 export async function deletarEntrada(id: string) {
   await assertPermissao('gastos', 'deletar')
-  const supabase = await createClient()
-  const { error } = await supabase.from('entradas').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.entrada.deleteMany({
+    where: { id },
+  })
 }

@@ -58,9 +58,8 @@ export function ErpTabsProvider({ children }: { children: ReactNode }) {
 
   /**
    * Após mutação local, invalida tudo (refetch imediato) e dá um `router.refresh()`
-   * para revalidar o RSC. O Realtime do Supabase também vai disparar invalidações
-   * em outras abas — isto aqui é só para a aba que originou a mutação responder
-   * sem esperar o WebSocket.
+   * para revalidar o RSC. As outras abas também recebem invalidação imediata via
+   * `BroadcastChannel`; isto aqui cobre a aba que originou a mutação.
    */
   const refreshActiveTab = useCallback(() => {
     queryClient.invalidateQueries()

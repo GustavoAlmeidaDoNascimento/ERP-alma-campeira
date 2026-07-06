@@ -1,10 +1,14 @@
 'use server'
 
 import { revalidateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
 import { fetchCategoriasFacaList } from '@/lib/cache/list-data'
+import { prisma } from '@/lib/prisma'
 import type { CategoriaFacaDB } from '@/types'
+
+function normalizeColor(value: string): string {
+  return value.trim()
+}
 
 async function revalidateCategoriasFaca() {
   try {
@@ -28,49 +32,43 @@ type CategoriaInput = {
 
 export async function criarCategoriaFaca(input: CategoriaInput) {
   await assertPermissao('facas', 'criar')
-  const supabase = await createClient()
-
-  const { data: maxData } = await supabase
-    .from('categorias_faca')
-    .select('ordem')
-    .order('ordem', { ascending: false })
-    .limit(1)
-    .single()
-
-  const ordem = (maxData?.ordem ?? 0) + 1
-
-  const { error } = await supabase.from('categorias_faca').insert({
-    nome: input.nome.trim(),
-    cor_texto: input.cor_texto,
-    cor_fundo: input.cor_fundo,
-    cor_borda: input.cor_borda,
-    ordem,
+  const ultimaCategoria = await prisma.categoriaFaca.findFirst({
+    select: { ordem: true },
+    orderBy: { ordem: 'desc' },
   })
-  if (error) throw new Error(error.message)
+
+  const ordem = (ultimaCategoria?.ordem ?? 0) + 1
+
+  await prisma.categoriaFaca.create({
+    data: {
+      nome: input.nome.trim(),
+      corTexto: normalizeColor(input.cor_texto),
+      corFundo: normalizeColor(input.cor_fundo),
+      corBorda: normalizeColor(input.cor_borda),
+      ordem,
+    },
+  })
   await revalidateCategoriasFaca()
 }
 
 export async function atualizarCategoriaFaca(id: string, input: CategoriaInput) {
   await assertPermissao('facas', 'editar')
-  const supabase = await createClient()
-
-  const { error } = await supabase
-    .from('categorias_faca')
-    .update({
+  await prisma.categoriaFaca.updateMany({
+    where: { id },
+    data: {
       nome: input.nome.trim(),
-      cor_texto: input.cor_texto,
-      cor_fundo: input.cor_fundo,
-      cor_borda: input.cor_borda,
-    })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+      corTexto: normalizeColor(input.cor_texto),
+      corFundo: normalizeColor(input.cor_fundo),
+      corBorda: normalizeColor(input.cor_borda),
+    },
+  })
   await revalidateCategoriasFaca()
 }
 
 export async function deletarCategoriaFaca(id: string) {
   await assertPermissao('facas', 'deletar')
-  const supabase = await createClient()
-  const { error } = await supabase.from('categorias_faca').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.categoriaFaca.deleteMany({
+    where: { id },
+  })
   await revalidateCategoriasFaca()
 }

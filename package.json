@@ -6,6 +6,12 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:pull": "powershell -ExecutionPolicy Bypass -File scripts/db-pull.ps1",
+    "prisma:generate": "node scripts/prisma-cli.mjs generate",
+    "prisma:db:pull": "node scripts/prisma-cli.mjs db pull",
+    "prisma:migrate:dev": "node scripts/prisma-cli.mjs migrate dev",
+    "prisma:bootstrap:admin": "node scripts/bootstrap-local-admin.mjs",
+    "prisma:validate": "node scripts/prisma-cli.mjs validate",
+    "prisma:studio": "node scripts/prisma-cli.mjs studio",
     "build": "next build",
     "preview": "next build && next start",
     "start": "next start",
@@ -13,17 +19,14 @@
     "test:e2e:perf": "playwright test tests/e2e/perf-navegacao.spec.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.9.0",
-    "@supabase/supabase-js": "^2.100.0",
+    "@prisma/client": "^6.12.0",
     "@tanstack/react-query": "^5.100.9",
-    "@tanstack/react-query-devtools": "^5.100.9",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "next": "^16.2.1",
     "next-themes": "^0.4.6",
-    "postgres": "^3.4.9",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -39,6 +42,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.1",
     "postcss": "^8.5.8",
+    "prisma": "^6.12.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3"
   }

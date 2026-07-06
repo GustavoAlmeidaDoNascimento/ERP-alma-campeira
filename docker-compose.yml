@@ -1,15 +1,6 @@
-# Stack local de desenvolvimento: Postgres + PostgREST
-# (substitui o Supabase hospedado, igual à VPS)
-#
+# Stack local de desenvolvimento: PostgreSQL only
 # Uso:
-#   1. Crie um arquivo `.env` (só pro docker) com a MESMA JWT_SECRET da VPS:
-#        JWT_SECRET=<o mesmo valor do .env.local da VPS>
-#   2. docker compose up -d
-#   3. Puxe o schema/dados da VPS:  pnpm/npm run db:pull  (ou scripts/db-pull.ps1)
-#
-# Portas expostas no host:
-#   - Postgres  -> localhost:5432
-#   - PostgREST -> localhost:3001  (é o NEXT_PUBLIC_SUPABASE_URL local)
+#   docker compose up -d
 
 services:
   db:
@@ -24,48 +15,11 @@ services:
       - "5432:5432"
     volumes:
       - erp_dbdata:/var/lib/postgresql/data
-      # Scripts em supabase/_local rodam UMA vez, na criação do volume.
-      # Criam os roles (anon/authenticated/service_role/authenticator)
-      # que o PostgREST e as policies de RLS usam.
-      - ./supabase/_local:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d erp_alma"]
       interval: 5s
       timeout: 5s
       retries: 12
-
-  postgrest:
-    image: postgrest/postgrest:v12.2.0
-    container_name: erp_postgrest
-    restart: unless-stopped
-    ports:
-      - "3002:3000"
-    environment:
-      # authenticator é o role de login; o PostgREST troca pra anon/authenticated/
-      # service_role conforme o claim "role" do JWT.
-      PGRST_DB_URI: postgres://authenticator:authenticator@db:5432/erp_alma
-      PGRST_DB_SCHEMAS: public
-      PGRST_DB_ANON_ROLE: anon
-      # DEVE ser igual à JWT_SECRET do .env.local (mesma que assina as chaves).
-      PGRST_JWT_SECRET: ${JWT_SECRET}
-      PGRST_DB_USE_LEGACY_GUCS: "false"
-    depends_on:
-      db:
-        condition: service_healthy
-
-  # Gateway estilo Supabase: reescreve /rest/v1/<x> -> /<x> antes do PostgREST.
-  # O @supabase/supabase-js sempre prefixa /rest/v1/; sem isso, o PostgREST
-  # (que serve na raiz) responde 404 e a app entra em loop de permissoes.
-  postgrest-proxy:
-    image: nginx:alpine
-    container_name: erp_postgrest_proxy
-    restart: unless-stopped
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./supabase/_local/postgrest-proxy.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - postgrest
 
 volumes:
   erp_dbdata:

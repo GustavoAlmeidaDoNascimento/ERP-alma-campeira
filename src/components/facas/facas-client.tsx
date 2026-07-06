@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
@@ -11,7 +11,7 @@ import { statusEstoqueFaca, type Faca, type CategoriaFacaDB, type MateriaPrima, 
 import { lucroUnitarioFaca } from '@/types'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useFacas, useCategoriasFaca, useMateriasPrimas } from '@/lib/query/hooks'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getOptimizedImageUrl } from '@/lib/images'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
 type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
@@ -31,7 +31,7 @@ type OrdemColunaFacas =
 type Props = {
   facas: Faca[]
   categorias: CategoriaFacaDB[]
-  // Carregada lazy via React Query — só usada no modal de edição.
+  // Carregada lazy via React Query â€” sÃ³ usada no modal de ediÃ§Ã£o.
   materiasPrimas: MateriaPrima[] | undefined
   perm: Perm
   verPrecoVenda: boolean
@@ -140,7 +140,7 @@ export function FacasClient({
       if (!f.foto_url) continue
       map.set(
         f.id,
-        getOptimizedSupabaseImageUrl(f.foto_url, {
+        getOptimizedImageUrl(f.foto_url, {
           width: 64,
           height: 64,
           quality: 65,
@@ -156,7 +156,7 @@ export function FacasClient({
 
   function abrirFotoLightbox(faca: Faca, thumbFallback: string) {
     if (!faca.foto_url) return
-    const srcGrande = getOptimizedSupabaseImageUrl(faca.foto_url, {
+    const srcGrande = getOptimizedImageUrl(faca.foto_url, {
       width: 520,
       height: 520,
       quality: 80,
@@ -194,7 +194,7 @@ export function FacasClient({
         <div>
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Facas</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-            {facas.length} {facas.length === 1 ? 'faca no catálogo' : 'facas no catálogo'}
+            {facas.length} {facas.length === 1 ? 'faca no catÃ¡logo' : 'facas no catÃ¡logo'}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -209,7 +209,7 @@ export function FacasClient({
               fontWeight: 500,
             }}
           >
-            Ver catálogo público
+            Ver catÃ¡logo pÃºblico
           </button>
           {perm.criar && (
             <Button onClick={abrirNovo}>
@@ -234,7 +234,7 @@ export function FacasClient({
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome ou código..."
+            placeholder="Buscar por nome ou cÃ³digo..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -275,9 +275,9 @@ export function FacasClient({
                     style={{ color: ordenacao.coluna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
                   >
                     <span className="inline-flex items-center gap-1">
-                      {col === 'codigo' ? 'Código' : col === 'nome' ? 'Nome' : 'Categoria'}
+                      {col === 'codigo' ? 'CÃ³digo' : col === 'nome' ? 'Nome' : 'Categoria'}
                       <span style={{ opacity: ordenacao.coluna === col ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordenacao.coluna === col ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                        {ordenacao.coluna === col ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
                       </span>
                     </span>
                   </th>
@@ -288,9 +288,9 @@ export function FacasClient({
                   style={{ color: ordenacao.coluna === 'preco_custo' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
                 >
                   <span className="inline-flex w-full items-center justify-end gap-1">
-                    Preço Custo
+                    PreÃ§o Custo
                     <span style={{ opacity: ordenacao.coluna === 'preco_custo' ? 1 : 0.3, fontSize: '10px' }}>
-                      {ordenacao.coluna === 'preco_custo' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                      {ordenacao.coluna === 'preco_custo' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
                     </span>
                   </span>
                 </th>
@@ -301,9 +301,9 @@ export function FacasClient({
                     style={{ color: ordenacao.coluna === 'preco_venda' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
                   >
                     <span className="inline-flex w-full items-center justify-end gap-1">
-                      Preço Venda
+                      PreÃ§o Venda
                       <span style={{ opacity: ordenacao.coluna === 'preco_venda' ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordenacao.coluna === 'preco_venda' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                        {ordenacao.coluna === 'preco_venda' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
                       </span>
                     </span>
                   </th>
@@ -317,7 +317,7 @@ export function FacasClient({
                     <span className="inline-flex w-full items-center justify-end gap-1">
                       Lucro
                       <span style={{ opacity: ordenacao.coluna === 'lucro' ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordenacao.coluna === 'lucro' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                        {ordenacao.coluna === 'lucro' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
                       </span>
                     </span>
                   </th>
@@ -328,9 +328,9 @@ export function FacasClient({
                   style={{ color: ordenacao.coluna === 'estoque' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
                 >
                   <span className="inline-flex w-full items-center justify-end gap-1">
-                    Estoque / Mín.
+                    Estoque / MÃ­n.
                     <span style={{ opacity: ordenacao.coluna === 'estoque' ? 1 : 0.3, fontSize: '10px' }}>
-                      {ordenacao.coluna === 'estoque' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                      {ordenacao.coluna === 'estoque' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
                     </span>
                   </span>
                 </th>
@@ -342,7 +342,7 @@ export function FacasClient({
                   <span className="inline-flex w-full items-center justify-center gap-1">
                     Status
                     <span style={{ opacity: ordenacao.coluna === 'status' ? 1 : 0.3, fontSize: '10px' }}>
-                      {ordenacao.coluna === 'status' ? (ordenacao.dir === 'asc' ? '▲' : '▼') : '▲'}
+                      {ordenacao.coluna === 'status' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
                     </span>
                   </span>
                 </th>
@@ -524,11 +524,11 @@ export function FacasClient({
       <Modal
         open={modalCatalogoAberto}
         onClose={() => setModalCatalogoAberto(false)}
-        title="Abrir catálogo público"
+        title="Abrir catÃ¡logo pÃºblico"
         width="420px"
       >
         <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-          Escolha se deseja exibir preços (como fica hoje) ou somente modelos, ideal para compartilhar.
+          Escolha se deseja exibir preÃ§os (como fica hoje) ou somente modelos, ideal para compartilhar.
         </p>
         <div className="mt-5 flex flex-col gap-3">
           <Link
@@ -537,7 +537,7 @@ export function FacasClient({
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-all hover:brightness-95"
             style={{ background: 'var(--ac-accent)', color: '#0c0a09' }}
           >
-            Com preços
+            Com preÃ§os
           </Link>
           <Link
             href="/catalogo?sem_precos=1"
@@ -549,7 +549,7 @@ export function FacasClient({
               border: '1px solid var(--ac-border)',
             }}
           >
-            Sem preços
+            Sem preÃ§os
           </Link>
         </div>
       </Modal>
@@ -557,12 +557,12 @@ export function FacasClient({
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir faca">
         <div className="flex flex-col gap-4">
           <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
-            Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>? Esta ação não pode ser desfeita.
+            Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>? Esta aÃ§Ã£o nÃ£o pode ser desfeita.
           </p>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-              Como tratar as matérias-primas?
+              Como tratar as matÃ©rias-primas?
             </label>
             <select
               value={modoDelete}
@@ -570,8 +570,8 @@ export function FacasClient({
               className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-all appearance-none"
               style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
             >
-              <option value="apagar_materias_primas">{deletando?.nome}: apagar materias primas também</option>
-              <option value="desmontar">desmontar: retornar matérias primas ao estoque</option>
+              <option value="apagar_materias_primas">{deletando?.nome}: apagar materias primas tambÃ©m</option>
+              <option value="desmontar">desmontar: retornar matÃ©rias primas ao estoque</option>
             </select>
           </div>
 
@@ -605,3 +605,4 @@ export function FacasClient({
     </>
   )
 }
+

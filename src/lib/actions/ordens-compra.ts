@@ -1,18 +1,16 @@
 'use server'
 
+import { Prisma } from '@prisma/client'
 import { revalidateTag } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
+import { assertPermissao, getAuthenticatedUser, requireAuthenticatedUserId } from '@/lib/auth'
 import { withTiming } from '@/lib/perf/timing'
+import { prisma } from '@/lib/prisma'
 import {
   fetchOrdensCompraList,
   fetchFilaReposicaoList as fetchFilaReposicaoListCached,
   fetchUsuariosRegistroOC,
 } from '@/lib/cache/list-data'
-import {
-  gerarCodigoOC,
-  gerarOCsDeFilaItens,
-} from '@/lib/ordens-compra/gerar-oc-fila'
+import { gerarCodigoOC, gerarOCsDeFilaItens } from '@/lib/ordens-compra/gerar-oc-fila'
 import { TIPO_GASTO_PAGAMENTO_OC } from '@/types'
 import type {
   OrdemCompra,
@@ -32,13 +30,12 @@ async function revalidateOCLists(opts: { estoque?: boolean } = {}) {
       revalidateTag(`list-materias-primas-${userId}`, 'max')
     }
   } catch {
-    // sem usuário (improvável dentro de mutation) — ignorar
+    // ignorar
   }
 }
 
 const STATUS_OC_VALIDOS: readonly StatusOC[] = ['pendente', 'enviada', 'recebida']
 
-/** Compat: bases legadas com status `pago` ou sem coluna `pago`. */
 function normalizarStatusEPago(row: { status?: unknown; pago?: unknown }): { status: StatusOC; pago: boolean } {
   let status = String(row.status ?? 'pendente')
   let pago = Boolean(row.pago)
@@ -50,40 +47,118 @@ function normalizarStatusEPago(row: { status?: unknown; pago?: unknown }): { sta
   return { status: status as StatusOC, pago }
 }
 
-async function resolverUsuarioRegistroOC(usuarioRegistroId: string | null | undefined): Promise<string> {
-  const { getAuthenticatedUser } = await import('@/lib/auth')
-  const user = await getAuthenticatedUser()
-  if (!user?.id) throw new Error('Não autenticado.')
-  const escolha = typeof usuarioRegistroId === 'string' ? usuarioRegistroId.trim() : ''
-  const alvo = escolha || user.id
-  if (alvo === user.id) return user.id
-  const supabase = await createClient()
-  const { data: perfil, error } = await supabase
-    .from('usuarios_perfis')
-    .select('id')
-    .eq('id', alvo)
-    .eq('ativo', true)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (!perfil) throw new Error('Usuário selecionado inválido ou inativo.')
-  return alvo
+function numberFrom(value: Prisma.Decimal | number | null | undefined): number {
+  if (typeof value === 'number') return value
+  return value?.toNumber() ?? 0
+}
+
+function decimal(value: number): Prisma.Decimal {
+  return new Prisma.Decimal(value)
 }
 
 function camposRegistroAlteracao(usuarioId: string) {
   return {
-    ultima_alteracao_usuario_id: usuarioId,
-    ultima_alteracao_em: new Date().toISOString(),
+    ultimaAlteracaoUsuarioId: usuarioId,
+    ultimaAlteracaoEm: new Date(),
   }
 }
 
+async function resolverUsuarioRegistroOC(usuarioRegistroId: string | null | undefined): Promise<string> {
+  const user = await getAuthenticatedUser()
+  if (!user?.id) throw new Error('Não autenticado.')
+
+  const escolha = typeof usuarioRegistroId === 'string' ? usuarioRegistroId.trim() : ''
+  const alvo = escolha || user.id
+  if (alvo === user.id) return user.id
+
+  const perfil = await prisma.usuarioPerfil.findFirst({
+    where: { id: alvo, ativo: true },
+    select: { id: true },
+  })
+
+  if (!perfil) throw new Error('Usuário selecionado inválido ou inativo.')
+  return alvo
+}
+
 async function marcarUltimaAlteracaoOC(ordemCompraId: string, usuarioId: string) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('ordens_compra')
-    .update(camposRegistroAlteracao(usuarioId))
-    .eq('id', ordemCompraId)
-  if (error) throw new Error(error.message)
+  await prisma.ordemCompra.update({
+    where: { id: ordemCompraId },
+    data: camposRegistroAlteracao(usuarioId),
+  })
   await revalidateOCLists()
+}
+
+async function nextSequencialFornecedor(
+  tx: Prisma.TransactionClient,
+  fornecedorId: string | null,
+): Promise<number> {
+  const agregado = await tx.ordemCompra.aggregate({
+    where: { fornecedorId },
+    _max: { sequencialFornecedor: true },
+  })
+
+  return (agregado._max.sequencialFornecedor ?? 0) + 1
+}
+
+function quantidadeMovimentacao(valor: Prisma.Decimal | number): number {
+  const numero = numberFrom(valor)
+  if (!Number.isFinite(numero)) throw new Error('Quantidade de movimentação inválida.')
+  if (!Number.isInteger(numero)) {
+    throw new Error('A movimentação de estoque da OC requer quantidade inteira.')
+  }
+  return numero
+}
+
+async function aplicarMovimentacaoStatusRecebida(
+  tx: Prisma.TransactionClient,
+  ordemCompraId: string,
+  usuarioId: string,
+  modo: 'receber' | 'reverter',
+) {
+  const oc = await tx.ordemCompra.findUnique({
+    where: { id: ordemCompraId },
+    select: { codigo: true },
+  })
+  if (!oc) throw new Error('OC não encontrada.')
+
+  const itens = await tx.ordemCompraItem.findMany({
+    where: { ordemCompraId },
+    select: { materiaPrimaId: true, quantidade: true },
+  })
+
+  const observacao =
+    modo === 'receber'
+      ? oc.codigo
+        ? `Recebimento — ${oc.codigo}`
+        : 'Recebimento OC'
+      : oc.codigo
+        ? `Reversão de recebimento — ${oc.codigo}`
+        : 'Reversão de recebimento OC'
+
+  for (const item of itens) {
+    const quantidade = item.quantidade
+    await tx.materiaPrima.update({
+      where: { id: item.materiaPrimaId },
+      data: {
+        estoqueAtual:
+          modo === 'receber'
+            ? { increment: quantidade }
+            : { decrement: quantidade },
+      },
+    })
+
+    await tx.movimentacaoEstoque.create({
+      data: {
+        tipo: modo === 'receber' ? 'entrada' : 'ajuste',
+        materiaPrimaId: item.materiaPrimaId,
+        quantidade: modo === 'receber'
+          ? quantidadeMovimentacao(quantidade)
+          : -quantidadeMovimentacao(quantidade),
+        observacao,
+        usuarioId,
+      },
+    })
+  }
 }
 
 export async function getUsuariosParaRegistroOC(): Promise<{ id: string; nome: string }[]> {
@@ -91,8 +166,6 @@ export async function getUsuariosParaRegistroOC(): Promise<{ id: string; nome: s
   const userId = await requireAuthenticatedUserId()
   return fetchUsuariosRegistroOC(userId)
 }
-
-// ─── Fila de Reposição ────────────────────────────────────────────────────────
 
 export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
   await assertPermissao('ordens_compra', 'ver')
@@ -102,178 +175,111 @@ export async function getFilaReposicaoList(): Promise<FilaReposicao[]> {
 
 export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaReposicaoDetalhe> {
   await assertPermissao('ordens_compra', 'ver')
-  return withSupabaseCookieContext(async () => {
-    const supabase = await createClient()
 
-    // Uma única query: fila + pedido/cliente + itens + MP + fornecedor + facas que usam a MP.
-    // Antes eram 3 queries sequenciais (~3 round-trips). Os FKs já têm índices em
-    // perf_indexes.sql, então o embed sai barato.
-    const { data: filaRow, error: filaErr } = await supabase
-      .from('fila_reposicao')
-      .select(`
-        id,
-        pedido_id,
-        status,
-        created_at,
-        pedido:pedidos(
-          id,
-          codigo,
-          sequencial,
-          cliente:clientes(id, nome),
-          pedido_itens(
-            faca_id,
-            quantidade,
-            preco_unitario,
-            faca:facas(
-              id, codigo, nome,
-              faca_mp:faca_materias_primas(
-                quantidade,
-                mp:materias_primas(id, codigo, nome, estoque_atual, estoque_minimo)
-              )
-            )
-          )
-        ),
-        itens:fila_reposicao_itens(
-          id,
-          fila_id,
-          materia_prima_id,
-          quantidade_sugerida,
-          quantidade_adicional,
-          selecionado,
-          mp:materias_primas(
-            id, codigo, nome, preco_custo, estoque_atual, estoque_minimo,
-            fornecedor_id,
-            fornecedor:fornecedores(id, nome),
-            faca_mp:faca_materias_primas(
-              quantidade,
-              faca:facas(id, nome, estoque_atual, estoque_minimo)
-            )
-          )
-        )
-      `)
-      .eq('id', fila_id)
-      .single()
-
-    if (filaErr || !filaRow) throw new Error(filaErr?.message ?? 'Fila não encontrada.')
-
-    const pedido = (Array.isArray(filaRow.pedido) ? filaRow.pedido[0] : filaRow.pedido) as {
-      id: string; codigo: string; sequencial: number | null
-      cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
-      pedido_itens: Array<{
-        faca_id: string
-        quantidade: number
-        preco_unitario: number
-        faca: FacaWithMp | FacaWithMp[] | null
-      }> | null
-    } | null
-
-    type MpRel = {
-      id: string; codigo: string; nome: string
-      estoque_atual: number; estoque_minimo: number
-    }
-    type FacaWithMp = {
-      id: string; codigo: string; nome: string
-      faca_mp: Array<{
-        quantidade: number
-        mp: MpRel | MpRel[] | null
-      }> | null
-    }
-    const cliente = pedido?.cliente
-      ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
-      : null
-
-    const pedido_itens: FilaReposicaoPedidoItem[] = (pedido?.pedido_itens ?? []).map((pi) => {
-      const faca = Array.isArray(pi.faca) ? pi.faca[0] : pi.faca
-      const materias_primas: FilaReposicaoPedidoItem['materias_primas'] = []
-      for (const fm of faca?.faca_mp ?? []) {
-        const mp = Array.isArray(fm.mp) ? fm.mp[0] : fm.mp
-        if (!mp) continue
-        materias_primas.push({
-          mp_id: mp.id,
-          mp_codigo: mp.codigo,
-          mp_nome: mp.nome,
-          quantidade_por_faca: Number(fm.quantidade),
-          estoque_atual: Number(mp.estoque_atual ?? 0),
-          estoque_minimo: Number(mp.estoque_minimo ?? 0),
-        })
-      }
-      return {
-        faca_id: pi.faca_id,
-        faca_codigo: faca?.codigo ?? '—',
-        faca_nome: faca?.nome ?? '—',
-        quantidade: Number(pi.quantidade),
-        preco_unitario: Number(pi.preco_unitario),
-        materias_primas,
-      }
-    })
-
-    const itensRows = (filaRow.itens ?? []) as Array<{
-      id: string; fila_id: string; materia_prima_id: string
-      quantidade_sugerida: number; quantidade_adicional: number; selecionado: boolean
-      mp: unknown
-    }>
-
-    const fila: FilaReposicao = {
-      id: filaRow.id,
-      pedido_id: filaRow.pedido_id,
-      pedido_codigo: pedido?.codigo ?? '—',
-      pedido_sequencial: pedido?.sequencial ?? null,
-      cliente_nome: cliente?.nome ?? '—',
-      status: filaRow.status as FilaReposicao['status'],
-      created_at: filaRow.created_at ?? '',
-      itens_count: itensRows.length,
-    }
-
-    const itens: FilaReposicaoItem[] = itensRows.map((row) => {
-      const mp = (Array.isArray(row.mp) ? row.mp[0] : row.mp) as {
-        id: string; codigo: string; nome: string; preco_custo: number
-        estoque_atual: number; estoque_minimo: number; fornecedor_id: string | null
-        fornecedor: { id: string; nome: string } | { id: string; nome: string }[] | null
-        faca_mp: Array<{
-          quantidade: number
-          faca: { id: string; nome: string; estoque_atual: number; estoque_minimo: number }
-            | { id: string; nome: string; estoque_atual: number; estoque_minimo: number }[]
-            | null
-        }> | null
-      } | null
-
-      const fornecedor = mp?.fornecedor
-        ? (Array.isArray(mp.fornecedor) ? mp.fornecedor[0] : mp.fornecedor)
-        : null
-
-      const facas_relacionadas: FilaReposicaoItem['facas_relacionadas'] = []
-      for (const fm of mp?.faca_mp ?? []) {
-        const faca = Array.isArray(fm.faca) ? fm.faca[0] : fm.faca
-        if (!faca) continue
-        facas_relacionadas.push({
-          faca_id: faca.id,
-          faca_nome: faca.nome,
-          estoque_atual: Number(faca.estoque_atual ?? 0),
-          estoque_minimo: Number(faca.estoque_minimo ?? 0),
-          quantidade_bom: Number(fm.quantidade),
-        })
-      }
-
-      return {
-        id: row.id,
-        fila_id: row.fila_id,
-        materia_prima_id: row.materia_prima_id,
-        mp_nome: mp?.nome ?? '—',
-        mp_codigo: mp?.codigo ?? '—',
-        mp_preco_custo: Number(mp?.preco_custo ?? 0),
-        fornecedor_id: mp?.fornecedor_id ?? null,
-        fornecedor_nome: fornecedor?.nome ?? null,
-        estoque_atual: Number(mp?.estoque_atual ?? 0),
-        estoque_minimo: Number(mp?.estoque_minimo ?? 0),
-        quantidade_sugerida: Number(row.quantidade_sugerida),
-        quantidade_adicional: Number(row.quantidade_adicional),
-        selecionado: row.selecionado,
-        facas_relacionadas,
-      }
-    })
-
-    return { fila, itens, pedido_itens }
+  const filaRow = await prisma.filaReposicao.findUnique({
+    where: { id: fila_id },
+    include: {
+      pedido: {
+        include: {
+          cliente: { select: { id: true, nome: true } },
+          itens: {
+            include: {
+              faca: {
+                include: {
+                  bom: {
+                    include: {
+                      materiaPrima: {
+                        select: {
+                          id: true,
+                          codigo: true,
+                          nome: true,
+                          estoqueAtual: true,
+                          estoqueMinimo: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      itens: {
+        include: {
+          materiaPrima: {
+            include: {
+              fornecedor: { select: { id: true, nome: true } },
+              facaLinks: {
+                include: {
+                  faca: {
+                    select: { id: true, nome: true, estoqueAtual: true, estoqueMinimo: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   })
+
+  if (!filaRow) throw new Error('Fila não encontrada.')
+
+  const pedido = filaRow.pedido
+  const cliente = pedido?.cliente ?? null
+
+  const pedido_itens: FilaReposicaoPedidoItem[] = (pedido?.itens ?? []).map((pi) => ({
+    faca_id: pi.facaId,
+    faca_codigo: pi.faca.codigo ?? '—',
+    faca_nome: pi.faca.nome ?? '—',
+    quantidade: Number(pi.quantidade),
+    preco_unitario: numberFrom(pi.precoUnitario),
+    materias_primas: pi.faca.bom.map((fm) => ({
+      mp_id: fm.materiaPrima.id,
+      mp_codigo: fm.materiaPrima.codigo,
+      mp_nome: fm.materiaPrima.nome,
+      quantidade_por_faca: numberFrom(fm.quantidade),
+      estoque_atual: numberFrom(fm.materiaPrima.estoqueAtual),
+      estoque_minimo: numberFrom(fm.materiaPrima.estoqueMinimo),
+    })),
+  }))
+
+  const fila: FilaReposicao = {
+    id: filaRow.id,
+    pedido_id: filaRow.pedidoId,
+    pedido_codigo: pedido?.codigo ?? '—',
+    pedido_sequencial: pedido?.sequencial ? Number(pedido.sequencial) : null,
+    cliente_nome: cliente?.nome ?? '—',
+    status: filaRow.status as FilaReposicao['status'],
+    created_at: filaRow.createdAt.toISOString(),
+    itens_count: filaRow.itens.length,
+  }
+
+  const itens: FilaReposicaoItem[] = filaRow.itens.map((row) => ({
+    id: row.id,
+    fila_id: row.filaId,
+    materia_prima_id: row.materiaPrimaId,
+    mp_nome: row.materiaPrima.nome,
+    mp_codigo: row.materiaPrima.codigo,
+    mp_preco_custo: numberFrom(row.materiaPrima.precoCusto),
+    fornecedor_id: row.materiaPrima.fornecedorId ?? null,
+    fornecedor_nome: row.materiaPrima.fornecedor?.nome ?? null,
+    estoque_atual: numberFrom(row.materiaPrima.estoqueAtual),
+    estoque_minimo: numberFrom(row.materiaPrima.estoqueMinimo),
+    quantidade_sugerida: numberFrom(row.quantidadeSugerida),
+    quantidade_adicional: numberFrom(row.quantidadeAdicional),
+    selecionado: row.selecionado,
+    facas_relacionadas: row.materiaPrima.facaLinks.map((fm) => ({
+      faca_id: fm.faca.id,
+      faca_nome: fm.faca.nome,
+      estoque_atual: Number(fm.faca.estoqueAtual),
+      estoque_minimo: Number(fm.faca.estoqueMinimo),
+      quantidade_bom: numberFrom(fm.quantidade),
+    })),
+  }))
+
+  return { fila, itens, pedido_itens }
 }
 
 export async function atualizarItemFila(
@@ -281,399 +287,179 @@ export async function atualizarItemFila(
   patch: { selecionado?: boolean; quantidade_adicional?: number },
 ) {
   await assertPermissao('ordens_compra', 'editar')
-  const supabase = await createClient()
 
-  const update: Record<string, unknown> = {}
+  const itemAtual = await prisma.filaReposicaoItem.findUnique({
+    where: { id: item_id },
+    select: { quantidadeSugerida: true },
+  })
+
+  if (!itemAtual) throw new Error('Item da fila não encontrado.')
+
+  const update: Prisma.FilaReposicaoItemUpdateInput = {}
   if (patch.selecionado !== undefined) update.selecionado = patch.selecionado
   if (patch.quantidade_adicional !== undefined) {
     if (!Number.isFinite(patch.quantidade_adicional)) {
       throw new Error('Quantidade adicional inválida.')
     }
-    const { data: itemAtual, error: itemErr } = await supabase
-      .from('fila_reposicao_itens')
-      .select('quantidade_sugerida')
-      .eq('id', item_id)
-      .single()
-    if (itemErr || !itemAtual) throw new Error(itemErr?.message ?? 'Item da fila não encontrado.')
-    const sugerida = Number(itemAtual.quantidade_sugerida)
-    const total = sugerida + patch.quantidade_adicional
-    if (total < 0) {
-      throw new Error('A quantidade total não pode ser negativa.')
-    }
-    update.quantidade_adicional = patch.quantidade_adicional
+    const total = numberFrom(itemAtual.quantidadeSugerida) + patch.quantidade_adicional
+    if (total < 0) throw new Error('A quantidade total não pode ser negativa.')
+    update.quantidadeAdicional = decimal(patch.quantidade_adicional)
   }
 
-  const { error } = await supabase
-    .from('fila_reposicao_itens')
-    .update(update)
-    .eq('id', item_id)
+  await prisma.filaReposicaoItem.update({
+    where: { id: item_id },
+    data: update,
+  })
 
-  if (error) throw new Error(error.message)
   await revalidateOCLists()
 }
 
 export async function gerarOCsDaFila(fila_id: string): Promise<string[]> {
   await assertPermissao('ordens_compra', 'criar')
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(undefined)
-  const codigos = await gerarOCsDeFilaItens(supabase, fila_id, uid)
+  const codigos = await gerarOCsDeFilaItens(fila_id, uid)
   await revalidateOCLists()
   return codigos
 }
 
 export async function dispensarFila(fila_id: string): Promise<void> {
   await assertPermissao('ordens_compra', 'editar')
-  const supabase = await createClient()
 
-  const { error } = await supabase
-    .from('fila_reposicao')
-    .update({ status: 'dispensada', updated_at: new Date().toISOString() })
-    .eq('id', fila_id)
+  const fila = await prisma.filaReposicao.findUnique({
+    where: { id: fila_id },
+    select: { status: true },
+  })
 
-  if (error) throw new Error(error.message)
+  if (!fila) throw new Error('Fila não encontrada.')
+  if (fila.status !== 'pendente') {
+    throw new Error('Somente filas pendentes podem ser dispensadas.')
+  }
+
+  await prisma.filaReposicao.update({
+    where: { id: fila_id },
+    data: { status: 'dispensada', updatedAt: new Date() },
+  })
+
   await revalidateOCLists()
 }
-
-// ─── OC Manual ────────────────────────────────────────────────────────────────
 
 export type CriarOcItemManual = {
   materia_prima_id: string
   quantidade: number
-  /** Se omitido, usa o preço de custo cadastrado na matéria-prima. */
   preco_unitario?: number | null
 }
 
-/**
- * Cria uma OC manualmente (sem passar pela fila de reposição).
- */
 export async function criarOrdemCompraManual(input: {
   fornecedor_id: string | null
   observacao?: string | null
   itens: CriarOcItemManual[]
 }): Promise<string> {
   await assertPermissao('ordens_compra', 'criar')
+
   const linhas = input.itens?.filter((i) => i.materia_prima_id) ?? []
   if (linhas.length === 0) throw new Error('Adicione ao menos um item com matéria-prima.')
 
-  const supabase = await createClient()
   const mpIds = [...new Set(linhas.map((i) => i.materia_prima_id))]
+  const mps = await prisma.materiaPrima.findMany({
+    where: { id: { in: mpIds } },
+    select: { id: true, precoCusto: true },
+  })
 
-  const { data: mps, error: mpErr } = await supabase
-    .from('materias_primas')
-    .select('id, preco_custo')
-    .in('id', mpIds)
-
-  if (mpErr) throw new Error(mpErr.message)
-  if (!mps || mps.length !== mpIds.length) {
+  if (mps.length !== mpIds.length) {
     throw new Error('Uma ou mais matérias-primas não foram encontradas.')
   }
 
-  const custoPorId = new Map(mps.map((m) => [m.id, Number(m.preco_custo ?? 0)]))
-
+  const custoPorId = new Map(mps.map((m) => [m.id, numberFrom(m.precoCusto)]))
   const agregado = new Map<string, { quantidade: number; subtotal: number }>()
+
   for (const row of linhas) {
-    const q = Number(row.quantidade)
-    if (!Number.isFinite(q) || q <= 0) throw new Error('Cada quantidade deve ser maior que zero.')
-
-    let unit: number
-    if (row.preco_unitario != null) {
-      const p = Number(row.preco_unitario)
-      if (!Number.isFinite(p) || p < 0) throw new Error('Preço unitário inválido.')
-      unit = p
-    } else {
-      unit = custoPorId.get(row.materia_prima_id) ?? 0
+    const quantidade = Number(row.quantidade)
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
+      throw new Error('Cada quantidade deve ser maior que zero.')
     }
 
-    const prev = agregado.get(row.materia_prima_id)
-    const sub = q * unit
-    if (!prev) {
-      agregado.set(row.materia_prima_id, { quantidade: q, subtotal: sub })
-    } else {
-      agregado.set(row.materia_prima_id, {
-        quantidade: prev.quantidade + q,
-        subtotal: prev.subtotal + sub,
-      })
+    const precoUnitario =
+      row.preco_unitario != null
+        ? Number(row.preco_unitario)
+        : (custoPorId.get(row.materia_prima_id) ?? 0)
+
+    if (!Number.isFinite(precoUnitario) || precoUnitario < 0) {
+      throw new Error('Preço unitário inválido.')
     }
+
+    const atual = agregado.get(row.materia_prima_id) ?? { quantidade: 0, subtotal: 0 }
+    atual.quantidade += quantidade
+    atual.subtotal += quantidade * precoUnitario
+    agregado.set(row.materia_prima_id, atual)
   }
 
-  const itensInsert = Array.from(agregado.entries()).map(([materia_prima_id, { quantidade, subtotal }]) => {
-    const preco_unitario = quantidade > 0 ? subtotal / quantidade : 0
-    return { materia_prima_id, quantidade, preco_unitario }
-  })
-
-  const codigo = await gerarCodigoOC(supabase)
-
+  const codigo = await gerarCodigoOC()
   const uidCriacao = await resolverUsuarioRegistroOC(undefined)
-  const agora = new Date().toISOString()
 
-  const { data: oc, error: ocErr } = await supabase
-    .from('ordens_compra')
-    .insert({
-      codigo,
-      fornecedor_id: input.fornecedor_id ?? null,
-      status: 'pendente',
-      data_geracao: new Date().toISOString().split('T')[0],
-      observacao: input.observacao?.trim() || null,
-      ultima_alteracao_usuario_id: uidCriacao,
-      ultima_alteracao_em: agora,
+  await prisma.$transaction(async (tx) => {
+    const sequencialFornecedor = await nextSequencialFornecedor(tx, input.fornecedor_id ?? null)
+
+    await tx.ordemCompra.create({
+      data: {
+        codigo,
+        fornecedorId: input.fornecedor_id ?? null,
+        sequencialFornecedor,
+        status: 'pendente',
+        dataGeracao: new Date(),
+        observacao: input.observacao?.trim() || null,
+        ...camposRegistroAlteracao(uidCriacao),
+        itens: {
+          create: Array.from(agregado.entries()).map(([materiaPrimaId, value]) => ({
+            materiaPrimaId,
+            quantidadeVendida: decimal(0),
+            quantidadeAdicional: decimal(value.quantidade),
+            quantidade: decimal(value.quantidade),
+            precoUnitario: decimal(value.quantidade > 0 ? value.subtotal / value.quantidade : 0),
+          })),
+        },
+      },
+      select: { id: true },
     })
-    .select('id')
-    .single()
-
-  if (ocErr || !oc) throw new Error(ocErr?.message ?? 'Erro ao criar OC.')
-
-  const rows = itensInsert.map((r) => ({
-    ordem_compra_id: oc.id,
-    materia_prima_id: r.materia_prima_id,
-    quantidade_vendida: 0,
-    quantidade_adicional: r.quantidade,
-    quantidade: r.quantidade,
-    preco_unitario: r.preco_unitario,
-  }))
-
-  const { error: itensErr } = await supabase.from('ordem_compra_itens').insert(rows)
-  if (itensErr) {
-    await supabase.from('ordens_compra').delete().eq('id', oc.id)
-    throw new Error(itensErr.message)
-  }
+  })
 
   await revalidateOCLists()
   return codigo
 }
 
-// ─── Consultas de OC ──────────────────────────────────────────────────────────
-
-/** PostgREST pode devolver embed 1:1 como objeto ou array com um elemento. */
-function embedUm<T>(v: T | T[] | null | undefined): T | null {
-  if (v == null) return null
-  return Array.isArray(v) ? (v[0] ?? null) : v
-}
-
 async function getOrdensCompraQuery(): Promise<OrdemCompra[]> {
-  const supabase = await createClient()
-
-  // Query principal: só a tabela + fornecedor (FK direta, embed barato).
-  // Embeds aninhados (fila→pedido→cliente, itens→materia_prima) viravam
-  // um único SQL com vários LEFT JOINs e estouravam o statement timeout.
-  const { data, error } = await supabase
-    .from('ordens_compra')
-    .select(`
-      *,
-      fornecedor:fornecedores!fornecedor_id(id, nome)
-    `)
-    .order('created_at', { ascending: false })
-
-  if (error) throw new Error(error.message)
-
-  type RowOC = Record<string, unknown> & {
-    id: string
-    fornecedor?: unknown
-    fornecedores?: unknown
-    fornecedor_id?: string | null
-    fila_reposicao_id?: string | null
-  }
-
-  const rows = (data ?? []) as RowOC[]
-  const ocIds = rows.map((r) => r.id)
-  const filaIds = [
-    ...new Set(
-      rows
-        .map((r) => r.fila_reposicao_id)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0),
-    ),
-  ]
-
-  type ItemRow = {
-    id: string
-    ordem_compra_id: string
-    materia_prima_id: string
-    quantidade: number
-    quantidade_vendida: number
-    quantidade_adicional: number
-    preco_unitario: number
-    materia_prima: { id: string; codigo: string; nome: string } | { id: string; codigo: string; nome: string }[] | null
-  }
-
-  type FilaRow = {
-    id: string
-    pedido: {
-      id: string
-      codigo: string
-      sequencial: number | null
-      cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
-    } | {
-      id: string
-      codigo: string
-      sequencial: number | null
-      cliente: { id: string; nome: string } | { id: string; nome: string }[] | null
-    }[] | null
-  }
-
-  const [itensRes, filaRes] = await Promise.all([
-    ocIds.length === 0
-      ? Promise.resolve({ data: [] as ItemRow[], error: null })
-      : supabase
-          .from('ordem_compra_itens')
-          .select(`
-            id, ordem_compra_id, materia_prima_id,
-            quantidade, quantidade_vendida, quantidade_adicional,
-            preco_unitario,
-            materia_prima:materias_primas(id, codigo, nome)
-          `)
-          .in('ordem_compra_id', ocIds),
-    filaIds.length === 0
-      ? Promise.resolve({ data: [] as FilaRow[], error: null })
-      : supabase
-          .from('fila_reposicao')
-          .select(`
-            id,
-            pedido:pedidos(
-              id,
-              codigo,
-              sequencial,
-              cliente:clientes(id, nome)
-            )
-          `)
-          .in('id', filaIds),
-  ])
-
-  if (itensRes.error) throw new Error(itensRes.error.message)
-  if (filaRes.error) throw new Error(filaRes.error.message)
-
-  const itensPorOC = new Map<string, ItemRow[]>()
-  for (const it of (itensRes.data ?? []) as ItemRow[]) {
-    const arr = itensPorOC.get(it.ordem_compra_id) ?? []
-    arr.push(it)
-    itensPorOC.set(it.ordem_compra_id, arr)
-  }
-
-  const filaPorId = new Map<string, FilaRow>()
-  for (const f of (filaRes.data ?? []) as FilaRow[]) {
-    filaPorId.set(f.id, f)
-  }
-
-  const mapped = rows.map((row) => {
-    const fila = row.fila_reposicao_id ? filaPorId.get(row.fila_reposicao_id) ?? null : null
-    const pedido = fila?.pedido
-      ? (Array.isArray(fila.pedido) ? fila.pedido[0] : fila.pedido)
-      : null
-    const cliente = pedido?.cliente
-      ? (Array.isArray(pedido.cliente) ? pedido.cliente[0] : pedido.cliente)
-      : null
-    const fornecedor =
-      embedUm(row.fornecedor as { id: string; nome: string } | { id: string; nome: string }[] | null) ??
-      embedUm(row.fornecedores as { id: string; nome: string } | { id: string; nome: string }[] | null)
-    const itens = itensPorOC.get(row.id) ?? []
-    const mappedRow = {
-      ...row,
-      fornecedor,
-      itens: itens.map((it) => ({
-        ...it,
-        materia_prima: embedUm(it.materia_prima),
-      })),
-      pedido_id: pedido?.id ?? null,
-      pedido_codigo: pedido?.codigo ?? null,
-      pedido_sequencial: pedido?.sequencial ?? null,
-      cliente_nome: cliente?.nome ?? null,
-    }
-    const { status, pago } = normalizarStatusEPago(row as { status?: unknown; pago?: unknown })
-    return { ...mappedRow, status, pago }
-  }) as OrdemCompra[]
-
-  const idsUltimaAlteracao = [
-    ...new Set(
-      mapped
-        .map((oc) => oc.ultima_alteracao_usuario_id as string | null | undefined)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0),
-    ),
-  ]
-
-  let nomesPorUsuarioAlteracao = new Map<string, { id: string; nome: string }>()
-  if (idsUltimaAlteracao.length > 0) {
-    const { data: perfisUa, error: uaErr } = await supabase
-      .from('usuarios_perfis')
-      .select('id, nome')
-      .in('id', idsUltimaAlteracao)
-    if (uaErr) throw new Error(uaErr.message)
-    nomesPorUsuarioAlteracao = new Map((perfisUa ?? []).map((p) => [p.id, p]))
-  }
-
-  const comUltimaUsuario = mapped.map((oc) => {
-    const uid = oc.ultima_alteracao_usuario_id as string | null | undefined
-    if (!uid) return { ...oc, ultima_alteracao_usuario: null }
-    const perf = nomesPorUsuarioAlteracao.get(uid)
-    return {
-      ...oc,
-      ultima_alteracao_usuario: perf ?? { id: uid, nome: '—' },
-    }
-  })
-
-  const idsFaltando = [
-    ...new Set(
-      comUltimaUsuario
-        .filter((oc) => oc.fornecedor_id && !oc.fornecedor?.nome)
-        .map((oc) => oc.fornecedor_id as string),
-    ),
-  ]
-
-  if (idsFaltando.length === 0) return comUltimaUsuario
-
-  const { data: fornecedoresExtras, error: fnErr } = await supabase
-    .from('fornecedores')
-    .select('id, nome')
-    .in('id', idsFaltando)
-
-  if (fnErr) throw new Error(fnErr.message)
-
-  const porId = new Map((fornecedoresExtras ?? []).map((f) => [f.id, f]))
-
-  return comUltimaUsuario.map((oc) => ({
-    ...oc,
-    fornecedor: oc.fornecedor?.nome
-      ? oc.fornecedor
-      : oc.fornecedor_id
-        ? (porId.get(oc.fornecedor_id) ?? oc.fornecedor ?? null)
-        : (oc.fornecedor ?? null),
-  }))
+  const userId = await requireAuthenticatedUserId()
+  return fetchOrdensCompraList(userId)
 }
 
 export async function getOrdensCompra(): Promise<OrdemCompra[]> {
   await assertPermissao('ordens_compra', 'ver')
-  const userId = await requireAuthenticatedUserId()
-  return withTiming('getOrdensCompra', () => fetchOrdensCompraList(userId))
+  return withTiming('getOrdensCompra', () => getOrdensCompraQuery())
 }
-
-// Mantida em volta caso algo a chame, mas a fonte real agora é o cache.
-void getOrdensCompraQuery
-
-// ─── Editar OC ────────────────────────────────────────────────────────────────
 
 export async function atualizarQuantidadeItem(item_id: string, quantidade: number, usuarioRegistroId?: string | null) {
   await assertPermissao('ordens_compra', 'editar')
   if (quantidade <= 0) throw new Error('Quantidade deve ser maior que zero.')
 
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
-  const { data: item, error: itemErr } = await supabase
-    .from('ordem_compra_itens')
-    .select('quantidade_vendida, quantidade, ordem_compra_id')
-    .eq('id', item_id)
-    .single()
+  const item = await prisma.ordemCompraItem.findUnique({
+    where: { id: item_id },
+    select: { quantidadeVendida: true, quantidade: true, ordemCompraId: true },
+  })
 
-  if (itemErr) throw new Error(itemErr.message)
   if (!item) throw new Error('Item não encontrado.')
 
-  const quantidade_vendida = Number(item.quantidade_vendida ?? item.quantidade)
-  const quantidade_adicional = Math.max(0, quantidade - quantidade_vendida)
+  const quantidadeVendida = numberFrom(item.quantidadeVendida ?? item.quantidade)
+  const quantidadeAdicional = Math.max(0, quantidade - quantidadeVendida)
 
-  const { error } = await supabase
-    .from('ordem_compra_itens')
-    .update({ quantidade, quantidade_adicional })
-    .eq('id', item_id)
+  await prisma.ordemCompraItem.update({
+    where: { id: item_id },
+    data: {
+      quantidade: decimal(quantidade),
+      quantidadeAdicional: decimal(quantidadeAdicional),
+    },
+  })
 
-  if (error) throw new Error(error.message)
-
-  await marcarUltimaAlteracaoOC(item.ordem_compra_id, uid)
+  await marcarUltimaAlteracaoOC(item.ordemCompraId, uid)
 }
 
 export async function atualizarUnidadesAdicionaisItem(
@@ -686,30 +472,27 @@ export async function atualizarUnidadesAdicionaisItem(
     throw new Error('Unidades adicionais inválidas.')
   }
 
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
-  const { data: item, error: itemErr } = await supabase
-    .from('ordem_compra_itens')
-    .select('quantidade_vendida, ordem_compra_id')
-    .eq('id', item_id)
-    .single()
+  const item = await prisma.ordemCompraItem.findUnique({
+    where: { id: item_id },
+    select: { quantidadeVendida: true, ordemCompraId: true },
+  })
 
-  if (itemErr) throw new Error(itemErr.message)
   if (!item) throw new Error('Item não encontrado.')
 
-  const quantidade_vendida = Number(item.quantidade_vendida ?? 0)
-  const quantidade_total = quantidade_vendida + Number(quantidade_adicional)
+  const quantidadeVendida = numberFrom(item.quantidadeVendida)
+  const quantidadeTotal = quantidadeVendida + Number(quantidade_adicional)
+  if (quantidadeTotal <= 0) throw new Error('Quantidade total inválida.')
 
-  if (quantidade_total <= 0) throw new Error('Quantidade total inválida.')
+  await prisma.ordemCompraItem.update({
+    where: { id: item_id },
+    data: {
+      quantidadeAdicional: decimal(quantidade_adicional),
+      quantidade: decimal(quantidadeTotal),
+    },
+  })
 
-  const { error } = await supabase
-    .from('ordem_compra_itens')
-    .update({ quantidade_adicional, quantidade: quantidade_total })
-    .eq('id', item_id)
-
-  if (error) throw new Error(error.message)
-
-  await marcarUltimaAlteracaoOC(item.ordem_compra_id, uid)
+  await marcarUltimaAlteracaoOC(item.ordemCompraId, uid)
 }
 
 export async function criarItemOrdemCompra(
@@ -723,27 +506,24 @@ export async function criarItemOrdemCompra(
     throw new Error('Unidades adicionais devem ser maiores que zero.')
   }
 
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
-  const { data: mp, error: mpErr } = await supabase
-    .from('materias_primas')
-    .select('preco_custo')
-    .eq('id', materia_prima_id)
-    .single()
-
-  if (mpErr) throw new Error(mpErr.message)
-  if (!mp) throw new Error('Matéria-prima não encontrada.')
-
-  const { error } = await supabase.from('ordem_compra_itens').insert({
-    ordem_compra_id,
-    materia_prima_id,
-    quantidade_vendida: 0,
-    quantidade_adicional,
-    quantidade: quantidade_adicional,
-    preco_unitario: mp.preco_custo ?? null,
+  const mp = await prisma.materiaPrima.findUnique({
+    where: { id: materia_prima_id },
+    select: { precoCusto: true },
   })
 
-  if (error) throw new Error(error.message)
+  if (!mp) throw new Error('Matéria-prima não encontrada.')
+
+  await prisma.ordemCompraItem.create({
+    data: {
+      ordemCompraId: ordem_compra_id,
+      materiaPrimaId: materia_prima_id,
+      quantidadeVendida: decimal(0),
+      quantidadeAdicional: decimal(quantidade_adicional),
+      quantidade: decimal(quantidade_adicional),
+      precoUnitario: mp.precoCusto,
+    },
+  })
 
   await marcarUltimaAlteracaoOC(ordem_compra_id, uid)
 }
@@ -754,19 +534,17 @@ export async function atualizarObservacaoOC(
   usuarioRegistroId?: string | null,
 ) {
   await assertPermissao('ordens_compra', 'editar')
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
-  const { error } = await supabase
-    .from('ordens_compra')
-    .update({
+
+  await prisma.ordemCompra.update({
+    where: { id },
+    data: {
       observacao: observacao.trim() || null,
       ...camposRegistroAlteracao(uid),
-    })
-    .eq('id', id)
-    .select('id, observacao')
-    .single()
+    },
+  })
 
-  if (error) throw new Error(error.message)
+  await revalidateOCLists()
 }
 
 export async function mudarStatusOC(
@@ -775,118 +553,38 @@ export async function mudarStatusOC(
   usuarioRegistroId?: string | null,
 ) {
   await assertPermissao('ordens_compra', 'editar')
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
 
-  const { data: statusRow, error: statusErr } = await supabase
-    .from('ordens_compra')
-    .select('status')
-    .eq('id', id)
-    .single()
-  if (statusErr) throw new Error(statusErr.message)
-  const statusAtual = normalizarStatusEPago(statusRow ?? {}).status
+  const atual = await prisma.ordemCompra.findUnique({
+    where: { id },
+    select: { status: true },
+  })
+
+  if (!atual) throw new Error('OC não encontrada.')
+  const statusAtual = normalizarStatusEPago(atual).status
   if (statusAtual === status) return
 
-  if (statusAtual === 'recebida' && status !== 'recebida') {
-    const { data: ocCabecalho } = await supabase
-      .from('ordens_compra')
-      .select('codigo')
-      .eq('id', id)
-      .single()
-
-    const { data: itens, error: itensErr } = await supabase
-      .from('ordem_compra_itens')
-      .select('materia_prima_id, quantidade')
-      .eq('ordem_compra_id', id)
-    if (itensErr) throw new Error(itensErr.message)
-
-    const obs = ocCabecalho?.codigo
-      ? `Reversão de recebimento — ${ocCabecalho.codigo}`
-      : 'Reversão de recebimento OC'
-
-    for (const item of itens ?? []) {
-      const { data: mp } = await supabase
-        .from('materias_primas')
-        .select('estoque_atual')
-        .eq('id', item.materia_prima_id)
-        .single()
-
-      if (mp) {
-        await supabase
-          .from('materias_primas')
-          .update({ estoque_atual: Number(mp.estoque_atual) - Number(item.quantidade) })
-          .eq('id', item.materia_prima_id)
-      }
-
-      await supabase.from('movimentacoes_estoque').insert({
-        tipo: 'ajuste',
-        materia_prima_id: item.materia_prima_id,
-        quantidade: -Number(item.quantidade),
-        observacao: obs,
-        usuario_id: uid,
-      })
+  await prisma.$transaction(async (tx) => {
+    if (statusAtual === 'recebida' && status !== 'recebida') {
+      await aplicarMovimentacaoStatusRecebida(tx, id, uid, 'reverter')
     }
-  }
 
-  if (status === 'recebida') {
-    const { data: ocCabecalho, error: ocErr } = await supabase
-      .from('ordens_compra')
-      .select('codigo')
-      .eq('id', id)
-      .single()
-
-    if (ocErr) throw new Error(ocErr.message)
-
-    const { data: itens, error: itensErr } = await supabase
-      .from('ordem_compra_itens')
-      .select('materia_prima_id, quantidade')
-      .eq('ordem_compra_id', id)
-
-    if (itensErr) throw new Error(itensErr.message)
-
-    const observacaoRecebimento = ocCabecalho?.codigo
-      ? `Recebimento — ${ocCabecalho.codigo}`
-      : 'Recebimento OC'
-
-    for (const item of itens ?? []) {
-      const { data: mp } = await supabase
-        .from('materias_primas')
-        .select('estoque_atual')
-        .eq('id', item.materia_prima_id)
-        .single()
-
-      if (mp) {
-        await supabase
-          .from('materias_primas')
-          .update({ estoque_atual: Number(mp.estoque_atual) + Number(item.quantidade) })
-          .eq('id', item.materia_prima_id)
-      }
-
-      await supabase.from('movimentacoes_estoque').insert({
-        tipo: 'entrada',
-        materia_prima_id: item.materia_prima_id,
-        quantidade: item.quantidade,
-        observacao: observacaoRecebimento,
-        usuario_id: uid,
-      })
+    if (status === 'recebida') {
+      await aplicarMovimentacaoStatusRecebida(tx, id, uid, 'receber')
     }
-  }
 
-  const { error } = await supabase
-    .from('ordens_compra')
-    .update({ status, ...camposRegistroAlteracao(uid) })
-    .eq('id', id)
+    await tx.ordemCompra.update({
+      where: { id },
+      data: {
+        status,
+        ...camposRegistroAlteracao(uid),
+      },
+    })
+  })
 
-  if (error) throw new Error(error.message)
-  // status='recebida' (e reversão) mexem no estoque das MPs → invalida materias_primas também.
   await revalidateOCLists({ estoque: true })
 }
 
-/**
- * Marca se a OC foi paga (estado independente do fluxo pendente → enviada → recebida).
- * Ao marcar pago: cria gasto automático `pagamento_oc` se ainda não existir um vinculado à OC.
- * Ao desmarcar: remove gastos automáticos desse tipo vinculados à OC.
- */
 export async function definirPagoOrdemCompra(
   id: string,
   pago: boolean,
@@ -894,91 +592,81 @@ export async function definirPagoOrdemCompra(
   formaPagamento?: string | null,
 ) {
   await assertPermissao('ordens_compra', 'editar')
-  const supabase = await createClient()
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
 
-  if (pago && formaPagamento !== 'boleto') {
-    const { data: ocCabecalho, error: ocErr } = await supabase
-      .from('ordens_compra')
-      .select('codigo, fornecedor:fornecedores(nome)')
-      .eq('id', id)
-      .single()
-
-    if (ocErr) throw new Error(ocErr.message)
-
-    const { data: itens, error: itensErr } = await supabase
-      .from('ordem_compra_itens')
-      .select('quantidade, preco_unitario')
-      .eq('ordem_compra_id', id)
-
-    if (itensErr) throw new Error(itensErr.message)
-
-    const valorTotal = (itens ?? []).reduce(
-      (s, it) => s + Number(it.quantidade ?? 0) * Number(it.preco_unitario ?? 0),
-      0,
-    )
-
-    const fornecedor = Array.isArray(ocCabecalho?.fornecedor)
-      ? ocCabecalho?.fornecedor[0]
-      : ocCabecalho?.fornecedor
-    const fornecedorNome = fornecedor?.nome ?? null
-    const codigoOC = ocCabecalho?.codigo ?? ''
-    const descricao = fornecedorNome
-      ? `Pagamento OC ${codigoOC} — ${fornecedorNome}`
-      : `Pagamento OC ${codigoOC}`
-
-    const { data: gastoExistente } = await supabase
-      .from('gastos')
-      .select('id')
-      .eq('ordem_compra_id', id)
-      .eq('tipo', TIPO_GASTO_PAGAMENTO_OC)
-      .is('boleto_parcela_id', null)
-      .limit(1)
-      .maybeSingle()
-
-    if (!gastoExistente) {
-      const hoje = new Date().toISOString().slice(0, 10)
-      const forma = formaPagamento === 'cartao_credito' ? 'cartao_credito'
-        : formaPagamento === 'dinheiro' ? 'dinheiro'
-        : formaPagamento === 'pix' ? 'pix'
-        : formaPagamento === 'cheque' ? 'cheque'
-        : formaPagamento === 'link' ? 'link'
-        : formaPagamento === 'boleto' ? 'boleto'
-        : 'transferencia'
-      const { error: gastoErr } = await supabase.from('gastos').insert({
-        tipo: TIPO_GASTO_PAGAMENTO_OC,
-        descricao,
-        valor: valorTotal,
-        forma_pagamento: forma,
-        data_gasto: hoje,
-        ordem_compra_id: id,
-        usuario_id: uid,
+  await prisma.$transaction(async (tx) => {
+    if (pago && formaPagamento !== 'boleto') {
+      const oc = await tx.ordemCompra.findUnique({
+        where: { id },
+        include: {
+          fornecedor: { select: { nome: true } },
+          itens: { select: { quantidade: true, precoUnitario: true } },
+        },
       })
-      if (gastoErr) throw new Error(gastoErr.message)
-    }
-  } else if (!pago) {
-    const { error: delErr } = await supabase
-      .from('gastos')
-      .delete()
-      .eq('ordem_compra_id', id)
-      .eq('tipo', TIPO_GASTO_PAGAMENTO_OC)
-      .is('boleto_parcela_id', null)
-    if (delErr) throw new Error(delErr.message)
-  }
 
-  const { error } = await supabase
-    .from('ordens_compra')
-    .update({ pago, ...camposRegistroAlteracao(uid) })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+      if (!oc) throw new Error('OC não encontrada.')
+
+      const valorTotal = oc.itens.reduce(
+        (sum, item) => sum + numberFrom(item.quantidade) * numberFrom(item.precoUnitario),
+        0,
+      )
+
+      const descricao = oc.fornecedor?.nome
+        ? `Pagamento OC ${oc.codigo} — ${oc.fornecedor.nome}`
+        : `Pagamento OC ${oc.codigo}`
+
+      const gastoExistente = await tx.gasto.findFirst({
+        where: {
+          ordemCompraId: id,
+          tipo: TIPO_GASTO_PAGAMENTO_OC,
+          boletoParcelaId: null,
+        },
+        select: { id: true },
+      })
+
+      if (!gastoExistente) {
+        const forma = formaPagamento === 'cartao_credito' ? 'cartao_credito'
+          : formaPagamento === 'dinheiro' ? 'dinheiro'
+          : formaPagamento === 'pix' ? 'pix'
+          : formaPagamento === 'cheque' ? 'cheque'
+          : formaPagamento === 'link' ? 'link'
+          : formaPagamento === 'boleto' ? 'boleto'
+          : 'transferencia'
+
+        await tx.gasto.create({
+          data: {
+            tipo: TIPO_GASTO_PAGAMENTO_OC,
+            descricao,
+            valor: decimal(valorTotal),
+            formaPagamento: forma,
+            dataGasto: new Date(),
+            ordemCompraId: id,
+            usuarioId: uid,
+          },
+        })
+      }
+    } else if (!pago) {
+      await tx.gasto.deleteMany({
+        where: {
+          ordemCompraId: id,
+          tipo: TIPO_GASTO_PAGAMENTO_OC,
+          boletoParcelaId: null,
+        },
+      })
+    }
+
+    await tx.ordemCompra.update({
+      where: { id },
+      data: {
+        pago,
+        ...camposRegistroAlteracao(uid),
+      },
+    })
+  })
+
   await revalidateOCLists()
 }
 
-/**
- * Salva todas as alterações pendentes da OC em uma única chamada.
- * Apenas os campos presentes no input são tocados.
- * Registra `ultima_alteracao_em` uma vez (a última write vence).
- */
 export async function salvarAlteracoesOC(input: {
   id: string
   observacao?: string | null
@@ -995,20 +683,27 @@ export async function salvarAlteracoesOC(input: {
       await atualizarUnidadesAdicionaisItem(item_id, quantidade_adicional, input.usuarioRegistroId)
     }
   }
+
   if (input.observacao !== undefined) {
     await atualizarObservacaoOC(input.id, input.observacao ?? '', input.usuarioRegistroId)
   }
+
   if (input.forma_pagamento !== undefined) {
-    const supabase = await createClient()
     const uid = await resolverUsuarioRegistroOC(input.usuarioRegistroId)
-    await supabase
-      .from('ordens_compra')
-      .update({ forma_pagamento: input.forma_pagamento, ...camposRegistroAlteracao(uid) })
-      .eq('id', input.id)
+    await prisma.ordemCompra.update({
+      where: { id: input.id },
+      data: {
+        formaPagamento: input.forma_pagamento,
+        ...camposRegistroAlteracao(uid),
+      },
+    })
+    await revalidateOCLists()
   }
+
   if (input.pago !== undefined) {
     await definirPagoOrdemCompra(input.id, input.pago, input.usuarioRegistroId, input.forma_pagamento)
   }
+
   if (input.status !== undefined) {
     await mudarStatusOC(input.id, input.status, input.usuarioRegistroId)
   }
@@ -1016,17 +711,15 @@ export async function salvarAlteracoesOC(input: {
 
 export async function deletarOC(id: string) {
   await assertPermissao('ordens_compra', 'deletar')
-  const supabase = await createClient()
 
-  const { data: oc } = await supabase
-    .from('ordens_compra')
-    .select('status')
-    .eq('id', id)
-    .single()
+  const oc = await prisma.ordemCompra.findUnique({
+    where: { id },
+    select: { status: true },
+  })
 
-  if (oc?.status !== 'pendente') throw new Error('Apenas OCs pendentes podem ser excluídas.')
+  if (!oc) throw new Error('OC não encontrada.')
+  if (oc.status !== 'pendente') throw new Error('Apenas OCs pendentes podem ser excluídas.')
 
-  const { error } = await supabase.from('ordens_compra').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await prisma.ordemCompra.delete({ where: { id } })
   await revalidateOCLists()
 }

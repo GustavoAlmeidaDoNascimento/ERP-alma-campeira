@@ -1,28 +1,17 @@
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
-import { createClient, withSupabaseCookieContext } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { permissoesVazias, permissoesFromArray } from '@/lib/permissoes'
 import { withTiming } from '@/lib/perf/timing'
 import type { PermMap } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 import type { ModuloKey } from '@/types'
 import { getSessionUser } from '@/lib/session'
+import { prisma } from '@/lib/prisma'
+import { mapPermRows } from '@/lib/prisma-auth-mappers'
 
 type Acao = 'ver' | 'criar' | 'editar' | 'deletar'
 
-function isErroConexaoPostgrest(error: { message?: string } | null | undefined): boolean {
-  const msg = (error?.message ?? '').toLowerCase()
-  return msg.includes('fetch failed') || msg.includes('econnrefused') || msg.includes('enotfound')
-}
-
-function erroPostgrestIndisponivel(): Error {
-  return new Error(
-    'Banco indisponível (PostgREST). Inicie o Docker Desktop e rode `npm run db:up` antes de usar o ERP local.',
-  )
-}
-
-// Tipo compatível com o uso anterior de User do Supabase
+// Tipo enxuto usado pelos helpers de sessão locais.
 export type AuthUser = { id: string; email: string }
 
 export const getAuthenticatedUser = cache(async (): Promise<AuthUser | null> => {
@@ -40,11 +29,8 @@ export async function requireAuthenticatedUserId(): Promise<string> {
 /** Evita COUNT(*) em `usuarios_perfis` a cada resolução de permissão sem perfil. */
 const systemHasAnyProfile = unstable_cache(
   async (): Promise<boolean> => {
-    const supabase = createAdminClient()
-    const { count } = await supabase
-      .from('usuarios_perfis')
-      .select('id', { count: 'exact', head: true })
-    return (count ?? 0) > 0
+    const count = await prisma.usuarioPerfil.count()
+    return count > 0
   },
   ['system-has-any-profile'],
   { revalidate: 3600, tags: ['system-has-any-profile'] },
@@ -52,37 +38,30 @@ const systemHasAnyProfile = unstable_cache(
 
 const getPermissoesEfetivasCached = unstable_cache(
   async (userId: string): Promise<PermMap> => {
-    // Usa admin (service_role) para bypasear RLS — permissões são lógica interna do servidor
-    const supabase = createAdminClient()
-
     // Permissões customizadas têm prioridade
-    const { data: customPerms, error: customError } = await supabase
-      .from('usuario_permissoes')
-      .select('*')
-      .eq('usuario_id', userId)
+    const customPerms = await prisma.usuarioPermissao.findMany({
+      where: { userId },
+      orderBy: { modulo: 'asc' },
+    })
 
-    if (customError) {
-      if (isErroConexaoPostgrest(customError)) throw erroPostgrestIndisponivel()
-    }
-
-    if (customPerms && customPerms.length > 0) {
-      return permissoesFromArray(customPerms as Parameters<typeof permissoesFromArray>[0])
+    if (customPerms.length > 0) {
+      return permissoesFromArray(mapPermRows(customPerms))
     }
 
     // Cargo do usuário
-    const { data: perfil, error: perfilError } = await supabase
-      .from('usuarios_perfis')
-      .select('cargo_id, cargo:cargos(permissoes:cargo_permissoes(*))')
-      .eq('id', userId)
-      .single()
-
-    // Se a query falhou por um motivo que não seja "nenhuma linha encontrada",
-    // bloqueamos o acesso em vez de conceder acesso total.
-    // PGRST116 = "The result contains 0 rows" (sem perfil = pode ser bootstrap).
-    if (perfilError && perfilError.code !== 'PGRST116') {
-      if (isErroConexaoPostgrest(perfilError)) throw erroPostgrestIndisponivel()
-      return permissoesVazias()
-    }
+    const perfil = await prisma.usuarioPerfil.findUnique({
+      where: { id: userId },
+      select: {
+        cargoId: true,
+        cargo: {
+          select: {
+            permissions: {
+              orderBy: { modulo: 'asc' },
+            },
+          },
+        },
+      },
+    })
 
     if (!perfil) {
       const hasAnyProfile = await systemHasAnyProfile()
@@ -90,13 +69,11 @@ const getPermissoesEfetivasCached = unstable_cache(
       return permissoesVazias()
     }
 
-    if (!perfil.cargo_id || !perfil.cargo) {
+    if (!perfil.cargoId || !perfil.cargo) {
       return permissoesVazias()
     }
 
-    const cargoRaw = Array.isArray(perfil.cargo) ? perfil.cargo[0] : perfil.cargo
-    const cargo = cargoRaw as { permissoes: Parameters<typeof permissoesFromArray>[0] }
-    return permissoesFromArray(cargo.permissoes)
+    return permissoesFromArray(mapPermRows(perfil.cargo.permissions))
   },
   ['user-permissions'],
   // Permissões mudam raramente. Cache de 10min reduz drasticamente queries em toda
@@ -114,7 +91,7 @@ export const getPermissoesEfetivas = cache(async (): Promise<PermMap> => {
   return withTiming('getPermissoesEfetivas', async () => {
     const user = await getAuthenticatedUser()
     if (!user) return permissoesVazias()
-    return withSupabaseCookieContext(() => getPermissoesEfetivasCached(user.id))
+    return getPermissoesEfetivasCached(user.id)
   })
 })
 

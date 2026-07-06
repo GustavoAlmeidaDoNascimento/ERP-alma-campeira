@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { compare, hash } from 'bcryptjs'
-import { db } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 import { getSessionUser } from '@/lib/session'
 
 export async function PATCH(req: NextRequest) {
@@ -16,26 +16,26 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Senha deve ter ao menos 6 caracteres' }, { status: 400 })
     }
 
-    const sql = db()
-
     // Se currentPassword enviado, valida antes de trocar
     if (currentPassword) {
-      const rows = await sql<{ password_hash: string }[]>`
-        SELECT password_hash FROM public.users WHERE id = ${sessionUser.id} LIMIT 1
-      `
-      if (rows.length === 0) {
+      const user = await prisma.user.findUnique({
+        where: { id: sessionUser.id },
+        select: { passwordHash: true },
+      })
+      if (!user) {
         return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
       }
-      const valid = await compare(currentPassword, rows[0].password_hash)
+      const valid = await compare(currentPassword, user.passwordHash)
       if (!valid) {
         return NextResponse.json({ error: 'Senha atual incorreta' }, { status: 400 })
       }
     }
 
     const passwordHash = await hash(password, 12)
-    await sql`
-      UPDATE public.users SET password_hash = ${passwordHash} WHERE id = ${sessionUser.id}
-    `
+    await prisma.user.update({
+      where: { id: sessionUser.id },
+      data: { passwordHash },
+    })
 
     return NextResponse.json({ success: true })
   } catch (err) {

@@ -2,75 +2,76 @@
 
 import { revalidateTag } from 'next/cache'
 import { hash } from 'bcryptjs'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
 import { assertPermissao, requireAuthenticatedUserId } from '@/lib/auth'
-import { db } from '@/lib/db'
-import type { Usuario, PerfilUsuario } from '@/types'
+import { prisma } from '@/lib/prisma'
+import { mapPermRows, mapUsuario } from '@/lib/prisma-auth-mappers'
+import type { Usuario } from '@/types'
 import type { PermMap } from '@/lib/permissoes'
+import { permissoesFromArray } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 
 export async function getUsuariosPerfisList(): Promise<{ id: string; nome: string }[]> {
   await assertPermissao('usuarios', 'ver')
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('usuarios_perfis')
-    .select('id, nome')
-    .eq('ativo', true)
-    .order('nome')
-  return data ?? []
+  return prisma.usuarioPerfil.findMany({
+    where: { ativo: true },
+    select: { id: true, nome: true },
+    orderBy: { nome: 'asc' },
+  })
 }
 
 export async function getUsuarios(limit = 100): Promise<Usuario[]> {
   await assertPermissao('usuarios', 'ver')
-  const supabase = await createClient()
-  const sql = db()
+  const users = await prisma.user.findMany({
+    include: {
+      profile: {
+        include: {
+          cargo: {
+            include: {
+              permissions: {
+                orderBy: { modulo: 'asc' },
+              },
+            },
+          },
+        },
+      },
+      userPermissions: {
+        select: { id: true },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+  })
 
-  // Busca usuários diretamente da tabela public.users (substituiu auth.admin.listUsers)
-  const authUsers = await sql<{ id: string; email: string; created_at: Date }[]>`
-    SELECT id, email, created_at FROM public.users ORDER BY created_at LIMIT ${limit}
-  `
-
-  const [{ data: perfis }, { data: userPerms }] = await Promise.all([
-    supabase.from('usuarios_perfis').select('*, cargo:cargos(id, nome, cor, permissoes:cargo_permissoes(*))'),
-    supabase.from('usuario_permissoes').select('usuario_id'),
-  ])
-
-  const perfisMap = new Map((perfis ?? []).map((p) => [p.id, p]))
-  const customIds = new Set((userPerms ?? []).map((p) => p.usuario_id))
-
-  return authUsers.map((u) => {
-    const perfil = perfisMap.get(u.id)
-    return {
-      id: u.id,
-      email: u.email ?? '',
-      nome: perfil?.nome ?? u.email?.split('@')[0] ?? '',
-      perfil: (perfil?.perfil ?? 'vendas') as PerfilUsuario,
-      ativo: perfil?.ativo ?? true,
-      cargo_id: perfil?.cargo_id ?? null,
-      cargo: perfil?.cargo ?? null,
-      permissoes_customizadas: customIds.has(u.id),
-      created_at: u.created_at instanceof Date ? u.created_at.toISOString() : String(u.created_at),
-    }
-  }) as Usuario[]
+  return users.map((user) =>
+    mapUsuario({
+      ...user,
+      profile: user.profile
+        ? {
+            ...user.profile,
+            cargo: user.profile.cargo
+              ? {
+                  ...user.profile.cargo,
+                  permissions: user.profile.cargo.permissions,
+                }
+              : null,
+          }
+        : null,
+      userPermissions: user.userPermissions,
+    })
+  ) as Usuario[]
 }
 
 export async function getPermissoesUsuario(userId: string): Promise<PermMap | null> {
   await assertPermissao('usuarios', 'ver')
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('usuario_permissoes')
-    .select('*')
-    .eq('usuario_id', userId)
+  const data = await prisma.usuarioPermissao.findMany({
+    where: { userId },
+    orderBy: { modulo: 'asc' },
+  })
 
-  if (!data || data.length === 0) return null
+  if (data.length === 0) return null
 
-  const { permissoesVazias } = await import('@/lib/permissoes')
-  const base = permissoesVazias()
-  for (const p of data) {
-    base[p.modulo as keyof PermMap] = { ver: p.ver, criar: p.criar, editar: p.editar, deletar: p.deletar }
-  }
-  return base
+  return permissoesFromArray(mapPermRows(data))
 }
 
 export async function criarUsuario({
@@ -82,37 +83,32 @@ export async function criarUsuario({
   cargo_id: string | null
 }) {
   await assertPermissao('usuarios', 'criar')
-
-  const sql = db()
+  const normalizedEmail = email.toLowerCase().trim()
 
   // Verifica se email já existe
-  const existing = await sql<{ id: string }[]>`
-    SELECT id FROM public.users WHERE email = ${email.toLowerCase().trim()} LIMIT 1
-  `
-  if (existing.length > 0) {
+  const existing = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true },
+  })
+  if (existing) {
     throw new Error('Já existe um usuário com este email.')
   }
 
   const passwordHash = await hash(senha, 12)
-
-  // Insere o novo usuário na tabela public.users
-  const [newUser] = await sql<{ id: string }[]>`
-    INSERT INTO public.users (email, password_hash)
-    VALUES (${email.toLowerCase().trim()}, ${passwordHash})
-    RETURNING id
-  `
-
-  if (!newUser) throw new Error('Usuário não criado.')
-
-  const supabase = await createClient()
-  const { error: perfilError } = await supabase.from('usuarios_perfis').insert({
-    id: newUser.id,
-    nome: nome.trim(),
-    perfil: 'vendas',
-    ativo: true,
-    cargo_id: cargo_id || null,
+  await prisma.user.create({
+    data: {
+      email: normalizedEmail,
+      passwordHash,
+      profile: {
+        create: {
+          nome: nome.trim(),
+          perfil: 'vendas',
+          ativo: true,
+          cargoId: cargo_id || null,
+        },
+      },
+    },
   })
-  if (perfilError) throw new Error(perfilError.message)
 }
 
 export async function atualizarPerfil(
@@ -130,26 +126,25 @@ export async function atualizarPerfil(
   }
 ) {
   await assertPermissao('usuarios', 'editar')
-  const supabase = await createClient()
+  await prisma.$transaction(async (tx) => {
+    await tx.usuarioPerfil.upsert({
+      where: { id },
+      create: { id, nome: nome.trim(), perfil: 'vendas', ativo, cargoId: cargo_id || null },
+      update: { nome: nome.trim(), perfil: 'vendas', ativo, cargoId: cargo_id || null },
+    })
 
-  const { error } = await supabase
-    .from('usuarios_perfis')
-    .upsert({ id, nome: nome.trim(), perfil: 'vendas', ativo, cargo_id: cargo_id || null })
-  if (error) throw new Error(error.message)
+    await tx.usuarioPermissao.deleteMany({ where: { userId: id } })
 
-  if (permissoes === null) {
-    await supabase.from('usuario_permissoes').delete().eq('usuario_id', id)
-  } else {
-    const rows = MODULOS.map((m) => ({
-      usuario_id: id,
-      modulo: m.key,
-      ...permissoes[m.key],
-    }))
-    const { error: permError } = await supabase
-      .from('usuario_permissoes')
-      .upsert(rows, { onConflict: 'usuario_id,modulo' })
-    if (permError) throw new Error(permError.message)
-  }
+    if (permissoes !== null) {
+      await tx.usuarioPermissao.createMany({
+        data: MODULOS.map((m) => ({
+          userId: id,
+          modulo: m.key,
+          ...permissoes[m.key],
+        })),
+      })
+    }
+  })
 
   // Invalida o cache global de permissões (todos os usuários).
   revalidateTag('user-permissions', 'max')
@@ -162,28 +157,19 @@ export async function deletarUsuario(id: string) {
     throw new Error('Não é possível excluir o próprio usuário.')
   }
 
-  const admin = createAdminClient()
-  const sql = db()
+  await prisma.$transaction(async (tx) => {
+    // Referências em tabelas ainda não modeladas no Prisma.
+    await tx.pedido.updateMany({
+      where: { vendedorId: id },
+      data: { vendedorId: null },
+    })
+    await tx.movimentacaoEstoque.updateMany({
+      where: { usuarioId: id },
+      data: { usuarioId: null },
+    })
 
-  // Referências em `public` impedem a remoção; limpa na ordem correta.
-  const { error: pedidosErr } = await admin
-    .from('pedidos')
-    .update({ vendedor_id: null })
-    .eq('vendedor_id', id)
-  if (pedidosErr) throw new Error(pedidosErr.message)
-
-  const { error: movErr } = await admin
-    .from('movimentacoes_estoque')
-    .update({ usuario_id: null })
-    .eq('usuario_id', id)
-  if (movErr) throw new Error(movErr.message)
-
-  const { error: permErr } = await admin.from('usuario_permissoes').delete().eq('usuario_id', id)
-  if (permErr) throw new Error(permErr.message)
-
-  const { error: perfilErr } = await admin.from('usuarios_perfis').delete().eq('id', id)
-  if (perfilErr) throw new Error(perfilErr.message)
-
-  // Remove da tabela public.users (substituiu auth.admin.deleteUser)
-  await sql`DELETE FROM public.users WHERE id = ${id}`
+    await tx.usuarioPermissao.deleteMany({ where: { userId: id } })
+    await tx.usuarioPerfil.deleteMany({ where: { id } })
+    await tx.user.delete({ where: { id } })
+  })
 }

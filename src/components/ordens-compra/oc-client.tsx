@@ -23,8 +23,8 @@ import { DateInputBR } from '@/components/ui/date-input-br'
 import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useOrdensCompra, useFilaReposicao, useUsuariosParaRegistroOC } from '@/lib/query/hooks'
 import { qk } from '@/lib/query/keys'
-import { getMatériasPrimas } from '@/lib/actions/materias-primas'
-import { getOptimizedSupabaseImageUrl } from '@/lib/supabase/optimized-image'
+import { getMatériasPrimas as getMateriasPrimas } from '@/lib/actions/materias-primas'
+import { getOptimizedImageUrl } from '@/lib/images'
 import { FilaReposicaoDetalheModal } from '@/components/ordens-compra/fila-reposicao-detalhe'
 
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
@@ -35,13 +35,13 @@ type Props = {
   fila: FilaReposicao[]
   ordens: OrdemCompra[]
   perm: Perm
-  /** perfil usuarios_perfis.id do login — pré-selecionado no registro de alterações */
+  /** perfil usuarios_perfis.id do login â€” prÃ©-selecionado no registro de alteraÃ§Ãµes */
   usuarioLogadoId: string | null
-  /** usuários ativos para o select "Quem registra a alteração" — pré-buscado no server */
+  /** usuÃ¡rios ativos para o select "Quem registra a alteraÃ§Ã£o" â€” prÃ©-buscado no server */
   usuariosRegistroInicial?: { id: string; nome: string }[]
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function fmt(n: number) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -68,7 +68,7 @@ function totalOC(itens: OrdemCompraItem[]) {
   return itens.reduce((s, i) => s + (i.preco_unitario ?? 0) * i.quantidade, 0)
 }
 
-// ─── PDF Export ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ PDF Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function exportarPDF(oc: OrdemCompra) {
   const itens = oc.itens ?? []
@@ -78,11 +78,11 @@ function exportarPDF(oc: OrdemCompra) {
       const sub = (item.preco_unitario ?? 0) * item.quantidade
       return `
         <tr>
-          <td>${item.materia_prima?.codigo ?? '—'}</td>
-          <td>${item.materia_prima?.nome ?? '—'}</td>
+          <td>${item.materia_prima?.codigo ?? 'â€”'}</td>
+          <td>${item.materia_prima?.nome ?? 'â€”'}</td>
           <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : '—'}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : '—'}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : 'â€”'}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : 'â€”'}</td>
         </tr>`
     })
     .join('')
@@ -122,8 +122,8 @@ function exportarPDF(oc: OrdemCompra) {
   </style>
 </head>
 <body>
-  <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ''}${oc.codigo}</h1>
-  <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+  <h1>ORDEM DE COMPRA â€” ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} Â· ` : ''}${oc.codigo}</h1>
+  <p class="subtitle">Alma Campeira â€” Cutelaria Artesanal</p>
 
   <div class="meta">
     <div>
@@ -131,12 +131,12 @@ function exportarPDF(oc: OrdemCompra) {
       <span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span>
     </div>
     <div>
-      <strong>Data de Geração</strong>
+      <strong>Data de GeraÃ§Ã£o</strong>
       <span>${fmtData(oc.data_geracao)}</span>
     </div>
     <div>
       <strong>Status</strong>
-      <span>${STATUS_OC[oc.status].label}${oc.pago ? ' · Pago' : ''}</span>
+      <span>${STATUS_OC[oc.status].label}${oc.pago ? ' Â· Pago' : ''}</span>
     </div>
     ${oc.pedido_codigo ? `
     <div>
@@ -145,17 +145,17 @@ function exportarPDF(oc: OrdemCompra) {
     </div>
     <div>
       <strong>Cliente</strong>
-      <span>${oc.cliente_nome ?? '—'}</span>
+      <span>${oc.cliente_nome ?? 'â€”'}</span>
     </div>` : ''}
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>Código</th>
+        <th>CÃ³digo</th>
         <th>Item</th>
         <th>Qtd</th>
-        <th>Preço Unit.</th>
+        <th>PreÃ§o Unit.</th>
         <th>Subtotal</th>
       </tr>
     </thead>
@@ -168,7 +168,7 @@ function exportarPDF(oc: OrdemCompra) {
     </tbody>
   </table>
 
-  ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ''}
+  ${oc.observacao ? `<div class="obs"><strong>ObservaÃ§Ãµes</strong>${oc.observacao}</div>` : ''}
 
   <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
 
@@ -182,7 +182,7 @@ function exportarPDF(oc: OrdemCompra) {
   win.document.close()
 }
 
-/** HTML de uma OC sem <head>/<style> — para concatenar várias num único PDF. */
+/** HTML de uma OC sem <head>/<style> â€” para concatenar vÃ¡rias num Ãºnico PDF. */
 function ocBodyHtml(oc: OrdemCompra) {
   const itens = oc.itens ?? []
   const total = totalOC(itens)
@@ -191,30 +191,30 @@ function ocBodyHtml(oc: OrdemCompra) {
       const sub = (item.preco_unitario ?? 0) * item.quantidade
       return `
         <tr>
-          <td>${item.materia_prima?.codigo ?? '—'}</td>
-          <td>${item.materia_prima?.nome ?? '—'}</td>
+          <td>${item.materia_prima?.codigo ?? 'â€”'}</td>
+          <td>${item.materia_prima?.nome ?? 'â€”'}</td>
           <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : '—'}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : '—'}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : 'â€”'}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : 'â€”'}</td>
         </tr>`
     })
     .join('')
 
   return `
   <section class="oc-page">
-    <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ''}${oc.codigo}</h1>
-    <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+    <h1>ORDEM DE COMPRA â€” ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} Â· ` : ''}${oc.codigo}</h1>
+    <p class="subtitle">Alma Campeira â€” Cutelaria Artesanal</p>
     <div class="meta">
       <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span></div>
-      <div><strong>Data de Geração</strong><span>${fmtData(oc.data_geracao)}</span></div>
-      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}${oc.pago ? ' · Pago' : ''}</span></div>
+      <div><strong>Data de GeraÃ§Ã£o</strong><span>${fmtData(oc.data_geracao)}</span></div>
+      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}${oc.pago ? ' Â· Pago' : ''}</span></div>
       ${oc.pedido_codigo ? `
       <div><strong>Pedido de Origem</strong><span>${oc.pedido_codigo}</span></div>
-      <div><strong>Cliente</strong><span>${oc.cliente_nome ?? '—'}</span></div>` : ''}
+      <div><strong>Cliente</strong><span>${oc.cliente_nome ?? 'â€”'}</span></div>` : ''}
     </div>
     <table>
       <thead>
-        <tr><th>Código</th><th>Item</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr>
+        <tr><th>CÃ³digo</th><th>Item</th><th>Qtd</th><th>PreÃ§o Unit.</th><th>Subtotal</th></tr>
       </thead>
       <tbody>
         ${linhasItens}
@@ -224,7 +224,7 @@ function ocBodyHtml(oc: OrdemCompra) {
         </tr>
       </tbody>
     </table>
-    ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ''}
+    ${oc.observacao ? `<div class="obs"><strong>ObservaÃ§Ãµes</strong>${oc.observacao}</div>` : ''}
     <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
   </section>`
 }
@@ -280,7 +280,7 @@ function exportarPDFMultiplas(ocs: OrdemCompra[]) {
   win.document.close()
 }
 
-// ─── Badge de Status OC ──────────────────────────────────────────────────────
+// â”€â”€â”€ Badge de Status OC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PAGO_BADGE = { label: 'Pago', color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' } as const
 
@@ -310,7 +310,7 @@ function BadgeStatus({ status, pago }: { status: StatusOC; pago?: boolean }) {
   )
 }
 
-// ─── Badge Status Fila ────────────────────────────────────────────────────────
+// â”€â”€â”€ Badge Status Fila â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function BadgeStatusFila({ status }: { status: FilaReposicao['status'] }) {
   const cfg = {
@@ -328,7 +328,7 @@ function BadgeStatusFila({ status }: { status: FilaReposicao['status'] }) {
   )
 }
 
-// ─── Modal de Detalhes da OC ─────────────────────────────────────────────────
+// â”€â”€â”€ Modal de Detalhes da OC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function OcDetalheModal({
   oc,
@@ -347,7 +347,7 @@ function OcDetalheModal({
   onRefresh: () => void | Promise<void>
   onRequestExcluir?: () => void
 }) {
-  /** Drafts editáveis — só são persistidos no Salvar. */
+  /** Drafts editÃ¡veis â€” sÃ³ sÃ£o persistidos no Salvar. */
   const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({})
   const [obs, setObs] = useState(oc.observacao ?? '')
   const [pagoDraft, setPagoDraft] = useState(oc.pago)
@@ -391,7 +391,7 @@ function OcDetalheModal({
 
   const { data: materiasPrimas = [], isPending: carregandoMateriasPrimas } = useQuery({
     queryKey: qk.materiasPrimas.listLimit(200),
-    queryFn: () => getMatériasPrimas(200),
+    queryFn: () => getMateriasPrimas(200),
     enabled: perm.editar && oc.status === 'pendente' && mpSectionVisible,
     staleTime: 120_000,
   })
@@ -411,7 +411,7 @@ function OcDetalheModal({
         .filter((mp) => !idsMateriaJaNoPedido.has(mp.id))
         .map((mp) => {
           const imageUrl =
-            getOptimizedSupabaseImageUrl(mp.foto_url, {
+            getOptimizedImageUrl(mp.foto_url, {
               width: 80,
               height: 80,
               quality: 72,
@@ -420,7 +420,7 @@ function OcDetalheModal({
             }) || null
           return {
             value: mp.id,
-            label: `${mp.codigo} — ${mp.nome}`,
+            label: `${mp.codigo} â€” ${mp.nome}`,
             imageUrl,
           }
         }),
@@ -457,7 +457,7 @@ function OcDetalheModal({
     })
   )
 
-  /** Itens com qtd_total alterada (e validada) — usados para diff e save. */
+  /** Itens com qtd_total alterada (e validada) â€” usados para diff e save. */
   const itensQtdDiff = useMemo(() => {
     const out: { item_id: string; quantidade_adicional: number }[] = []
     for (const item of itens) {
@@ -484,33 +484,33 @@ function OcDetalheModal({
   async function salvarTudo() {
     setErro('')
 
-    // Validação local dos drafts de qtd.
+    // ValidaÃ§Ã£o local dos drafts de qtd.
     for (const item of itens) {
       const raw = editandoQtdTotal[item.id]
       if (raw === undefined) continue
       const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
       const totalQty = parseNumero(raw)
       if (!Number.isFinite(totalQty)) {
-        setErro(`Quantidade total inválida em ${item.materia_prima?.codigo ?? 'um item'}.`)
+        setErro(`Quantidade total invÃ¡lida em ${item.materia_prima?.codigo ?? 'um item'}.`)
         return
       }
       const minTotal = vendido > 0 ? vendido : 1
       if (totalQty < minTotal) {
-        setErro(`A quantidade total de ${item.materia_prima?.codigo ?? 'um item'} não pode ser menor que ${fmtQtd(minTotal)}.`)
+        setErro(`A quantidade total de ${item.materia_prima?.codigo ?? 'um item'} nÃ£o pode ser menor que ${fmtQtd(minTotal)}.`)
         return
       }
     }
 
     if (statusAlterado) {
       if (statusDraft === 'recebida') {
-        if (!window.confirm('Confirmar recebimento dará entrada no estoque das matérias-primas. Confirmar?')) return
+        if (!window.confirm('Confirmar recebimento darÃ¡ entrada no estoque das matÃ©rias-primas. Confirmar?')) return
       } else if (oc.status === 'recebida') {
-        if (!window.confirm('Voltar de Recebida irá estornar a entrada de estoque (criando movimentações de ajuste). Confirmar?')) return
+        if (!window.confirm('Voltar de Recebida irÃ¡ estornar a entrada de estoque (criando movimentaÃ§Ãµes de ajuste). Confirmar?')) return
       }
     }
 
-    // Se a forma escolhida é boleto e ainda não havia boleto (forma mudou),
-    // exige ao menos uma parcela válida para gerar o boleto de saída.
+    // Se a forma escolhida Ã© boleto e ainda nÃ£o havia boleto (forma mudou),
+    // exige ao menos uma parcela vÃ¡lida para gerar o boleto de saÃ­da.
     const vaiCriarBoleto = formaPagamentoDraft === 'boleto' && formaAlterada
     if (vaiCriarBoleto) {
       const temParcela = boletoParcelas.some((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
@@ -563,14 +563,14 @@ function OcDetalheModal({
       setEditandoQtdTotal({})
       await Promise.resolve(onRefresh())
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao salvar alterações.')
+      setErro(e instanceof Error ? e.message : 'Erro ao salvar alteraÃ§Ãµes.')
     } finally {
       setSalvandoTudo(false)
     }
   }
 
   return (
-    <Modal open onClose={onClose} title={`${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ''}${oc.codigo} — ${oc.fornecedor?.nome ?? 'Sem fornecedor'}`} width="760px">
+    <Modal open onClose={onClose} title={`${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} Â· ` : ''}${oc.codigo} â€” ${oc.fornecedor?.nome ?? 'Sem fornecedor'}`} width="760px">
       <div className="space-y-5">
         {/* Resumo */}
         <div className="flex items-center gap-6 text-sm flex-wrap" style={{ color: 'var(--ac-muted)' }}>
@@ -591,7 +591,7 @@ function OcDetalheModal({
               Pedido de origem
             </span>
             <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{oc.pedido_codigo}</span>
-            <span style={{ color: 'var(--ac-text)' }}>· {oc.cliente_nome ?? '—'}</span>
+            <span style={{ color: 'var(--ac-text)' }}>Â· {oc.cliente_nome ?? 'â€”'}</span>
           </div>
         )}
 
@@ -600,9 +600,9 @@ function OcDetalheModal({
             className="text-xs px-3 py-2 rounded-lg"
             style={{ background: 'color-mix(in srgb, var(--ac-border) 35%, transparent)', color: 'var(--ac-muted)' }}
           >
-            Última alteração:{' '}
-            <strong style={{ color: 'var(--ac-text)' }}>{oc.ultima_alteracao_usuario?.nome ?? '—'}</strong>
-            <span> · {fmtDataHora(oc.ultima_alteracao_em)}</span>
+            Ãšltima alteraÃ§Ã£o:{' '}
+            <strong style={{ color: 'var(--ac-text)' }}>{oc.ultima_alteracao_usuario?.nome ?? 'â€”'}</strong>
+            <span> Â· {fmtDataHora(oc.ultima_alteracao_em)}</span>
           </div>
         )}
 
@@ -612,11 +612,11 @@ function OcDetalheModal({
             <thead>
               <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
                 {[
-                  'Código',
-                  'Matéria-Prima',
+                  'CÃ³digo',
+                  'MatÃ©ria-Prima',
                   'Vendido',
                   'Qtd Total',
-                  'Preço Unit.',
+                  'PreÃ§o Unit.',
                   'Subtotal',
                 ].map((h) => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
@@ -645,10 +645,10 @@ function OcDetalheModal({
                     }}
                   >
                     <td className="px-3 py-2.5 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
-                      {item.materia_prima?.codigo ?? '—'}
+                      {item.materia_prima?.codigo ?? 'â€”'}
                     </td>
                     <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>
-                      {item.materia_prima?.nome ?? '—'}
+                      {item.materia_prima?.nome ?? 'â€”'}
                     </td>
                     <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
                       {fmtQtd(vendido)}
@@ -680,10 +680,10 @@ function OcDetalheModal({
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
-                      {item.preco_unitario != null ? fmt(item.preco_unitario) : '—'}
+                      {item.preco_unitario != null ? fmt(item.preco_unitario) : 'â€”'}
                     </td>
                     <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
-                      {item.preco_unitario != null ? fmt(sub) : '—'}
+                      {item.preco_unitario != null ? fmt(sub) : 'â€”'}
                     </td>
                   </tr>
                 )
@@ -701,12 +701,12 @@ function OcDetalheModal({
           </table>
         </div>
 
-        {/* Adicionar matéria-prima */}
+        {/* Adicionar matÃ©ria-prima */}
         {perm.editar && oc.status === 'pendente' && (
           <div ref={mpSectionRef} className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                Adicionar matéria-prima
+                Adicionar matÃ©ria-prima
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-2">
@@ -716,16 +716,16 @@ function OcDetalheModal({
                   className="text-xs font-semibold uppercase tracking-wide"
                   style={{ color: 'var(--ac-muted)' }}
                 >
-                  Matéria-prima
+                  MatÃ©ria-prima
                 </label>
                 <SearchableSelect
                   id="oc-mp-search"
                   value={materiaPrimaParaAdicionar}
                   onChange={setMateriaPrimaParaAdicionar}
                   options={opcoesMateriaPrima}
-                  placeholder="Pesquisar por código ou nome…"
+                  placeholder="Pesquisar por cÃ³digo ou nomeâ€¦"
                   loading={carregandoMateriasPrimas}
-                  emptyMessage="Nenhuma matéria-prima disponível para este pedido"
+                  emptyMessage="Nenhuma matÃ©ria-prima disponÃ­vel para este pedido"
                 />
               </div>
 
@@ -771,7 +771,7 @@ function OcDetalheModal({
                     setAdicionalParaAdicionar('')
                     onRefresh()
                   } catch (e: unknown) {
-                    setErro(e instanceof Error ? e.message : 'Erro ao adicionar matéria-prima.')
+                    setErro(e instanceof Error ? e.message : 'Erro ao adicionar matÃ©ria-prima.')
                   } finally {
                     setAdicionandoItem(false)
                   }
@@ -783,11 +783,11 @@ function OcDetalheModal({
           </div>
         )}
 
-        {/* Observações */}
+        {/* ObservaÃ§Ãµes */}
         {perm.editar && (
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-              Observações
+              ObservaÃ§Ãµes
             </label>
             <textarea
               rows={2}
@@ -816,7 +816,7 @@ function OcDetalheModal({
           </p>
         )}
 
-        {/* Rodapé: campos de alteração + ações */}
+        {/* RodapÃ©: campos de alteraÃ§Ã£o + aÃ§Ãµes */}
         <div
           className="flex flex-col gap-3 pt-3"
           style={{ borderTop: '1px solid var(--ac-border)' }}
@@ -826,23 +826,23 @@ function OcDetalheModal({
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
               <div
                 className="flex flex-col gap-1 min-w-0"
-                title="Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança."
+                title="Por padrÃ£o vem o usuÃ¡rio logado. Troque se outra pessoa efetivou a mudanÃ§a."
               >
                 <label
                   htmlFor="oc-registro-usuario"
                   className="text-[11px] font-semibold uppercase tracking-wide"
                   style={{ color: 'var(--ac-muted)' }}
                 >
-                  Quem registra a alteração
+                  Quem registra a alteraÃ§Ã£o
                 </label>
                 <SearchableSelect
                   id="oc-registro-usuario"
                   value={usuarioRegistroId}
                   onChange={setUsuarioRegistroId}
                   options={opcoesUsuarioRegistro}
-                  placeholder="Selecione o usuário…"
+                  placeholder="Selecione o usuÃ¡rioâ€¦"
                   loading={carregandoUsuariosRegistro}
-                  emptyMessage="Nenhum usuário ativo encontrado"
+                  emptyMessage="Nenhum usuÃ¡rio ativo encontrado"
                   className="w-full"
                   showThumbnails={false}
                 />
@@ -919,7 +919,7 @@ function OcDetalheModal({
                     minWidth: 180,
                   }}
                 >
-                  <option value="">— Selecione —</option>
+                  <option value="">â€” Selecione â€”</option>
                   {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
                     <option key={k} value={k}>{v.label}</option>
                   ))}
@@ -927,7 +927,7 @@ function OcDetalheModal({
               </div>
             </div>
 
-            {/* Inline boleto form — aparece assim que a forma "boleto" é escolhida */}
+            {/* Inline boleto form â€” aparece assim que a forma "boleto" Ã© escolhida */}
             {formaPagamentoDraft === 'boleto' && !oc.pago && (
               <div
                 className="flex flex-col gap-3 rounded-lg p-4"
@@ -1044,7 +1044,7 @@ function OcDetalheModal({
             </>
           ) : (
             <div className="text-sm flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--ac-muted)' }}>
-              <span>Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'não'}</strong></span>
+              <span>Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'nÃ£o'}</strong></span>
               {oc.forma_pagamento && (
                 <span>Forma: <strong style={{ color: 'var(--ac-text)' }}>{FORMAS_PAGAMENTO_OC[oc.forma_pagamento]?.label ?? oc.forma_pagamento}</strong></span>
               )}
@@ -1077,7 +1077,7 @@ function OcDetalheModal({
                 loading={salvandoTudo}
                 disabled={!temAlteracoes || salvandoTudo}
               >
-                Salvar alterações
+                Salvar alteraÃ§Ãµes
               </Button>
             )}
           </div>
@@ -1087,7 +1087,7 @@ function OcDetalheModal({
   )
 }
 
-// ─── Modal: Nova OC manual ───────────────────────────────────────────────────
+// â”€â”€â”€ Modal: Nova OC manual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type LinhaCriarOc = { key: string; materia_prima_id: string; quantidade: string; preco_unitario: string }
 
@@ -1117,7 +1117,7 @@ function OcCriarModal({
     () =>
       materiasPrimas.map((mp) => {
         const imageUrl =
-          getOptimizedSupabaseImageUrl(mp.foto_url, {
+          getOptimizedImageUrl(mp.foto_url, {
             width: 80,
             height: 80,
             quality: 72,
@@ -1126,7 +1126,7 @@ function OcCriarModal({
           }) || null
         return {
           value: mp.id,
-          label: `${mp.codigo} — ${mp.nome}`,
+          label: `${mp.codigo} â€” ${mp.nome}`,
           imageUrl,
         }
       }),
@@ -1144,7 +1144,7 @@ function OcCriarModal({
     async function load() {
       setCarregando(true)
       try {
-        const [f, m] = await Promise.all([getFornecedoresSemCache(1000), getMatériasPrimas(300)])
+        const [f, m] = await Promise.all([getFornecedoresSemCache(1000), getMateriasPrimas(300)])
         if (!cancelled) {
           setFornecedores(f)
           setMateriasPrimas(m)
@@ -1192,7 +1192,7 @@ function OcCriarModal({
   async function salvar() {
     const itensValidos = linhas.filter((l) => l.materia_prima_id)
     if (itensValidos.length === 0) {
-      setErro('Selecione ao menos uma matéria-prima.')
+      setErro('Selecione ao menos uma matÃ©ria-prima.')
       return
     }
     const payload: { materia_prima_id: string; quantidade: number; preco_unitario?: number | null }[] = []
@@ -1207,7 +1207,7 @@ function OcCriarModal({
       if (precoRaw !== '') {
         const p = parseNumero(precoRaw)
         if (!Number.isFinite(p) || p < 0) {
-          setErro('Preço unitário inválido em um dos itens.')
+          setErro('PreÃ§o unitÃ¡rio invÃ¡lido em um dos itens.')
           return
         }
         preco_unitario = p
@@ -1280,7 +1280,7 @@ function OcCriarModal({
 
         <div className="space-y-1.5 shrink-0">
           <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-            Observações (opcional)
+            ObservaÃ§Ãµes (opcional)
           </label>
           <textarea
             value={observacao}
@@ -1292,7 +1292,7 @@ function OcCriarModal({
               background: 'var(--ac-bg)',
               color: 'var(--ac-text)',
             }}
-            placeholder="Notas internas sobre esta OC…"
+            placeholder="Notas internas sobre esta OCâ€¦"
           />
         </div>
 
@@ -1311,13 +1311,13 @@ function OcCriarModal({
               <thead>
                 <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
                   <th className="px-2 py-2 text-left text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
-                    Matéria-prima
+                    MatÃ©ria-prima
                   </th>
                   <th className="px-2 py-2 text-right text-xs font-semibold uppercase w-[100px]" style={{ color: 'var(--ac-muted)' }}>
                     Qtd
                   </th>
                   <th className="px-2 py-2 text-right text-xs font-semibold uppercase w-[120px]" style={{ color: 'var(--ac-muted)' }}>
-                    Preço unit.
+                    PreÃ§o unit.
                   </th>
                   <th className="w-10 px-1 py-2" />
                 </tr>
@@ -1330,7 +1330,7 @@ function OcCriarModal({
                         value={l.materia_prima_id}
                         onChange={(v) => updateLinha(l.key, { materia_prima_id: v })}
                         options={opcoesMateria}
-                        placeholder="Escolher…"
+                        placeholder="Escolherâ€¦"
                         disabled={carregando}
                         loading={carregando}
                         className="w-full"
@@ -1403,7 +1403,7 @@ function OcCriarModal({
   )
 }
 
-// ─── Componente Principal ─────────────────────────────────────────────────────
+// â”€â”€â”€ Componente Principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistroInicial }: Props) {  const { refreshActiveTab } = useErpTabs()
   const queryClient = useQueryClient()
@@ -1442,7 +1442,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
 
   // Cache + in-flight de detalhes de fila para abrir o modal sem espera.
   // Disparamos a busca no mouseEnter (e no focus, p/ teclado). Quando o clique
-  // chega, na maioria das vezes a resposta já chegou ou está perto de chegar.
+  // chega, na maioria das vezes a resposta jÃ¡ chegou ou estÃ¡ perto de chegar.
   const filaDetalheCacheRef = useRef<Map<string, FilaReposicaoDetalhe>>(new Map())
   const filaDetalheInFlightRef = useRef<Map<string, Promise<FilaReposicaoDetalhe>>>(new Map())
   function prefetchFilaDetalhe(fila_id: string) {
@@ -1468,7 +1468,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         const data = await getOrdensCompra()
         if (!cancelled) queryClient.setQueryData(qk.ordensCompra.list(), data)
       } catch (e: unknown) {
-        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar histórico.')
+        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar histÃ³rico.')
       } finally {
         if (!cancelled) setLoadingHistorico(false)
       }
@@ -1551,7 +1551,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
     return lista
   }, [ordensLista, filtroStatus, periodoIni, periodoFim])
 
-  // Limpa seleções que saíram do filtro para evitar imprimir OCs invisíveis.
+  // Limpa seleÃ§Ãµes que saÃ­ram do filtro para evitar imprimir OCs invisÃ­veis.
   useEffect(() => {
     setSelecionadasIds((prev) => {
       const visiveis = new Set(ordensFiltradas.map((o) => o.id))
@@ -1588,7 +1588,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
   }
 
   // Agrupa OCs pelo pedido de origem. OCs manuais (sem pedido_id) ficam num
-  // grupo "Sem pedido (manuais)". Mantém a ordem decrescente de created_at ao
+  // grupo "Sem pedido (manuais)". MantÃ©m a ordem decrescente de created_at ao
   // posicionar cada grupo pelo created_at mais recente entre seus filhos.
   const gruposPorPedido = useMemo(() => {
     if (!agruparPorPedido) return null
@@ -1642,8 +1642,8 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Ordens de Compra</h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
             {filaLista.length > 0
-              ? `${filaLista.length} ${filaLista.length === 1 ? 'pedido' : 'pedidos'} aguardando reposição`
-              : 'Fila de reposição vazia'}
+              ? `${filaLista.length} ${filaLista.length === 1 ? 'pedido' : 'pedidos'} aguardando reposiÃ§Ã£o`
+              : 'Fila de reposiÃ§Ã£o vazia'}
           </p>
         </div>
         {perm.criar && (
@@ -1673,7 +1673,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
       <div className="px-4 sm:px-8 pt-5">
         <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
           {[
-            { key: 'fila' as const, label: 'Fila de Reposição', count: filaLista.length },
+            { key: 'fila' as const, label: 'Fila de ReposiÃ§Ã£o', count: filaLista.length },
             { key: 'historico' as const, label: 'Ordens de Compra', count: ordensLista.length },
           ].map((tab) => (
             <button
@@ -1703,13 +1703,13 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         </div>
       </div>
 
-      {/* ── Aba: Fila de Reposição ── */}
+      {/* â”€â”€ Aba: Fila de ReposiÃ§Ã£o â”€â”€ */}
       {aba === 'fila' && (
         <div className="px-4 sm:px-8 py-6">
           {filaLista.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                Período:
+                PerÃ­odo:
               </span>
               <input
                 type="date"
@@ -1719,7 +1719,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                 className="px-2 py-1 rounded text-sm"
                 style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
               />
-              <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>até</span>
+              <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>atÃ©</span>
               <input
                 type="date"
                 value={filaPeriodoFim}
@@ -1733,7 +1733,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                   onClick={() => { setFilaPeriodoIni(''); setFilaPeriodoFim('') }}
                   className="px-2 py-1 rounded text-xs font-medium"
                   style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)', color: 'var(--ac-muted)' }}
-                  title="Limpar período"
+                  title="Limpar perÃ­odo"
                 >
                   Limpar
                 </button>
@@ -1755,7 +1755,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
               </svg>
               <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Fila vazia</p>
               <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                Quando vendas forem entregues e houver estoques abaixo do mínimo, os pedidos aparecerão aqui.
+                Quando vendas forem entregues e houver estoques abaixo do mÃ­nimo, os pedidos aparecerÃ£o aqui.
               </p>
             </div>
           ) : filaFiltrada.length === 0 ? (
@@ -1763,7 +1763,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
               className="flex flex-col items-center justify-center py-16 rounded-xl text-center"
               style={{ border: '2px dashed var(--ac-border)' }}
             >
-              <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Nenhum pedido neste período</p>
+              <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Nenhum pedido neste perÃ­odo</p>
               <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Ajuste as datas ou clique em Limpar.</p>
             </div>
           ) : (
@@ -1794,7 +1794,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                     >
                       <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
                         {item.pedido_sequencial != null && (
-                          <>#{item.pedido_sequencial}<span className="mx-1 opacity-60">·</span></>
+                          <>#{item.pedido_sequencial}<span className="mx-1 opacity-60">Â·</span></>
                         )}
                         {item.pedido_codigo}
                       </td>
@@ -1835,7 +1835,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         </div>
       )}
 
-      {/* ── Aba: Histórico ── */}
+      {/* â”€â”€ Aba: HistÃ³rico â”€â”€ */}
       {aba === 'historico' && (
         <div className="px-4 sm:px-8 py-6">
           {/* Filtro de status + agrupamento */}
@@ -1877,10 +1877,10 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
             </label>
           </div>
 
-          {/* Filtro de período + ação de impressão em massa */}
+          {/* Filtro de perÃ­odo + aÃ§Ã£o de impressÃ£o em massa */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-              Período:
+              PerÃ­odo:
             </span>
             <input
               type="date"
@@ -1890,7 +1890,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
               className="px-2 py-1 rounded text-sm"
               style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
             />
-            <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>até</span>
+            <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>atÃ©</span>
             <input
               type="date"
               value={periodoFim}
@@ -1904,7 +1904,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                 onClick={() => { setPeriodoIni(''); setPeriodoFim('') }}
                 className="px-2 py-1 rounded text-xs font-medium"
                 style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)', color: 'var(--ac-muted)' }}
-                title="Limpar período"
+                title="Limpar perÃ­odo"
               >
                 Limpar
               </button>
@@ -1931,7 +1931,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
 
           {loadingHistorico && (
             <div className="py-8 text-sm" style={{ color: 'var(--ac-muted)' }}>
-              Carregando histórico de ordens...
+              Carregando histÃ³rico de ordens...
             </div>
           )}
 
@@ -1949,7 +1949,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
               </p>
               <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
                 {filtroStatus === 'todas'
-                  ? 'Use "Nova ordem de compra" no topo ou gere OCs pela aba "Fila de Reposição".'
+                  ? 'Use "Nova ordem de compra" no topo ou gere OCs pela aba "Fila de ReposiÃ§Ã£o".'
                   : 'Altere o filtro para ver outras.'}
               </p>
             </div>
@@ -1978,7 +1978,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                         style={{ accentColor: 'var(--ac-accent)' }}
                       />
                     </th>
-                    {['Código', 'Pedido', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
+                    {['CÃ³digo', 'Pedido', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
                       <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left ${h === '' ? 'w-20' : ''}`} style={{ color: 'var(--ac-muted)' }}>
                         {h}
                       </th>
@@ -2011,7 +2011,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                         </td>
                         <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
                           {oc.sequencial_fornecedor != null && (
-                            <>#{oc.sequencial_fornecedor}<span className="mx-1 opacity-60">·</span></>
+                            <>#{oc.sequencial_fornecedor}<span className="mx-1 opacity-60">Â·</span></>
                           )}
                           {oc.codigo}
                         </td>
@@ -2020,18 +2020,18 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                             <div>
                               <div className="font-mono font-semibold" style={{ color: 'var(--ac-text)' }}>
                                 {oc.pedido_sequencial != null && (
-                                  <span style={{ color: 'var(--ac-accent)' }}>#{oc.pedido_sequencial} · </span>
+                                  <span style={{ color: 'var(--ac-accent)' }}>#{oc.pedido_sequencial} Â· </span>
                                 )}
                                 {oc.pedido_codigo}
                               </div>
-                              <div style={{ color: 'var(--ac-muted)' }}>{oc.cliente_nome ?? '—'}</div>
+                              <div style={{ color: 'var(--ac-muted)' }}>{oc.cliente_nome ?? 'â€”'}</div>
                             </div>
                           ) : (
                             <span style={{ color: 'var(--ac-muted)' }}>Manual</span>
                           )}
                         </td>
                         <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
-                          {oc.fornecedor?.nome ?? '—'}
+                          {oc.fornecedor?.nome ?? 'â€”'}
                         </td>
                         <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
                           {fmtData(oc.data_geracao)}
@@ -2125,14 +2125,14 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                                     {grupo.pedido_sequencial != null && (
                                       <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>#{grupo.pedido_sequencial}</span>
                                     )}
-                                    <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{grupo.pedido_sequencial != null ? `· ${grupo.pedido_codigo}` : grupo.pedido_codigo}</span>
-                                    <span style={{ color: 'var(--ac-text)' }}>· {grupo.cliente_nome ?? '—'}</span>
+                                    <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{grupo.pedido_sequencial != null ? `Â· ${grupo.pedido_codigo}` : grupo.pedido_codigo}</span>
+                                    <span style={{ color: 'var(--ac-text)' }}>Â· {grupo.cliente_nome ?? 'â€”'}</span>
                                   </>
                                 ) : (
                                   <span className="font-semibold" style={{ color: 'var(--ac-muted)' }}>Ordens manuais (sem pedido)</span>
                                 )}
                                 <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                                  · {grupo.ocs.length} {grupo.ocs.length === 1 ? 'OC' : 'OCs'}
+                                  Â· {grupo.ocs.length} {grupo.ocs.length === 1 ? 'OC' : 'OCs'}
                                 </span>
                                 <span className="ml-auto text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
                                   Total: <span style={{ color: 'var(--ac-text)' }}>{fmt(totalGrupo)}</span>
@@ -2155,7 +2155,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         </div>
       )}
 
-      {/* Modal detalhe Fila de Reposição */}
+      {/* Modal detalhe Fila de ReposiÃ§Ã£o */}
       {filaAberta && (
         <FilaReposicaoDetalheModal
           fila={filaAberta}
@@ -2165,7 +2165,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           onClose={() => setFilaAberta(null)}
           onRefresh={() => {
             setFilaAberta(null)
-            flash('Operação realizada com sucesso.')
+            flash('OperaÃ§Ã£o realizada com sucesso.')
             refresh()
             setAba('historico')
           }}
@@ -2205,10 +2205,10 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
             Tem certeza que deseja excluir a OC{' '}
             <strong style={{ color: 'var(--ac-text)' }}>
-              {deletando?.sequencial_fornecedor != null ? `#${deletando.sequencial_fornecedor} · ` : ''}
+              {deletando?.sequencial_fornecedor != null ? `#${deletando.sequencial_fornecedor} Â· ` : ''}
               {deletando?.codigo}
             </strong>?
-            Esta ação não pode ser desfeita.
+            Esta aÃ§Ã£o nÃ£o pode ser desfeita.
           </p>
           {erroDelete && (
             <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#fee2e2', color: '#dc2626' }}>
@@ -2224,3 +2224,4 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
     </>
   )
 }
+
