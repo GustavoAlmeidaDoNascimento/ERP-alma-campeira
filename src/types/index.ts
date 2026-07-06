@@ -445,6 +445,7 @@ export type OrdemCompra = {
   pago: boolean
   forma_pagamento: FormaPagamentoOC | null
   data_geracao: string
+  desconto_total: number
   observacao: string | null
   ultima_alteracao_usuario_id?: string | null
   ultima_alteracao_em?: string | null

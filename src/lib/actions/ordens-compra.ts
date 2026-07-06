@@ -79,6 +79,37 @@ function decimal(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value)
 }
 
+function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+function subtotalOCFromItens(
+  itens: Iterable<{ quantidade?: Prisma.Decimal | number | null; precoUnitario?: Prisma.Decimal | number | null }>,
+): number {
+  let total = 0
+  for (const item of itens) {
+    total += numberFrom(item.quantidade) * numberFrom(item.precoUnitario)
+  }
+  return roundCurrency(total)
+}
+
+function normalizarPercentualDesconto(percentual: number): number {
+  if (!Number.isFinite(percentual) || percentual < 0 || percentual > 100) {
+    throw new Error('Percentual de desconto inválido (use 0 a 100%).')
+  }
+  return percentual
+}
+
+function calcularDescontoTotal(subtotal: number, percentual: number): number {
+  const percentualNormalizado = normalizarPercentualDesconto(percentual)
+  if (subtotal <= 0 || percentualNormalizado <= 0) return 0
+  return Math.min(subtotal, roundCurrency((subtotal * percentualNormalizado) / 100))
+}
+
+function calcularTotalLiquidoOC(subtotal: number, descontoTotal: number): number {
+  return Math.max(0, roundCurrency(subtotal - descontoTotal))
+}
+
 function camposRegistroAlteracao(usuarioId: string) {
   return {
     ultimaAlteracaoUsuarioId: usuarioId,
@@ -391,6 +422,7 @@ export type CriarOcItemManual = {
 export async function criarOrdemCompraManual(input: {
   fornecedor_id: string | null
   categoria: string | null
+  desconto_percentual?: number | null
   observacao?: string | null
   itens: CriarOcItemManual[]
 }): Promise<string> {
@@ -415,6 +447,7 @@ export async function criarOrdemCompraManual(input: {
   if (categoriaItens !== categoriaSelecionada) {
     throw new Error(ERRO_CATEGORIA_MISTURADA)
   }
+  const descontoPercentual = normalizarPercentualDesconto(Number(input.desconto_percentual ?? 0))
 
   const custoPorId = new Map(mps.map((m) => [m.id, numberFrom(m.precoCusto)]))
   const agregado = new Map<string, { quantidade: number; subtotal: number }>()
@@ -442,6 +475,8 @@ export async function criarOrdemCompraManual(input: {
 
   const codigo = await gerarCodigoOC()
   const uidCriacao = await resolverUsuarioRegistroOC(undefined)
+  const subtotal = Array.from(agregado.values()).reduce((sum, item) => sum + item.subtotal, 0)
+  const descontoTotal = calcularDescontoTotal(subtotal, descontoPercentual)
 
   await prisma.$transaction(async (tx) => {
     const sequencialFornecedor = await nextSequencialFornecedor(tx, input.fornecedor_id ?? null)
@@ -453,6 +488,7 @@ export async function criarOrdemCompraManual(input: {
         sequencialFornecedor,
         status: 'pendente',
         dataGeracao: new Date(),
+        descontoTotal: decimal(descontoTotal),
         observacao: input.observacao?.trim() || null,
         ...camposRegistroAlteracao(uidCriacao),
         itens: {
@@ -600,6 +636,33 @@ export async function atualizarObservacaoOC(
   await revalidateOCLists()
 }
 
+export async function atualizarDescontoOC(
+  id: string,
+  descontoPercentual: number,
+  usuarioRegistroId?: string | null,
+) {
+  await assertPermissao('ordens_compra', 'editar')
+  const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
+  const percentual = normalizarPercentualDesconto(descontoPercentual)
+
+  const subtotal = subtotalOCFromItens(
+    await prisma.ordemCompraItem.findMany({
+      where: { ordemCompraId: id },
+      select: { quantidade: true, precoUnitario: true },
+    }),
+  )
+
+  await prisma.ordemCompra.update({
+    where: { id },
+    data: {
+      descontoTotal: decimal(calcularDescontoTotal(subtotal, percentual)),
+      ...camposRegistroAlteracao(uid),
+    },
+  })
+
+  await revalidateOCLists()
+}
+
 export async function mudarStatusOC(
   id: string,
   status: StatusOC,
@@ -659,10 +722,8 @@ export async function definirPagoOrdemCompra(
 
       if (!oc) throw new Error('OC não encontrada.')
 
-      const valorTotal = oc.itens.reduce(
-        (sum, item) => sum + numberFrom(item.quantidade) * numberFrom(item.precoUnitario),
-        0,
-      )
+      const subtotal = subtotalOCFromItens(oc.itens)
+      const valorTotal = calcularTotalLiquidoOC(subtotal, numberFrom(oc.descontoTotal))
 
       const descricao = oc.fornecedor?.nome
         ? `Pagamento OC ${oc.codigo} — ${oc.fornecedor.nome}`
@@ -723,6 +784,7 @@ export async function definirPagoOrdemCompra(
 export async function salvarAlteracoesOC(input: {
   id: string
   observacao?: string | null
+  desconto_percentual?: number | null
   pago?: boolean
   forma_pagamento?: string | null
   status?: StatusOC
@@ -739,6 +801,10 @@ export async function salvarAlteracoesOC(input: {
 
   if (input.observacao !== undefined) {
     await atualizarObservacaoOC(input.id, input.observacao ?? '', input.usuarioRegistroId)
+  }
+
+  if (input.desconto_percentual !== undefined) {
+    await atualizarDescontoOC(input.id, Number(input.desconto_percentual ?? 0), input.usuarioRegistroId)
   }
 
   if (input.forma_pagamento !== undefined) {

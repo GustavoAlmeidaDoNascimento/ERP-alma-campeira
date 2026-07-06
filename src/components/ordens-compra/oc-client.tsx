@@ -77,15 +77,61 @@ function normalizarCategoria(categoria: string | null | undefined) {
   return (categoria ?? "").trim().toLocaleLowerCase("pt-BR");
 }
 
-function totalOC(itens: OrdemCompraItem[]) {
+function subtotalOC(itens: OrdemCompraItem[]) {
   return itens.reduce((s, i) => s + (i.preco_unitario ?? 0) * i.quantidade, 0);
+}
+
+function clampPercentualDesconto(percentual: number) {
+  if (!Number.isFinite(percentual)) return 0;
+  return Math.max(0, Math.min(100, percentual));
+}
+
+function calcularDescontoPercentual(subtotal: number, percentual: number) {
+  const percentualNormalizado = clampPercentualDesconto(percentual);
+  if (subtotal <= 0 || percentualNormalizado <= 0) return 0;
+  return Math.min(subtotal, Math.round(subtotal * percentualNormalizado * 100) / 10000);
+}
+
+function calcularTotalFinalOC(subtotal: number, descontoTotal: number) {
+  return Math.max(0, subtotal - descontoTotal);
+}
+
+function percentualPorDesconto(subtotal: number, descontoTotal: number) {
+  if (subtotal <= 0 || descontoTotal <= 0) return 0;
+  return clampPercentualDesconto((descontoTotal / subtotal) * 100);
+}
+
+function fmtPercentual(percentual: number) {
+  return percentual.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+async function carregarLogoLetreiroDataUrl(): Promise<string | null> {
+  try {
+    const resp = await fetch("/images/letreiro.png");
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return await new Promise<string | null>((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : null);
+      fr.onerror = () => resolve(null);
+      fr.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
 }
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 
-function exportarPDF(oc: OrdemCompra) {
+async function exportarPDF(oc: OrdemCompra) {
   const itens = oc.itens ?? [];
-  const total = totalOC(itens);
+  const subtotal = subtotalOC(itens);
+  const desconto = oc.desconto_total ?? 0;
+  const total = calcularTotalFinalOC(subtotal, desconto);
+  const logoDataUrl = await carregarLogoLetreiroDataUrl();
   const linhasItens = itens
     .map((item) => {
       const sub = (item.preco_unitario ?? 0) * item.quantidade;
@@ -109,7 +155,10 @@ function exportarPDF(oc: OrdemCompra) {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 40px; }
     h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
-    .subtitle { font-size: 12px; color: #555; margin-bottom: 24px; }
+    .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
+    .brand img { height: 58px; width: auto; object-fit: contain; }
+    .brand-text { min-width: 0; }
+    .subtitle { font-size: 12px; color: #555; margin-bottom: 2px; }
     .meta { display: flex; gap: 40px; margin-bottom: 24px; }
     .meta div { display: flex; flex-direction: column; gap: 2px; }
     .meta strong { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
@@ -135,8 +184,13 @@ function exportarPDF(oc: OrdemCompra) {
   </style>
 </head>
 <body>
-  <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
-  <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+  <div class="brand">
+    ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Alma Campeira" />` : ""}
+    <div class="brand-text">
+      <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
+      <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+    </div>
+  </div>
 
   <div class="meta">
     <div>
@@ -178,6 +232,8 @@ function exportarPDF(oc: OrdemCompra) {
     </thead>
     <tbody>
       ${linhasItens}
+      ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${fmt(subtotal)}</td></tr>` : ""}
+      ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Desconto</td><td style="text-align:right">-${fmt(desconto)}</td></tr>` : ""}
       <tr class="total-row">
         <td colspan="4" style="text-align:right">TOTAL</td>
         <td style="text-align:right">${fmt(total)}</td>
@@ -200,9 +256,11 @@ function exportarPDF(oc: OrdemCompra) {
 }
 
 /** HTML de uma OC sem <head>/<style> — para concatenar várias num único PDF. */
-function ocBodyHtml(oc: OrdemCompra) {
+function ocBodyHtml(oc: OrdemCompra, logoDataUrl?: string | null) {
   const itens = oc.itens ?? [];
-  const total = totalOC(itens);
+  const subtotal = subtotalOC(itens);
+  const desconto = oc.desconto_total ?? 0;
+  const total = calcularTotalFinalOC(subtotal, desconto);
   const linhasItens = itens
     .map((item) => {
       const sub = (item.preco_unitario ?? 0) * item.quantidade;
@@ -219,8 +277,13 @@ function ocBodyHtml(oc: OrdemCompra) {
 
   return `
   <section class="oc-page">
-    <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
-    <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+    <div class="brand">
+      ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Alma Campeira" />` : ""}
+      <div class="brand-text">
+        <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
+        <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+      </div>
+    </div>
     <div class="meta">
       <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? "Sem fornecedor"}</span></div>
       <div><strong>Data de Geração</strong><span>${fmtData(oc.data_geracao)}</span></div>
@@ -239,6 +302,8 @@ function ocBodyHtml(oc: OrdemCompra) {
       </thead>
       <tbody>
         ${linhasItens}
+        ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${fmt(subtotal)}</td></tr>` : ""}
+        ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Desconto</td><td style="text-align:right">-${fmt(desconto)}</td></tr>` : ""}
         <tr class="total-row">
           <td colspan="4" style="text-align:right">TOTAL</td>
           <td style="text-align:right">${fmt(total)}</td>
@@ -250,9 +315,10 @@ function ocBodyHtml(oc: OrdemCompra) {
   </section>`;
 }
 
-function exportarPDFMultiplas(ocs: OrdemCompra[]) {
+async function exportarPDFMultiplas(ocs: OrdemCompra[]) {
   if (ocs.length === 0) return;
-  const paginas = ocs.map(ocBodyHtml).join("");
+  const logoDataUrl = await carregarLogoLetreiroDataUrl();
+  const paginas = ocs.map((oc) => ocBodyHtml(oc, logoDataUrl)).join("");
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -263,8 +329,11 @@ function exportarPDFMultiplas(ocs: OrdemCompra[]) {
     body { font-family: Arial, sans-serif; font-size: 13px; color: #111; }
     .oc-page { padding: 40px; page-break-after: always; }
     .oc-page:last-child { page-break-after: auto; }
+    .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
+    .brand img { height: 58px; width: auto; object-fit: contain; }
+    .brand-text { min-width: 0; }
     h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
-    .subtitle { font-size: 12px; color: #555; margin-bottom: 24px; }
+    .subtitle { font-size: 12px; color: #555; margin-bottom: 2px; }
     .meta { display: flex; gap: 40px; margin-bottom: 24px; flex-wrap: wrap; }
     .meta div { display: flex; flex-direction: column; gap: 2px; }
     .meta strong { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
@@ -371,6 +440,7 @@ function OcDetalheModal({
   /** Drafts editáveis — só são persistidos no Salvar. */
   const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({});
   const [obs, setObs] = useState(oc.observacao ?? "");
+  const [descontoPercentualDraft, setDescontoPercentualDraft] = useState("0");
   const [pagoDraft, setPagoDraft] = useState(oc.pago);
   const [formaPagamentoDraft, setFormaPagamentoDraft] = useState<FormaPagamentoOC | "">(
     oc.forma_pagamento ?? "",
@@ -480,17 +550,23 @@ function OcDetalheModal({
 
   useEffect(() => {
     setObs(oc.observacao ?? "");
+    setDescontoPercentualDraft(
+      String(percentualPorDesconto(subtotalOC(oc.itens ?? []), oc.desconto_total ?? 0)).replace(
+        ".",
+        ",",
+      ),
+    );
     setPagoDraft(oc.pago);
     setFormaPagamentoDraft(oc.forma_pagamento ?? "");
     setStatusDraft(oc.status);
     setEditandoQtdTotal({});
-  }, [oc.id, oc.observacao, oc.pago, oc.forma_pagamento, oc.status]);
+  }, [oc.id, oc.observacao, oc.pago, oc.forma_pagamento, oc.status, oc.desconto_total, oc.itens]);
 
   useEffect(() => {
     setUsuarioRegistroId(usuarioLogadoId ?? "");
   }, [oc.id, usuarioLogadoId]);
 
-  const total = totalOC(
+  const subtotal = subtotalOC(
     itens.map((i) => {
       const vendido = Number(i.quantidade_vendida ?? i.quantidade);
       const adicionalBase = Number(i.quantidade_adicional ?? 0);
@@ -501,6 +577,11 @@ function OcDetalheModal({
       return { ...i, quantidade: qtd };
     }),
   );
+  const descontoPercentual = parseNumero(descontoPercentualDraft);
+  const descontoPercentualAtual = Number.isFinite(descontoPercentual) ? descontoPercentual : 0;
+  const descontoTotalAtual = calcularDescontoPercentual(subtotal, descontoPercentualAtual);
+  const total = calcularTotalFinalOC(subtotal, descontoTotalAtual);
+  const percentualOriginal = percentualPorDesconto(subtotalOC(itens), oc.desconto_total ?? 0);
 
   /** Itens com qtd_total alterada (e validada) — usados para diff e save. */
   const itensQtdDiff = useMemo(() => {
@@ -520,11 +601,17 @@ function OcDetalheModal({
   }, [itens, editandoQtdTotal]);
 
   const obsAlterada = (obs ?? "") !== (oc.observacao ?? "");
+  const descontoAlterado = Math.abs(descontoPercentualAtual - percentualOriginal) > 1e-9;
   const pagoAlterado = pagoDraft !== oc.pago;
   const formaAlterada = (formaPagamentoDraft || null) !== (oc.forma_pagamento ?? null);
   const statusAlterado = statusDraft !== oc.status;
   const temAlteracoes =
-    obsAlterada || pagoAlterado || formaAlterada || statusAlterado || itensQtdDiff.length > 0;
+    obsAlterada ||
+    descontoAlterado ||
+    pagoAlterado ||
+    formaAlterada ||
+    statusAlterado ||
+    itensQtdDiff.length > 0;
 
   async function salvarTudo() {
     setErro("");
@@ -546,6 +633,15 @@ function OcDetalheModal({
         );
         return;
       }
+    }
+
+    if (
+      !Number.isFinite(descontoPercentual) ||
+      descontoPercentual < 0 ||
+      descontoPercentual > 100
+    ) {
+      setErro("Percentual de desconto inválido (use 0 a 100%).");
+      return;
     }
 
     if (statusAlterado) {
@@ -585,6 +681,8 @@ function OcDetalheModal({
       await salvarAlteracoesOC({
         id: oc.id,
         observacao: obsAlterada ? obs : undefined,
+        desconto_percentual:
+          descontoAlterado || itensQtdDiff.length > 0 ? descontoPercentualAtual : undefined,
         pago: pagoAlterado ? pagoDraft : undefined,
         forma_pagamento: formaParaSalvar,
         status: statusAlterado ? statusDraft : undefined,
@@ -800,7 +898,39 @@ function OcDetalheModal({
                   className="px-3 py-2.5 text-right font-semibold text-sm"
                   style={{ color: "var(--ac-muted)" }}
                 >
-                  TOTAL
+                  SUBTOTAL
+                </td>
+                <td
+                  className="px-3 py-2.5 text-right font-bold text-base"
+                  style={{ color: "var(--ac-text)" }}
+                >
+                  {fmt(subtotal)}
+                </td>
+              </tr>
+              {descontoTotalAtual > 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-3 py-2.5 text-right font-semibold text-sm"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    DESCONTO ({fmtPercentual(descontoPercentualAtual)}%)
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-right font-medium"
+                    style={{ color: "var(--ac-text)" }}
+                  >
+                    -{fmt(descontoTotalAtual)}
+                  </td>
+                </tr>
+              )}
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-3 py-2.5 text-right font-semibold text-sm"
+                  style={{ color: "var(--ac-muted)" }}
+                >
+                  TOTAL FINAL
                 </td>
                 <td
                   className="px-3 py-2.5 text-right font-bold text-base"
@@ -843,7 +973,7 @@ function OcDetalheModal({
                   value={materiaPrimaParaAdicionar}
                   onChange={setMateriaPrimaParaAdicionar}
                   options={opcoesMateriaPrima}
-                  placeholder="Pesquisar por código ou nome…"
+                  placeholder="Pesquisar por nome ou SKU…"
                   loading={carregandoMateriasPrimas}
                   emptyMessage={
                     categoriaOcAtiva
@@ -942,6 +1072,34 @@ function OcDetalheModal({
             }}
           >
             {oc.observacao}
+          </div>
+        )}
+
+        {perm.editar && (
+          <div className="space-y-1.5">
+            <label
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--ac-muted)" }}
+            >
+              % Desconto
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={descontoPercentualDraft}
+              onChange={(e) => setDescontoPercentualDraft(e.target.value)}
+              placeholder="0"
+              className="w-full px-3 py-2 rounded-lg text-sm text-right"
+              style={{
+                border: "1px solid var(--ac-border)",
+                background: "var(--ac-bg)",
+                color: "var(--ac-text)",
+              }}
+            />
+            <p className="text-xs" style={{ color: "var(--ac-muted)" }}>
+              Subtotal: {fmt(subtotal)} · Desconto: {fmt(descontoTotalAtual)} · Total final:{" "}
+              {fmt(total)}
+            </p>
           </div>
         )}
 
@@ -1343,6 +1501,7 @@ function OcCriarModal({
 }) {
   const [fornecedorId, setFornecedorId] = useState("");
   const [categoria, setCategoria] = useState("");
+  const [descontoPercentual, setDescontoPercentual] = useState("0");
   const [observacao, setObservacao] = useState("");
   const [linhas, setLinhas] = useState<LinhaCriarOc[]>(() => [
     { key: `${Date.now()}-0`, materia_prima_id: "", quantidade: "1", preco_unitario: "" },
@@ -1402,6 +1561,7 @@ function OcCriarModal({
     setErro("");
     setFornecedorId("");
     setCategoria("");
+    setDescontoPercentual("0");
     setObservacao("");
     setLinhas([
       { key: `${Date.now()}-0`, materia_prima_id: "", quantidade: "1", preco_unitario: "" },
@@ -1508,12 +1668,19 @@ function OcCriarModal({
       payload.push({ materia_prima_id: l.materia_prima_id, quantidade: q, preco_unitario });
     }
 
+    const desconto = parseNumero(descontoPercentual);
+    if (!Number.isFinite(desconto) || desconto < 0 || desconto > 100) {
+      setErro("Percentual de desconto inválido (use 0 a 100%).");
+      return;
+    }
+
     setErro("");
     setSalvando(true);
     try {
       const codigo = await criarOrdemCompraManual({
         fornecedor_id: fornecedorId || null,
         categoria,
+        desconto_percentual: desconto,
         observacao: observacao.trim() || null,
         itens: payload,
       });
@@ -1526,7 +1693,7 @@ function OcCriarModal({
     }
   }
 
-  const totalEstimado = useMemo(() => {
+  const subtotalEstimado = useMemo(() => {
     let s = 0;
     for (const l of linhas) {
       if (!l.materia_prima_id) continue;
@@ -1544,6 +1711,12 @@ function OcCriarModal({
     }
     return s;
   }, [linhas, mpById]);
+  const descontoPercentualAtual = parseNumero(descontoPercentual);
+  const descontoTotalEstimado = calcularDescontoPercentual(
+    subtotalEstimado,
+    Number.isFinite(descontoPercentualAtual) ? descontoPercentualAtual : 0,
+  );
+  const totalEstimado = calcularTotalFinalOC(subtotalEstimado, descontoTotalEstimado);
 
   return (
     <Modal open={open} onClose={onClose} title="Nova ordem de compra" width="920px">
@@ -1737,9 +1910,46 @@ function OcCriarModal({
               </tbody>
             </table>
           </div>
-          <p className="text-sm text-right font-medium" style={{ color: "var(--ac-text)" }}>
-            Total estimado: <span style={{ color: "var(--ac-accent)" }}>{fmt(totalEstimado)}</span>
-          </p>
+          <div className="space-y-1.5 shrink-0">
+            <label
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--ac-muted)" }}
+            >
+              % Desconto
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={descontoPercentual}
+              onChange={(e) => setDescontoPercentual(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-lg px-3 py-2 text-sm text-right"
+              style={{
+                border: "1px solid var(--ac-border)",
+                background: "var(--ac-bg)",
+                color: "var(--ac-text)",
+              }}
+            />
+          </div>
+
+          <div className="space-y-1 text-sm text-right">
+            <p style={{ color: "var(--ac-muted)" }}>
+              Subtotal: <span style={{ color: "var(--ac-text)" }}>{fmt(subtotalEstimado)}</span>
+            </p>
+            <p style={{ color: "var(--ac-muted)" }}>
+              Desconto:{" "}
+              <span style={{ color: "var(--ac-text)" }}>
+                {fmtPercentual(
+                  Number.isFinite(descontoPercentualAtual) ? descontoPercentualAtual : 0,
+                )}
+                % · {fmt(descontoTotalEstimado)}
+              </span>
+            </p>
+            <p className="font-medium" style={{ color: "var(--ac-text)" }}>
+              Total estimado:{" "}
+              <span style={{ color: "var(--ac-accent)" }}>{fmt(totalEstimado)}</span>
+            </p>
+          </div>
         </div>
 
         <div
@@ -2465,7 +2675,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                       "Fornecedor",
                       "Data",
                       "Qtd Final",
-                      "Total Estimado",
+                      "Total Final",
                       "Status",
                       "",
                     ].map((h) => (
@@ -2487,7 +2697,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                         (acc, item) => acc + Number(item.quantidade ?? 0),
                         0,
                       );
-                      const total = totalOC(itens);
+                      const total = calcularTotalFinalOC(subtotalOC(itens), oc.desconto_total ?? 0);
                       return (
                         <tr
                           key={oc.id}
@@ -2623,7 +2833,12 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                       let globalIdx = 0;
                       return gruposPorPedido.flatMap((grupo, grupoIdx) => {
                         const totalGrupo = grupo.ocs.reduce(
-                          (s, oc) => s + totalOC(oc.itens ?? []),
+                          (s, oc) =>
+                            s +
+                            calcularTotalFinalOC(
+                              subtotalOC(oc.itens ?? []),
+                              oc.desconto_total ?? 0,
+                            ),
                           0,
                         );
                         const idsGrupo = grupo.ocs.map((oc) => oc.id);

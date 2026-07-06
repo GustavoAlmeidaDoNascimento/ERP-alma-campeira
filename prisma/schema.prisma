@@ -404,6 +404,7 @@ model OrdemCompra {
   pago                     Boolean           @default(false)
   formaPagamento           String?           @map("forma_pagamento")
   dataGeracao              DateTime          @default(now()) @map("data_geracao") @db.Date
+  descontoTotal            Decimal           @default(0) @map("desconto_total") @db.Decimal(10, 2)
   observacao               String?
   ultimaAlteracaoUsuarioId String?           @map("ultima_alteracao_usuario_id") @db.Uuid
   ultimaAlteracaoEm        DateTime?         @map("ultima_alteracao_em") @db.Timestamptz(6)

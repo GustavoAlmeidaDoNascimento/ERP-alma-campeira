@@ -483,6 +483,7 @@ function ordensCompraCache(userId: string) {
           pago,
           forma_pagamento: (row.formaPagamento as OrdemCompra["forma_pagamento"]) ?? null,
           data_geracao: row.dataGeracao.toISOString().slice(0, 10),
+          desconto_total: numberFrom(row.descontoTotal),
           observacao: row.observacao ?? null,
           ultima_alteracao_usuario_id: row.ultimaAlteracaoUsuarioId ?? null,
           ultima_alteracao_em: row.ultimaAlteracaoEm?.toISOString() ?? null,
