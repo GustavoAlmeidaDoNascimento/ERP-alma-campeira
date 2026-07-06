@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import { BadgeEstoque } from "@/components/ui/badge-estoque";
@@ -66,6 +66,7 @@ export function ConsumivelClient({
       (c) =>
         c.nome.toLowerCase().includes(q) ||
         c.codigo.toLowerCase().includes(q) ||
+        c.sku.toLowerCase().includes(q) ||
         c.categoria.toLowerCase().includes(q) ||
         c.fornecedor?.nome?.toLowerCase().includes(q),
     );
@@ -205,7 +206,7 @@ export function ConsumivelClient({
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome, código, categoria ou fornecedor..."
+            placeholder="Buscar por nome, código, SKU, categoria ou fornecedor..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -380,7 +381,8 @@ export function ConsumivelClient({
                       className="px-4 py-3 font-mono text-xs font-medium"
                       style={{ color: "var(--ac-muted)" }}
                     >
-                      {c.codigo}
+                      <div>{c.codigo}</div>
+                      <div>SKU: {c.sku}</div>
                     </td>
                     <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
                       {c.nome}

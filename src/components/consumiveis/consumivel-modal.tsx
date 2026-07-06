@@ -20,6 +20,7 @@ type Props = {
 };
 
 type Form = {
+  sku: string;
   nome: string;
   categoria: string;
   fornecedor_id: string;
@@ -29,6 +30,7 @@ type Form = {
 };
 
 const formVazio: Form = {
+  sku: "",
   nome: "",
   categoria: "",
   fornecedor_id: "",
@@ -69,6 +71,7 @@ export function ConsumivelModal({
   useEffect(() => {
     if (editando) {
       setForm({
+        sku: editando.sku,
         nome: editando.nome,
         categoria: editando.categoria,
         fornecedor_id: editando.fornecedor_id ?? "",
@@ -117,6 +120,10 @@ export function ConsumivelModal({
     e.preventDefault();
     setErro("");
 
+    if (!form.sku.trim()) {
+      setErro("SKU é obrigatório.");
+      return;
+    }
     if (!form.nome.trim()) {
       setErro("Nome é obrigatório.");
       return;
@@ -134,6 +141,7 @@ export function ConsumivelModal({
     try {
       const fd = new FormData();
       if (editando?.id) fd.append("id", editando.id);
+      fd.append("sku", form.sku);
       fd.append("nome", form.nome);
       fd.append("categoria", form.categoria);
       fd.append("fornecedor_id", form.fornecedor_id);
@@ -159,6 +167,13 @@ export function ConsumivelModal({
       title={editando ? `Editar — ${editando.codigo}` : "Novo Consumível"}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Input
+          id="sku"
+          label="SKU *"
+          placeholder="Ex: CONS-0001"
+          value={form.sku}
+          onChange={(e) => set("sku", e.target.value)}
+        />
         <Input
           id="nome"
           label="Nome *"

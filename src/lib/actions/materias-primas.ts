@@ -57,6 +57,19 @@ function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
+function throwFriendlyUniqueError(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
+    if (targets.includes("sku")) {
+      throw new Error("Já existe uma matéria-prima com este SKU.");
+    }
+    if (targets.includes("codigo")) {
+      throw new Error("Já existe uma matéria-prima com este código.");
+    }
+  }
+  throw error;
+}
+
 function mapFornecedorDetalhe(
   row: {
     id: string;
@@ -103,6 +116,7 @@ function mapFornecedorDetalhe(
 function mapMateriaPrimaDetalhe(row: {
   id: string;
   codigo: string;
+  sku: string;
   nome: string;
   categoria: string;
   fornecedorId: string | null;
@@ -134,6 +148,7 @@ function mapMateriaPrimaDetalhe(row: {
   return {
     id: row.id,
     codigo: row.codigo,
+    sku: row.sku,
     nome: row.nome,
     categoria: row.categoria,
     fornecedor_id: row.fornecedorId,
@@ -179,6 +194,7 @@ function mapMovimentacaoDetalhe(
 }
 
 type MPInput = {
+  sku: string;
   nome: string;
   categoria: string;
   fornecedor_id: string | null;
@@ -189,12 +205,14 @@ type MPInput = {
 
 function normalizeMPInput(input: MPInput, linha?: number): MPInput {
   const prefixo = linha ? `Linha ${linha}: ` : "";
+  const sku = input.sku.trim();
   const nome = input.nome.trim();
   const categoria = input.categoria.trim();
   const preco_custo = Number(input.preco_custo);
   const estoque_atual = Number(input.estoque_atual || 0);
   const estoque_minimo = Number(input.estoque_minimo || 0);
 
+  if (!sku) throw new Error(`${prefixo}sku é obrigatório.`);
   if (!nome) throw new Error(`${prefixo}nome é obrigatório.`);
   if (!categoria) throw new Error(`${prefixo}categoria é obrigatória.`);
   if (!Number.isFinite(preco_custo)) throw new Error(`${prefixo}preço de custo inválido.`);
@@ -202,6 +220,7 @@ function normalizeMPInput(input: MPInput, linha?: number): MPInput {
   if (!Number.isFinite(estoque_minimo)) throw new Error(`${prefixo}estoque mínimo inválido.`);
 
   return {
+    sku,
     nome,
     categoria,
     fornecedor_id: input.fornecedor_id?.trim() || null,
@@ -216,17 +235,22 @@ export async function criarMateriaPrima(input: MPInput) {
   const normalized = normalizeMPInput(input);
   const codigo = await gerarCodigoMP();
 
-  await prisma.materiaPrima.create({
-    data: {
-      codigo,
-      nome: normalized.nome,
-      categoria: normalized.categoria,
-      fornecedorId: normalized.fornecedor_id,
-      precoCusto: decimal(normalized.preco_custo),
-      estoqueAtual: decimal(normalized.estoque_atual),
-      estoqueMinimo: decimal(normalized.estoque_minimo),
-    },
-  });
+  try {
+    await prisma.materiaPrima.create({
+      data: {
+        codigo,
+        sku: normalized.sku,
+        nome: normalized.nome,
+        categoria: normalized.categoria,
+        fornecedorId: normalized.fornecedor_id,
+        precoCusto: decimal(normalized.preco_custo),
+        estoqueAtual: decimal(normalized.estoque_atual),
+        estoqueMinimo: decimal(normalized.estoque_minimo),
+      },
+    });
+  } catch (error) {
+    throwFriendlyUniqueError(error);
+  }
   await revalidateMPLists();
 }
 
@@ -238,6 +262,10 @@ export async function criarMateriasPrimasEmLote(inputs: MPInput[]) {
   }
 
   const normalizedInputs = inputs.map((input, index) => normalizeMPInput(input, index + 1));
+  const skusNormalizados = normalizedInputs.map((input) => input.sku.toLowerCase());
+  if (new Set(skusNormalizados).size !== skusNormalizados.length) {
+    throw new Error("Existem SKUs duplicados na planilha de criação em massa.");
+  }
   const fornecedorIds = [
     ...new Set(
       normalizedInputs
@@ -262,19 +290,24 @@ export async function criarMateriasPrimasEmLote(inputs: MPInput[]) {
 
   const codigos = await Promise.all(normalizedInputs.map(() => gerarCodigoMP()));
 
-  await prisma.$transaction(async (tx) => {
-    await tx.materiaPrima.createMany({
-      data: normalizedInputs.map((input, index) => ({
-        codigo: codigos[index],
-        nome: input.nome,
-        categoria: input.categoria,
-        fornecedorId: input.fornecedor_id,
-        precoCusto: decimal(input.preco_custo),
-        estoqueAtual: decimal(input.estoque_atual),
-        estoqueMinimo: decimal(input.estoque_minimo),
-      })),
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.materiaPrima.createMany({
+        data: normalizedInputs.map((input, index) => ({
+          codigo: codigos[index],
+          sku: input.sku,
+          nome: input.nome,
+          categoria: input.categoria,
+          fornecedorId: input.fornecedor_id,
+          precoCusto: decimal(input.preco_custo),
+          estoqueAtual: decimal(input.estoque_atual),
+          estoqueMinimo: decimal(input.estoque_minimo),
+        })),
+      });
     });
-  });
+  } catch (error) {
+    throwFriendlyUniqueError(error);
+  }
 
   await revalidateMPLists();
 }
@@ -282,17 +315,22 @@ export async function criarMateriasPrimasEmLote(inputs: MPInput[]) {
 export async function atualizarMateriaPrima(id: string, input: MPInput) {
   await assertPermissao("materias_primas", "editar");
   const normalized = normalizeMPInput(input);
-  await prisma.materiaPrima.update({
-    where: { id },
-    data: {
-      nome: normalized.nome,
-      categoria: normalized.categoria,
-      fornecedorId: normalized.fornecedor_id,
-      precoCusto: decimal(normalized.preco_custo),
-      estoqueAtual: decimal(normalized.estoque_atual),
-      estoqueMinimo: decimal(normalized.estoque_minimo),
-    },
-  });
+  try {
+    await prisma.materiaPrima.update({
+      where: { id },
+      data: {
+        sku: normalized.sku,
+        nome: normalized.nome,
+        categoria: normalized.categoria,
+        fornecedorId: normalized.fornecedor_id,
+        precoCusto: decimal(normalized.preco_custo),
+        estoqueAtual: decimal(normalized.estoque_atual),
+        estoqueMinimo: decimal(normalized.estoque_minimo),
+      },
+    });
+  } catch (error) {
+    throwFriendlyUniqueError(error);
+  }
 
   await revalidateMPLists();
 }

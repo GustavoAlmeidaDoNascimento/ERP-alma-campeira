@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useMemo, useState } from "react";
 import { BadgeEstoque } from "@/components/ui/badge-estoque";
@@ -287,7 +287,8 @@ function MPTabela({
                   className="px-4 py-3 font-mono text-xs font-medium"
                   style={{ color: "var(--ac-muted)" }}
                 >
-                  {mp.codigo}
+                  <div>{mp.codigo}</div>
+                  <div>SKU: {mp.sku}</div>
                 </td>
                 <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
                   {mp.nome}
@@ -463,6 +464,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
       (mp) =>
         mp.nome.toLowerCase().includes(q) ||
         mp.codigo.toLowerCase().includes(q) ||
+        mp.sku.toLowerCase().includes(q) ||
         mp.categoria.toLowerCase().includes(q) ||
         mp.fornecedor?.nome?.toLowerCase().includes(q),
     );
@@ -620,7 +622,7 @@ export function MPClient({ materiasPrimas: initialMP, perm }: Props) {
               type="text"
               placeholder={
                 buscaHabilitada
-                  ? "Buscar por nome, código, categoria ou fornecedor..."
+                  ? "Buscar por nome, código, SKU, categoria ou fornecedor..."
                   : "Selecione uma categoria ou use Todos para buscar..."
               }
               value={busca}

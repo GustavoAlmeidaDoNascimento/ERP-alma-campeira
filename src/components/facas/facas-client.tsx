@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
@@ -106,7 +106,8 @@ export function FacasClient({
       const matchBusca =
         !busca.trim() ||
         f.nome.toLowerCase().includes(busca.toLowerCase()) ||
-        f.codigo.toLowerCase().includes(busca.toLowerCase());
+        f.codigo.toLowerCase().includes(busca.toLowerCase()) ||
+        f.sku.toLowerCase().includes(busca.toLowerCase());
       const matchCategoria = !filtroCategoria || f.categoria === filtroCategoria;
       return matchBusca && matchCategoria;
     });
@@ -281,7 +282,7 @@ export function FacasClient({
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome ou código..."
+            placeholder="Buscar por nome, código ou SKU..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -593,7 +594,8 @@ export function FacasClient({
                       className="px-4 py-3 font-mono text-xs font-medium"
                       style={{ color: "var(--ac-muted)" }}
                     >
-                      {faca.codigo}
+                      <div>{faca.codigo}</div>
+                      <div>SKU: {faca.sku}</div>
                     </td>
                     <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
                       {faca.nome}

@@ -22,6 +22,7 @@ type Props = {
 };
 
 type Form = {
+  sku: string;
   nome: string;
   categoria: string;
   fornecedor_id: string;
@@ -34,6 +35,7 @@ type BulkMode = "single" | "bulk";
 
 type BulkRow = {
   id: string;
+  sku: string;
   nome: string;
   categoria: string;
   fornecedor: string;
@@ -45,6 +47,7 @@ type BulkRow = {
 type BulkField = Exclude<keyof BulkRow, "id">;
 
 const BULK_COLUMNS: BulkField[] = [
+  "sku",
   "nome",
   "categoria",
   "fornecedor",
@@ -56,6 +59,7 @@ const BULK_COLUMNS: BulkField[] = [
 const BULK_ROWS_STEP = 5;
 
 const formVazio: Form = {
+  sku: "",
   nome: "",
   categoria: "",
   fornecedor_id: "",
@@ -70,6 +74,7 @@ function getInitialForm(
 ): Form {
   if (editando) {
     return {
+      sku: editando.sku,
       nome: editando.nome,
       categoria: editando.categoria,
       fornecedor_id: editando.fornecedor_id ?? "",
@@ -88,6 +93,7 @@ function getInitialForm(
 function createBulkRow(): BulkRow {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    sku: "",
     nome: "",
     categoria: "",
     fornecedor: "",
@@ -118,6 +124,7 @@ function isBulkRowEmpty(row: BulkRow): boolean {
     row.preco_custo,
     row.estoque_atual,
     row.estoque_minimo,
+    row.sku,
   ].every((value) => !value.trim());
 }
 
@@ -235,6 +242,7 @@ export function MPModal({
       if (isBulkRowEmpty(row)) return [];
 
       const linha = index + 1;
+      const sku = row.sku.trim();
       const nome = row.nome.trim();
       const categoria = row.categoria.trim();
       const fornecedor = row.fornecedor.trim();
@@ -243,6 +251,7 @@ export function MPModal({
       const estoqueMinimoText = row.estoque_minimo.trim();
 
       const missing: string[] = [];
+      if (!sku) missing.push("sku");
       if (!nome) missing.push("nome");
       if (!categoria) missing.push("categoria");
       if (!precoText) missing.push("preço de custo");
@@ -286,6 +295,7 @@ export function MPModal({
       return [
         {
           nome,
+          sku,
           categoria,
           fornecedor_id: fornecedorId,
           preco_custo: preco,
@@ -314,6 +324,10 @@ export function MPModal({
         setErro("Nome é obrigatório.");
         return;
       }
+      if (!form.sku.trim()) {
+        setErro("SKU é obrigatório.");
+        return;
+      }
       if (!categoriaSelecionada) {
         setErro("Categoria é obrigatória.");
         return;
@@ -327,6 +341,7 @@ export function MPModal({
       try {
         const fd = new FormData();
         if (editando?.id) fd.append("id", editando.id);
+        fd.append("sku", form.sku);
         fd.append("nome", form.nome);
         fd.append("categoria", categoriaSelecionada);
         fd.append("fornecedor_id", form.fornecedor_id);
@@ -431,6 +446,14 @@ export function MPModal({
 
         {(editando || modo === "single") && (
           <>
+            <Input
+              id="sku"
+              label="SKU *"
+              disabled={loadingReferencias}
+              placeholder="Ex: MP-0001"
+              value={form.sku}
+              onChange={(e) => set("sku", e.target.value)}
+            />
             <Input
               id="nome"
               label="Nome *"
@@ -727,13 +750,13 @@ export function MPModal({
               }}
             >
               Preencha ou cole várias linhas no formato planilha. Linhas totalmente vazias serão
-              ignoradas. Linhas incompletas ou com fornecedor/categoria inválidos serão bloqueadas
-              antes de criar.
+              ignoradas. Linhas incompletas, com SKU duplicado ou com fornecedor/categoria inválidos
+              serão bloqueadas antes de criar.
             </div>
 
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs" style={{ color: "var(--ac-muted)" }}>
-                Use o nome da categoria e, no fornecedor, o nome já cadastrado.
+                Use o SKU desejado, o nome da categoria e, no fornecedor, o nome já cadastrado.
               </div>
               <Button type="button" variant="secondary" onClick={() => addBulkRows()}>
                 Adicionar mais {BULK_ROWS_STEP} linhas
@@ -757,6 +780,12 @@ export function MPModal({
                       style={{ color: "var(--ac-muted)", width: 60 }}
                     >
                       #
+                    </th>
+                    <th
+                      className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--ac-muted)" }}
+                    >
+                      SKU *
                     </th>
                     <th
                       className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide"
@@ -823,13 +852,15 @@ export function MPModal({
                                   : undefined
                             }
                             placeholder={
-                              field === "nome"
-                                ? "Nome da matéria-prima"
-                                : field === "categoria"
-                                  ? "Categoria"
-                                  : field === "fornecedor"
-                                    ? "Fornecedor"
-                                    : "0"
+                              field === "sku"
+                                ? "SKU"
+                                : field === "nome"
+                                  ? "Nome da matéria-prima"
+                                  : field === "categoria"
+                                    ? "Categoria"
+                                    : field === "fornecedor"
+                                      ? "Fornecedor"
+                                      : "0"
                             }
                             inputMode={
                               field === "preco_custo" ||

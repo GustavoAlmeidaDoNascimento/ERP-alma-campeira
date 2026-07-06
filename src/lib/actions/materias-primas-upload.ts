@@ -48,8 +48,22 @@ function isFileLike(v: unknown): v is Blob & { type?: string; name?: string } {
   return typeof v === 'object' && v !== null && typeof (v as Blob).arrayBuffer === 'function'
 }
 
+function throwFriendlyUniqueError(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : []
+    if (targets.includes('sku')) {
+      throw new Error('Já existe uma matéria-prima com este SKU.')
+    }
+    if (targets.includes('codigo')) {
+      throw new Error('Já existe uma matéria-prima com este código.')
+    }
+  }
+  throw error
+}
+
 export async function salvarMPComFoto(formData: FormData) {
   const id = formData.get('id')
+  const sku = String(formData.get('sku') ?? '').trim()
   const nome = String(formData.get('nome') ?? '').trim()
   const categoria = String(formData.get('categoria') ?? '').trim()
   const fornecedor_id = formData.get('fornecedor_id')
@@ -58,6 +72,7 @@ export async function salvarMPComFoto(formData: FormData) {
   const estoque_minimo = Number(formData.get('estoque_minimo'))
   const foto = formData.get('foto')
 
+  if (!sku) throw new Error('SKU é obrigatório.')
   if (!nome) throw new Error('Nome é obrigatório.')
   if (!categoria) throw new Error('Categoria é obrigatória.')
   if (!Number.isFinite(preco_custo)) throw new Error('Preço de custo inválido.')
@@ -70,31 +85,42 @@ export async function salvarMPComFoto(formData: FormData) {
 
   if (isEdit) {
     mpId = id as string
-    await prisma.materiaPrima.update({
-      where: { id: mpId },
-      data: {
-        nome,
-        categoria,
-        fornecedorId: fornecedor_id ? String(fornecedor_id) : null,
-        precoCusto: decimal(preco_custo),
-        estoqueAtual: decimal(estoque_atual || 0),
-        estoqueMinimo: decimal(estoque_minimo || 0),
-      },
-    })
+    try {
+      await prisma.materiaPrima.update({
+        where: { id: mpId },
+        data: {
+          sku,
+          nome,
+          categoria,
+          fornecedorId: fornecedor_id ? String(fornecedor_id) : null,
+          precoCusto: decimal(preco_custo),
+          estoqueAtual: decimal(estoque_atual || 0),
+          estoqueMinimo: decimal(estoque_minimo || 0),
+        },
+      })
+    } catch (error) {
+      throwFriendlyUniqueError(error)
+    }
   } else {
     const codigo = await gerarCodigoMP()
-    const data = await prisma.materiaPrima.create({
-      data: {
-        codigo,
-        nome,
-        categoria,
-        fornecedorId: fornecedor_id ? String(fornecedor_id) : null,
-        precoCusto: decimal(preco_custo),
-        estoqueAtual: decimal(estoque_atual || 0),
-        estoqueMinimo: decimal(estoque_minimo || 0),
-      },
-      select: { id: true },
-    })
+    let data: { id: string }
+    try {
+      data = await prisma.materiaPrima.create({
+        data: {
+          codigo,
+          sku,
+          nome,
+          categoria,
+          fornecedorId: fornecedor_id ? String(fornecedor_id) : null,
+          precoCusto: decimal(preco_custo),
+          estoqueAtual: decimal(estoque_atual || 0),
+          estoqueMinimo: decimal(estoque_minimo || 0),
+        },
+        select: { id: true },
+      })
+    } catch (error) {
+      throwFriendlyUniqueError(error)
+    }
     if (!data?.id) throw new Error('Falha ao criar matéria-prima.')
     mpId = data.id
   }

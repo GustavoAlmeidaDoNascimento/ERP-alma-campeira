@@ -28,6 +28,7 @@ async function revalidateFacasLists() {
 type FacaRow = {
   id: string;
   codigo: string;
+  sku: string;
   nome: string;
   categoria: string;
   fotoUrl: string | null;
@@ -84,6 +85,7 @@ function mapFacaRow(row: FacaRow, extra?: Partial<Faca>): Faca {
   return {
     id: row.id,
     codigo: row.codigo,
+    sku: row.sku,
     nome: row.nome,
     categoria: row.categoria,
     foto_url: row.fotoUrl,
@@ -108,6 +110,7 @@ function mapFacaRow(row: FacaRow, extra?: Partial<Faca>): Faca {
 function mapMateriaPrimaRow(row: {
   id: string;
   codigo: string;
+  sku: string;
   nome: string;
   precoCusto: Prisma.Decimal;
   estoqueAtual: Prisma.Decimal;
@@ -119,6 +122,7 @@ function mapMateriaPrimaRow(row: {
   return {
     id: row.id,
     codigo: row.codigo,
+    sku: row.sku,
     nome: row.nome,
     categoria: "",
     fornecedor_id: row.fornecedorId,
@@ -162,6 +166,7 @@ async function getFacaRows(limit: number): Promise<FacaRow[]> {
     select: {
       id: true,
       codigo: true,
+      sku: true,
       nome: true,
       categoria: true,
       fotoUrl: true,
@@ -189,6 +194,7 @@ async function getFacaRowById(facaId: string): Promise<FacaRow | null> {
     select: {
       id: true,
       codigo: true,
+      sku: true,
       nome: true,
       categoria: true,
       fotoUrl: true,
@@ -219,6 +225,7 @@ async function loadFacaBOM(facaId: string): Promise<FacaMateriaPrima[]> {
         select: {
           id: true,
           codigo: true,
+          sku: true,
           nome: true,
           precoCusto: true,
           estoqueAtual: true,
@@ -265,6 +272,7 @@ export async function gerarCodigoFaca(): Promise<string> {
 }
 
 type FacaInput = {
+  sku: string;
   nome: string;
   categoria: string;
   preco_venda: number;
@@ -279,6 +287,7 @@ export async function criarFaca(input: FacaInput) {
   await prisma.faca.create({
     data: {
       codigo,
+      sku: input.sku.trim(),
       nome: input.nome.trim(),
       categoria: input.categoria,
       taxaProducao: 0,
@@ -298,6 +307,7 @@ export async function atualizarFaca(id: string, input: FacaInput) {
   await prisma.faca.updateMany({
     where: { id },
     data: {
+      sku: input.sku.trim(),
       nome: input.nome.trim(),
       categoria: input.categoria,
       taxaProducao: 0,

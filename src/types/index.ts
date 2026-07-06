@@ -25,6 +25,7 @@ export type Fornecedor = {
 export type MateriaPrima = {
   id: string
   codigo: string
+  sku: string
   nome: string
   categoria: string
   fornecedor_id: string | null
@@ -48,6 +49,7 @@ export function statusEstoque(mp: MateriaPrima): StatusEstoque {
 export type Faca = {
   id: string
   codigo: string
+  sku: string
   nome: string
   categoria: string
   foto_url: string | null
@@ -553,6 +555,7 @@ export type CategoriaMateriaPrimaDB = {
 export type Consumivel = {
   id: string
   codigo: string
+  sku: string
   nome: string
   categoria: string
   fornecedor_id: string | null

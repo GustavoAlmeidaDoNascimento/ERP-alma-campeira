@@ -9,6 +9,7 @@ import { gerarCodigoForte } from '@/lib/utils/codigo'
 type ConsumivelRow = {
   id: string
   codigo: string
+  sku: string
   nome: string
   categoria: string
   fornecedorId: string | null
@@ -86,6 +87,7 @@ function mapConsumivelRow(row: ConsumivelRow): Consumivel {
   return {
     id: row.id,
     codigo: row.codigo,
+    sku: row.sku,
     nome: row.nome,
     categoria: row.categoria,
     fornecedor_id: row.fornecedorId,

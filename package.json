@@ -5,7 +5,6 @@
     "dev": "next dev",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "db:pull": "powershell -ExecutionPolicy Bypass -File scripts/db-pull.ps1",
     "prisma:generate": "node scripts/prisma-cli.mjs generate",
     "prisma:db:pull": "node scripts/prisma-cli.mjs db pull",
     "prisma:migrate:dev": "node scripts/prisma-cli.mjs migrate dev",

@@ -89,6 +89,7 @@ function mapFornecedor(row: {
 function mapMateriaPrima(row: {
   id: string;
   codigo: string;
+  sku: string;
   nome: string;
   categoria: string;
   fornecedorId: string | null;
@@ -102,6 +103,7 @@ function mapMateriaPrima(row: {
   return {
     id: row.id,
     codigo: row.codigo,
+    sku: row.sku,
     nome: row.nome,
     categoria: row.categoria,
     fornecedor_id: row.fornecedorId,
@@ -256,6 +258,7 @@ function facasComCustoCache(userId: string) {
         select: {
           id: true,
           codigo: true,
+          sku: true,
           nome: true,
           categoria: true,
           fotoUrl: true,
@@ -272,6 +275,7 @@ function facasComCustoCache(userId: string) {
       const facas: Faca[] = rows.map((row) => ({
         id: row.id,
         codigo: row.codigo,
+        sku: row.sku,
         nome: row.nome,
         categoria: row.categoria,
         foto_url: row.fotoUrl,
