@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button } from '@/components/ui/button'
-import { Modal } from '@/components/ui/modal'
-import { Select } from '@/components/ui/select'
-import { SearchableSelect } from '@/components/ui/searchable-select'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   getFilaReposicaoList,
   getFilaReposicaoDetalhe,
@@ -14,78 +14,87 @@ import {
   criarItemOrdemCompra,
   salvarAlteracoesOC,
   deletarOC,
-} from '@/lib/actions/ordens-compra'
-import { getFornecedoresSemCache } from '@/lib/actions/fornecedores'
-import { STATUS_OC, FORMAS_PAGAMENTO_OC } from '@/types'
-import type { FilaReposicao, FilaReposicaoDetalhe, Fornecedor, MateriaPrima, OrdemCompra, OrdemCompraItem, StatusOC, FormaPagamentoOC } from '@/types'
-import { criarBoleto, type ParcelaInput } from '@/lib/actions/boletos'
-import { DateInputBR } from '@/components/ui/date-input-br'
-import { useErpTabs } from '@/components/layout/erp-tabs'
-import { useOrdensCompra, useFilaReposicao, useUsuariosParaRegistroOC } from '@/lib/query/hooks'
-import { qk } from '@/lib/query/keys'
-import { getMatériasPrimas as getMateriasPrimas } from '@/lib/actions/materias-primas'
-import { getOptimizedImageUrl } from '@/lib/images'
-import { FilaReposicaoDetalheModal } from '@/components/ordens-compra/fila-reposicao-detalhe'
+} from "@/lib/actions/ordens-compra";
+import { getFornecedoresSemCache } from "@/lib/actions/fornecedores";
+import { STATUS_OC, FORMAS_PAGAMENTO_OC } from "@/types";
+import type {
+  FilaReposicao,
+  FilaReposicaoDetalhe,
+  Fornecedor,
+  MateriaPrima,
+  OrdemCompra,
+  OrdemCompraItem,
+  StatusOC,
+  FormaPagamentoOC,
+} from "@/types";
+import { criarBoleto, type ParcelaInput } from "@/lib/actions/boletos";
+import { DateInputBR } from "@/components/ui/date-input-br";
+import { useErpTabs } from "@/components/layout/erp-tabs";
+import { useOrdensCompra, useFilaReposicao, useUsuariosParaRegistroOC } from "@/lib/query/hooks";
+import { qk } from "@/lib/query/keys";
+import { getMatériasPrimas as getMateriasPrimas } from "@/lib/actions/materias-primas";
+import { getOptimizedImageUrl } from "@/lib/images";
+import { FilaReposicaoDetalheModal } from "@/components/ordens-compra/fila-reposicao-detalhe";
 
-type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
+type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean };
 
-type FiltroListaOC = 'todas' | StatusOC | 'pagas'
+type FiltroListaOC = "todas" | StatusOC | "pagas";
 
 type Props = {
-  fila: FilaReposicao[]
-  ordens: OrdemCompra[]
-  perm: Perm
-  /** perfil usuarios_perfis.id do login â€” prÃ©-selecionado no registro de alteraÃ§Ãµes */
-  usuarioLogadoId: string | null
-  /** usuÃ¡rios ativos para o select "Quem registra a alteraÃ§Ã£o" â€” prÃ©-buscado no server */
-  usuariosRegistroInicial?: { id: string; nome: string }[]
-}
+  fila: FilaReposicao[];
+  ordens: OrdemCompra[];
+  perm: Perm;
+  /** perfil usuarios_perfis.id do login — pré-selecionado no registro de alterações */
+  usuarioLogadoId: string | null;
+  /** usuários ativos para o select "Quem registra a alteração" — pré-buscado no server */
+  usuariosRegistroInicial?: { id: string; nome: string }[];
+};
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function fmtData(s: string) {
-  if (!s) return ''
-  const [y, m, d] = s.split('T')[0].split('-')
-  return `${d}/${m}/${y}`
+  if (!s) return "";
+  const [y, m, d] = s.split("T")[0].split("-");
+  return `${d}/${m}/${y}`;
 }
 
 function fmtDataHora(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 function fmtQtd(n: number) {
-  return Number.isInteger(n) ? String(n) : n.toLocaleString('pt-BR', { maximumFractionDigits: 3 })
+  return Number.isInteger(n) ? String(n) : n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 }
 
 function totalOC(itens: OrdemCompraItem[]) {
-  return itens.reduce((s, i) => s + (i.preco_unitario ?? 0) * i.quantidade, 0)
+  return itens.reduce((s, i) => s + (i.preco_unitario ?? 0) * i.quantidade, 0);
 }
 
-// â”€â”€â”€ PDF Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PDF Export ───────────────────────────────────────────────────────────────
 
 function exportarPDF(oc: OrdemCompra) {
-  const itens = oc.itens ?? []
-  const total = totalOC(itens)
+  const itens = oc.itens ?? [];
+  const total = totalOC(itens);
   const linhasItens = itens
     .map((item) => {
-      const sub = (item.preco_unitario ?? 0) * item.quantidade
+      const sub = (item.preco_unitario ?? 0) * item.quantidade;
       return `
         <tr>
-          <td>${item.materia_prima?.codigo ?? 'â€”'}</td>
-          <td>${item.materia_prima?.nome ?? 'â€”'}</td>
+          <td>${item.materia_prima?.codigo ?? "—"}</td>
+          <td>${item.materia_prima?.nome ?? "—"}</td>
           <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : 'â€”'}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : 'â€”'}</td>
-        </tr>`
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : "—"}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : "—"}</td>
+        </tr>`;
     })
-    .join('')
+    .join("");
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -122,40 +131,44 @@ function exportarPDF(oc: OrdemCompra) {
   </style>
 </head>
 <body>
-  <h1>ORDEM DE COMPRA â€” ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} Â· ` : ''}${oc.codigo}</h1>
-  <p class="subtitle">Alma Campeira â€” Cutelaria Artesanal</p>
+  <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
+  <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
 
   <div class="meta">
     <div>
       <strong>Fornecedor</strong>
-      <span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span>
+      <span>${oc.fornecedor?.nome ?? "Sem fornecedor"}</span>
     </div>
     <div>
-      <strong>Data de GeraÃ§Ã£o</strong>
+      <strong>Data de Geração</strong>
       <span>${fmtData(oc.data_geracao)}</span>
     </div>
     <div>
       <strong>Status</strong>
-      <span>${STATUS_OC[oc.status].label}${oc.pago ? ' Â· Pago' : ''}</span>
+      <span>${STATUS_OC[oc.status].label}${oc.pago ? " · Pago" : ""}</span>
     </div>
-    ${oc.pedido_codigo ? `
+    ${
+      oc.pedido_codigo
+        ? `
     <div>
       <strong>Pedido de Origem</strong>
       <span>${oc.pedido_codigo}</span>
     </div>
     <div>
       <strong>Cliente</strong>
-      <span>${oc.cliente_nome ?? 'â€”'}</span>
-    </div>` : ''}
+      <span>${oc.cliente_nome ?? "—"}</span>
+    </div>`
+        : ""
+    }
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>CÃ³digo</th>
+        <th>Código</th>
         <th>Item</th>
         <th>Qtd</th>
-        <th>PreÃ§o Unit.</th>
+        <th>Preço Unit.</th>
         <th>Subtotal</th>
       </tr>
     </thead>
@@ -168,53 +181,57 @@ function exportarPDF(oc: OrdemCompra) {
     </tbody>
   </table>
 
-  ${oc.observacao ? `<div class="obs"><strong>ObservaÃ§Ãµes</strong>${oc.observacao}</div>` : ''}
+  ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ""}
 
   <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
 
   <script>window.onload = () => { window.print() }</script>
 </body>
-</html>`
+</html>`;
 
-  const win = window.open('', '_blank')
-  if (!win) return
-  win.document.write(html)
-  win.document.close()
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
 }
 
-/** HTML de uma OC sem <head>/<style> â€” para concatenar vÃ¡rias num Ãºnico PDF. */
+/** HTML de uma OC sem <head>/<style> — para concatenar várias num único PDF. */
 function ocBodyHtml(oc: OrdemCompra) {
-  const itens = oc.itens ?? []
-  const total = totalOC(itens)
+  const itens = oc.itens ?? [];
+  const total = totalOC(itens);
   const linhasItens = itens
     .map((item) => {
-      const sub = (item.preco_unitario ?? 0) * item.quantidade
+      const sub = (item.preco_unitario ?? 0) * item.quantidade;
       return `
         <tr>
-          <td>${item.materia_prima?.codigo ?? 'â€”'}</td>
-          <td>${item.materia_prima?.nome ?? 'â€”'}</td>
+          <td>${item.materia_prima?.codigo ?? "—"}</td>
+          <td>${item.materia_prima?.nome ?? "—"}</td>
           <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : 'â€”'}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : 'â€”'}</td>
-        </tr>`
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : "—"}</td>
+          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : "—"}</td>
+        </tr>`;
     })
-    .join('')
+    .join("");
 
   return `
   <section class="oc-page">
-    <h1>ORDEM DE COMPRA â€” ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} Â· ` : ''}${oc.codigo}</h1>
-    <p class="subtitle">Alma Campeira â€” Cutelaria Artesanal</p>
+    <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
+    <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
     <div class="meta">
-      <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? 'Sem fornecedor'}</span></div>
-      <div><strong>Data de GeraÃ§Ã£o</strong><span>${fmtData(oc.data_geracao)}</span></div>
-      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}${oc.pago ? ' Â· Pago' : ''}</span></div>
-      ${oc.pedido_codigo ? `
+      <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? "Sem fornecedor"}</span></div>
+      <div><strong>Data de Geração</strong><span>${fmtData(oc.data_geracao)}</span></div>
+      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}${oc.pago ? " · Pago" : ""}</span></div>
+      ${
+        oc.pedido_codigo
+          ? `
       <div><strong>Pedido de Origem</strong><span>${oc.pedido_codigo}</span></div>
-      <div><strong>Cliente</strong><span>${oc.cliente_nome ?? 'â€”'}</span></div>` : ''}
+      <div><strong>Cliente</strong><span>${oc.cliente_nome ?? "—"}</span></div>`
+          : ""
+      }
     </div>
     <table>
       <thead>
-        <tr><th>CÃ³digo</th><th>Item</th><th>Qtd</th><th>PreÃ§o Unit.</th><th>Subtotal</th></tr>
+        <tr><th>Código</th><th>Item</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr>
       </thead>
       <tbody>
         ${linhasItens}
@@ -224,14 +241,14 @@ function ocBodyHtml(oc: OrdemCompra) {
         </tr>
       </tbody>
     </table>
-    ${oc.observacao ? `<div class="obs"><strong>ObservaÃ§Ãµes</strong>${oc.observacao}</div>` : ''}
+    ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ""}
     <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
-  </section>`
+  </section>`;
 }
 
 function exportarPDFMultiplas(ocs: OrdemCompra[]) {
-  if (ocs.length === 0) return
-  const paginas = ocs.map(ocBodyHtml).join('')
+  if (ocs.length === 0) return;
+  const paginas = ocs.map(ocBodyHtml).join("");
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -272,20 +289,20 @@ function exportarPDFMultiplas(ocs: OrdemCompra[]) {
   ${paginas}
   <script>window.onload = () => { window.print() }</script>
 </body>
-</html>`
+</html>`;
 
-  const win = window.open('', '_blank')
-  if (!win) return
-  win.document.write(html)
-  win.document.close()
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
 }
 
-// â”€â”€â”€ Badge de Status OC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Badge de Status OC ──────────────────────────────────────────────────────
 
-const PAGO_BADGE = { label: 'Pago', color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe' } as const
+const PAGO_BADGE = { label: "Pago", color: "#6d28d9", bg: "#ede9fe", border: "#ddd6fe" } as const;
 
 function BadgeStatus({ status, pago }: { status: StatusOC; pago?: boolean }) {
-  const cfg = STATUS_OC[status]
+  const cfg = STATUS_OC[status];
   return (
     <span className="inline-flex items-center gap-1.5 flex-wrap">
       <span
@@ -307,17 +324,17 @@ function BadgeStatus({ status, pago }: { status: StatusOC; pago?: boolean }) {
         </span>
       ) : null}
     </span>
-  )
+  );
 }
 
-// â”€â”€â”€ Badge Status Fila â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Badge Status Fila ────────────────────────────────────────────────────────
 
-function BadgeStatusFila({ status }: { status: FilaReposicao['status'] }) {
+function BadgeStatusFila({ status }: { status: FilaReposicao["status"] }) {
   const cfg = {
-    pendente: { label: 'Pendente', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
-    convertida: { label: 'Convertida', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
-    dispensada: { label: 'Dispensada', color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db' },
-  }[status]
+    pendente: { label: "Pendente", color: "#b45309", bg: "#fef3c7", border: "#fde68a" },
+    convertida: { label: "Convertida", color: "#15803d", bg: "#dcfce7", border: "#bbf7d0" },
+    dispensada: { label: "Dispensada", color: "#6b7280", bg: "#f3f4f6", border: "#d1d5db" },
+  }[status];
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
@@ -325,10 +342,10 @@ function BadgeStatusFila({ status }: { status: FilaReposicao['status'] }) {
     >
       {cfg.label}
     </span>
-  )
+  );
 }
 
-// â”€â”€â”€ Modal de Detalhes da OC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Modal de Detalhes da OC ─────────────────────────────────────────────────
 
 function OcDetalheModal({
   oc,
@@ -339,71 +356,77 @@ function OcDetalheModal({
   onRefresh,
   onRequestExcluir,
 }: {
-  oc: OrdemCompra
-  perm: Perm
-  usuarioLogadoId: string | null
-  usuariosRegistroInicial?: { id: string; nome: string }[]
-  onClose: () => void
-  onRefresh: () => void | Promise<void>
-  onRequestExcluir?: () => void
+  oc: OrdemCompra;
+  perm: Perm;
+  usuarioLogadoId: string | null;
+  usuariosRegistroInicial?: { id: string; nome: string }[];
+  onClose: () => void;
+  onRefresh: () => void | Promise<void>;
+  onRequestExcluir?: () => void;
 }) {
-  /** Drafts editÃ¡veis â€” sÃ³ sÃ£o persistidos no Salvar. */
-  const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({})
-  const [obs, setObs] = useState(oc.observacao ?? '')
-  const [pagoDraft, setPagoDraft] = useState(oc.pago)
-  const [formaPagamentoDraft, setFormaPagamentoDraft] = useState<FormaPagamentoOC | ''>(oc.forma_pagamento ?? '')
-  const [statusDraft, setStatusDraft] = useState<StatusOC>(oc.status)
-  const [qtdParcelas, setQtdParcelas] = useState(1)
-  const [boletoParcelas, setBoletoParcelas] = useState<{ numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]>(() => [
-    { numero: 1, vencimento: '', valor: '', pago: false, pago_em: '' },
-  ])
-  const [salvandoTudo, setSalvandoTudo] = useState(false)
-  const [erro, setErro] = useState('')
-  const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState('')
-  const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState('')
-  const [adicionandoItem, setAdicionandoItem] = useState(false)
-  const [usuarioRegistroId, setUsuarioRegistroId] = useState(() => usuarioLogadoId ?? '')
+  /** Drafts editáveis — só são persistidos no Salvar. */
+  const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({});
+  const [obs, setObs] = useState(oc.observacao ?? "");
+  const [pagoDraft, setPagoDraft] = useState(oc.pago);
+  const [formaPagamentoDraft, setFormaPagamentoDraft] = useState<FormaPagamentoOC | "">(
+    oc.forma_pagamento ?? "",
+  );
+  const [statusDraft, setStatusDraft] = useState<StatusOC>(oc.status);
+  const [qtdParcelas, setQtdParcelas] = useState(1);
+  const [boletoParcelas, setBoletoParcelas] = useState<
+    { numero: number; vencimento: string; valor: string; pago: boolean; pago_em: string }[]
+  >(() => [{ numero: 1, vencimento: "", valor: "", pago: false, pago_em: "" }]);
+  const [salvandoTudo, setSalvandoTudo] = useState(false);
+  const [erro, setErro] = useState("");
+  const [materiaPrimaParaAdicionar, setMateriaPrimaParaAdicionar] = useState("");
+  const [adicionalParaAdicionar, setAdicionalParaAdicionar] = useState("");
+  const [adicionandoItem, setAdicionandoItem] = useState(false);
+  const [usuarioRegistroId, setUsuarioRegistroId] = useState(() => usuarioLogadoId ?? "");
 
-  const { data: usuariosRegistro = [], isPending: carregandoUsuariosRegistro } = useUsuariosParaRegistroOC({
-    enabled: perm.editar,
-    initialData: usuariosRegistroInicial,
-  })
+  const { data: usuariosRegistro = [], isPending: carregandoUsuariosRegistro } =
+    useUsuariosParaRegistroOC({
+      enabled: perm.editar,
+      initialData: usuariosRegistroInicial,
+    });
 
-  const mpSectionRef = useRef<HTMLDivElement>(null)
-  const [mpSectionVisible, setMpSectionVisible] = useState(false)
+  const mpSectionRef = useRef<HTMLDivElement>(null);
+  const [mpSectionVisible, setMpSectionVisible] = useState(false);
 
   useLayoutEffect(() => {
-    if (!perm.editar || oc.status !== 'pendente') {
-      setMpSectionVisible(false)
-      return
+    if (!perm.editar || oc.status !== "pendente") {
+      setMpSectionVisible(false);
+      return;
     }
-    const el = mpSectionRef.current
-    if (!el) return
+    const el = mpSectionRef.current;
+    if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) setMpSectionVisible(true)
+        if (entry.isIntersecting) setMpSectionVisible(true);
       },
-      { rootMargin: '120px', threshold: 0.01 },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [perm.editar, oc.status, oc.id])
+      { rootMargin: "120px", threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [perm.editar, oc.status, oc.id]);
 
   const { data: materiasPrimas = [], isPending: carregandoMateriasPrimas } = useQuery({
     queryKey: qk.materiasPrimas.listLimit(200),
     queryFn: () => getMateriasPrimas(200),
-    enabled: perm.editar && oc.status === 'pendente' && mpSectionVisible,
+    enabled: perm.editar && oc.status === "pendente" && mpSectionVisible,
     staleTime: 120_000,
-  })
+  });
 
   function parseNumero(raw: string): number {
-    const v = raw.trim().replace(',', '.')
-    const n = Number(v)
-    return Number.isFinite(n) ? n : NaN
+    const v = raw.trim().replace(",", ".");
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
   }
 
-  const itens = useMemo(() => oc.itens ?? [], [oc.itens])
-  const idsMateriaJaNoPedido = useMemo(() => new Set(itens.map((i) => i.materia_prima_id)), [itens])
+  const itens = useMemo(() => oc.itens ?? [], [oc.itens]);
+  const idsMateriaJaNoPedido = useMemo(
+    () => new Set(itens.map((i) => i.materia_prima_id)),
+    [itens],
+  );
 
   const opcoesMateriaPrima = useMemo(
     () =>
@@ -415,114 +438,127 @@ function OcDetalheModal({
               width: 80,
               height: 80,
               quality: 72,
-              resize: 'cover',
-              fallbackUrl: '',
-            }) || null
+              resize: "cover",
+              fallbackUrl: "",
+            }) || null;
           return {
             value: mp.id,
-            label: `${mp.codigo} â€” ${mp.nome}`,
+            label: `${mp.codigo} — ${mp.nome}`,
             imageUrl,
-          }
+          };
         }),
-    [materiasPrimas, idsMateriaJaNoPedido]
-  )
+    [materiasPrimas, idsMateriaJaNoPedido],
+  );
 
   const opcoesUsuarioRegistro = useMemo(
     () => usuariosRegistro.map((u) => ({ value: u.id, label: u.nome })),
     [usuariosRegistro],
-  )
+  );
 
   useEffect(() => {
-    setObs(oc.observacao ?? '')
-    setPagoDraft(oc.pago)
-    setFormaPagamentoDraft(oc.forma_pagamento ?? '')
-    setStatusDraft(oc.status)
-    setEditandoQtdTotal({})
-  }, [oc.id, oc.observacao, oc.pago, oc.forma_pagamento, oc.status])
+    setObs(oc.observacao ?? "");
+    setPagoDraft(oc.pago);
+    setFormaPagamentoDraft(oc.forma_pagamento ?? "");
+    setStatusDraft(oc.status);
+    setEditandoQtdTotal({});
+  }, [oc.id, oc.observacao, oc.pago, oc.forma_pagamento, oc.status]);
 
   useEffect(() => {
-    setUsuarioRegistroId(usuarioLogadoId ?? '')
-  }, [oc.id, usuarioLogadoId])
+    setUsuarioRegistroId(usuarioLogadoId ?? "");
+  }, [oc.id, usuarioLogadoId]);
 
   const total = totalOC(
     itens.map((i) => {
-      const vendido = Number(i.quantidade_vendida ?? i.quantidade)
-      const adicionalBase = Number(i.quantidade_adicional ?? 0)
-      const salvoTotal = vendido + adicionalBase
-      const rawTotal = editandoQtdTotal[i.id]
-      const parsedTotal = rawTotal !== undefined ? parseNumero(rawTotal) : NaN
-      const qtd =
-        rawTotal !== undefined && Number.isFinite(parsedTotal) ? parsedTotal : salvoTotal
-      return { ...i, quantidade: qtd }
-    })
-  )
+      const vendido = Number(i.quantidade_vendida ?? i.quantidade);
+      const adicionalBase = Number(i.quantidade_adicional ?? 0);
+      const salvoTotal = vendido + adicionalBase;
+      const rawTotal = editandoQtdTotal[i.id];
+      const parsedTotal = rawTotal !== undefined ? parseNumero(rawTotal) : NaN;
+      const qtd = rawTotal !== undefined && Number.isFinite(parsedTotal) ? parsedTotal : salvoTotal;
+      return { ...i, quantidade: qtd };
+    }),
+  );
 
-  /** Itens com qtd_total alterada (e validada) â€” usados para diff e save. */
+  /** Itens com qtd_total alterada (e validada) — usados para diff e save. */
   const itensQtdDiff = useMemo(() => {
-    const out: { item_id: string; quantidade_adicional: number }[] = []
+    const out: { item_id: string; quantidade_adicional: number }[] = [];
     for (const item of itens) {
-      const raw = editandoQtdTotal[item.id]
-      if (raw === undefined) continue
-      const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
-      const adicionalBase = Number(item.quantidade_adicional ?? 0)
-      const salvoTotal = vendido + adicionalBase
-      const totalQty = parseNumero(raw)
-      if (!Number.isFinite(totalQty)) continue
-      if (Math.abs(totalQty - salvoTotal) < 1e-9) continue
-      out.push({ item_id: item.id, quantidade_adicional: totalQty - vendido })
+      const raw = editandoQtdTotal[item.id];
+      if (raw === undefined) continue;
+      const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0);
+      const adicionalBase = Number(item.quantidade_adicional ?? 0);
+      const salvoTotal = vendido + adicionalBase;
+      const totalQty = parseNumero(raw);
+      if (!Number.isFinite(totalQty)) continue;
+      if (Math.abs(totalQty - salvoTotal) < 1e-9) continue;
+      out.push({ item_id: item.id, quantidade_adicional: totalQty - vendido });
     }
-    return out
-  }, [itens, editandoQtdTotal])
+    return out;
+  }, [itens, editandoQtdTotal]);
 
-  const obsAlterada = (obs ?? '') !== (oc.observacao ?? '')
-  const pagoAlterado = pagoDraft !== oc.pago
-  const formaAlterada = (formaPagamentoDraft || null) !== (oc.forma_pagamento ?? null)
-  const statusAlterado = statusDraft !== oc.status
+  const obsAlterada = (obs ?? "") !== (oc.observacao ?? "");
+  const pagoAlterado = pagoDraft !== oc.pago;
+  const formaAlterada = (formaPagamentoDraft || null) !== (oc.forma_pagamento ?? null);
+  const statusAlterado = statusDraft !== oc.status;
   const temAlteracoes =
-    obsAlterada || pagoAlterado || formaAlterada || statusAlterado || itensQtdDiff.length > 0
+    obsAlterada || pagoAlterado || formaAlterada || statusAlterado || itensQtdDiff.length > 0;
 
   async function salvarTudo() {
-    setErro('')
+    setErro("");
 
-    // ValidaÃ§Ã£o local dos drafts de qtd.
+    // Validação local dos drafts de qtd.
     for (const item of itens) {
-      const raw = editandoQtdTotal[item.id]
-      if (raw === undefined) continue
-      const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0)
-      const totalQty = parseNumero(raw)
+      const raw = editandoQtdTotal[item.id];
+      if (raw === undefined) continue;
+      const vendido = Number(item.quantidade_vendida ?? item.quantidade ?? 0);
+      const totalQty = parseNumero(raw);
       if (!Number.isFinite(totalQty)) {
-        setErro(`Quantidade total invÃ¡lida em ${item.materia_prima?.codigo ?? 'um item'}.`)
-        return
+        setErro(`Quantidade total inválida em ${item.materia_prima?.codigo ?? "um item"}.`);
+        return;
       }
-      const minTotal = vendido > 0 ? vendido : 1
+      const minTotal = vendido > 0 ? vendido : 1;
       if (totalQty < minTotal) {
-        setErro(`A quantidade total de ${item.materia_prima?.codigo ?? 'um item'} nÃ£o pode ser menor que ${fmtQtd(minTotal)}.`)
-        return
+        setErro(
+          `A quantidade total de ${item.materia_prima?.codigo ?? "um item"} não pode ser menor que ${fmtQtd(minTotal)}.`,
+        );
+        return;
       }
     }
 
     if (statusAlterado) {
-      if (statusDraft === 'recebida') {
-        if (!window.confirm('Confirmar recebimento darÃ¡ entrada no estoque das matÃ©rias-primas. Confirmar?')) return
-      } else if (oc.status === 'recebida') {
-        if (!window.confirm('Voltar de Recebida irÃ¡ estornar a entrada de estoque (criando movimentaÃ§Ãµes de ajuste). Confirmar?')) return
+      if (statusDraft === "recebida") {
+        if (
+          !window.confirm(
+            "Confirmar recebimento dará entrada no estoque das matérias-primas. Confirmar?",
+          )
+        )
+          return;
+      } else if (oc.status === "recebida") {
+        if (
+          !window.confirm(
+            "Voltar de Recebida irá estornar a entrada de estoque (criando movimentações de ajuste). Confirmar?",
+          )
+        )
+          return;
       }
     }
 
-    // Se a forma escolhida Ã© boleto e ainda nÃ£o havia boleto (forma mudou),
-    // exige ao menos uma parcela vÃ¡lida para gerar o boleto de saÃ­da.
-    const vaiCriarBoleto = formaPagamentoDraft === 'boleto' && formaAlterada
+    // Se a forma escolhida é boleto e ainda não havia boleto (forma mudou),
+    // exige ao menos uma parcela válida para gerar o boleto de saída.
+    const vaiCriarBoleto = formaPagamentoDraft === "boleto" && formaAlterada;
     if (vaiCriarBoleto) {
-      const temParcela = boletoParcelas.some((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
+      const temParcela = boletoParcelas.some(
+        (p) => p.vencimento && Number(p.valor.replace(",", ".")) > 0,
+      );
       if (!temParcela) {
-        setErro('Preencha ao menos uma parcela do boleto.')
-        return
+        setErro("Preencha ao menos uma parcela do boleto.");
+        return;
       }
     }
 
-    setSalvandoTudo(true)
+    setSalvandoTudo(true);
     try {
-      const formaParaSalvar = formaAlterada ? (formaPagamentoDraft || null) : undefined
+      const formaParaSalvar = formaAlterada ? formaPagamentoDraft || null : undefined;
       await salvarAlteracoesOC({
         id: oc.id,
         observacao: obsAlterada ? obs : undefined,
@@ -531,25 +567,26 @@ function OcDetalheModal({
         status: statusAlterado ? statusDraft : undefined,
         itensQtd: itensQtdDiff.length > 0 ? itensQtdDiff : undefined,
         usuarioRegistroId: usuarioRegistroId || null,
-      })
+      });
 
       if (vaiCriarBoleto) {
-        const fornecedorNome = oc.fornecedor?.nome ?? ''
-        const fornecedorId = oc.fornecedor_id ?? undefined
+        const fornecedorNome = oc.fornecedor?.nome ?? "";
+        const fornecedorId = oc.fornecedor_id ?? undefined;
         const valorBoleto = boletoParcelas.reduce(
-          (s, p) => s + (Number(p.valor.replace(',', '.')) || 0), 0,
-        )
+          (s, p) => s + (Number(p.valor.replace(",", ".")) || 0),
+          0,
+        );
         const parcelasInput: ParcelaInput[] = boletoParcelas
-          .filter((p) => p.vencimento && Number(p.valor.replace(',', '.')) > 0)
+          .filter((p) => p.vencimento && Number(p.valor.replace(",", ".")) > 0)
           .map((p) => ({
             numero: p.numero,
             vencimento: p.vencimento,
-            valor: Number(p.valor.replace(',', '.')) || 0,
+            valor: Number(p.valor.replace(",", ".")) || 0,
             pago_em: p.pago && p.pago_em ? p.pago_em : null,
-            valor_pago: p.pago ? Number(p.valor.replace(',', '.')) || 0 : null,
-          }))
+            valor_pago: p.pago ? Number(p.valor.replace(",", ".")) || 0 : null,
+          }));
         await criarBoleto({
-          tipo: 'saida',
+          tipo: "saida",
           contraparte_nome: fornecedorNome,
           fornecedor_id: fornecedorId ?? null,
           valor_total: valorBoleto,
@@ -557,143 +594,195 @@ function OcDetalheModal({
           observacao: `Boleto gerado da OC ${oc.codigo}`,
           ordem_compra_id: oc.id,
           parcelas: parcelasInput,
-        })
+        });
       }
 
-      setEditandoQtdTotal({})
-      await Promise.resolve(onRefresh())
+      setEditandoQtdTotal({});
+      await Promise.resolve(onRefresh());
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao salvar alteraÃ§Ãµes.')
+      setErro(e instanceof Error ? e.message : "Erro ao salvar alterações.");
     } finally {
-      setSalvandoTudo(false)
+      setSalvandoTudo(false);
     }
   }
 
   return (
-    <Modal open onClose={onClose} title={`${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} Â· ` : ''}${oc.codigo} â€” ${oc.fornecedor?.nome ?? 'Sem fornecedor'}`} width="760px">
+    <Modal
+      open
+      onClose={onClose}
+      title={`${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo} — ${oc.fornecedor?.nome ?? "Sem fornecedor"}`}
+      width="760px"
+    >
       <div className="space-y-5">
         {/* Resumo */}
-        <div className="flex items-center gap-6 text-sm flex-wrap" style={{ color: 'var(--ac-muted)' }}>
-          <span>Data: <strong style={{ color: 'var(--ac-text)' }}>{fmtData(oc.data_geracao)}</strong></span>
+        <div
+          className="flex items-center gap-6 text-sm flex-wrap"
+          style={{ color: "var(--ac-muted)" }}
+        >
+          <span>
+            Data: <strong style={{ color: "var(--ac-text)" }}>{fmtData(oc.data_geracao)}</strong>
+          </span>
           <span className="inline-flex items-center gap-2 flex-wrap">
             Status: <BadgeStatus status={oc.status} />
           </span>
-          <span className="ml-auto font-semibold text-base" style={{ color: 'var(--ac-text)' }}>{fmt(total)}</span>
+          <span className="ml-auto font-semibold text-base" style={{ color: "var(--ac-text)" }}>
+            {fmt(total)}
+          </span>
         </div>
 
         {/* Pedido de origem */}
         {oc.pedido_codigo && (
           <div
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm flex-wrap"
-            style={{ background: 'color-mix(in srgb, var(--ac-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--ac-accent) 30%, transparent)' }}
+            style={{
+              background: "color-mix(in srgb, var(--ac-accent) 8%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--ac-accent) 30%, transparent)",
+            }}
           >
-            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+            <span
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--ac-muted)" }}
+            >
               Pedido de origem
             </span>
-            <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{oc.pedido_codigo}</span>
-            <span style={{ color: 'var(--ac-text)' }}>Â· {oc.cliente_nome ?? 'â€”'}</span>
+            <span className="font-mono font-bold" style={{ color: "var(--ac-accent)" }}>
+              {oc.pedido_codigo}
+            </span>
+            <span style={{ color: "var(--ac-text)" }}>· {oc.cliente_nome ?? "—"}</span>
           </div>
         )}
 
         {oc.ultima_alteracao_em && (
           <div
             className="text-xs px-3 py-2 rounded-lg"
-            style={{ background: 'color-mix(in srgb, var(--ac-border) 35%, transparent)', color: 'var(--ac-muted)' }}
+            style={{
+              background: "color-mix(in srgb, var(--ac-border) 35%, transparent)",
+              color: "var(--ac-muted)",
+            }}
           >
-            Ãšltima alteraÃ§Ã£o:{' '}
-            <strong style={{ color: 'var(--ac-text)' }}>{oc.ultima_alteracao_usuario?.nome ?? 'â€”'}</strong>
-            <span> Â· {fmtDataHora(oc.ultima_alteracao_em)}</span>
+            íšltima alteração:{" "}
+            <strong style={{ color: "var(--ac-text)" }}>
+              {oc.ultima_alteracao_usuario?.nome ?? "—"}
+            </strong>
+            <span> · {fmtDataHora(oc.ultima_alteracao_em)}</span>
           </div>
         )}
 
         {/* Tabela de itens */}
-        <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--ac-border)' }}>
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ border: "1px solid var(--ac-border)" }}
+        >
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
-                {[
-                  'CÃ³digo',
-                  'MatÃ©ria-Prima',
-                  'Vendido',
-                  'Qtd Total',
-                  'PreÃ§o Unit.',
-                  'Subtotal',
-                ].map((h) => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                    {h}
-                  </th>
-                ))}
+              <tr style={{ background: "color-mix(in srgb, var(--ac-border) 40%, transparent)" }}>
+                {["Código", "Matéria-Prima", "Vendido", "Qtd Total", "Preço Unit.", "Subtotal"].map(
+                  (h) => (
+                    <th
+                      key={h}
+                      className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: "var(--ac-muted)" }}
+                    >
+                      {h}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody>
               {itens.map((item, idx) => {
-                const isEditing = editandoQtdTotal[item.id] !== undefined
-                const vendido = Number(item.quantidade_vendida ?? item.quantidade)
-                const adicionalBase = Number(item.quantidade_adicional ?? 0)
-                const salvoTotal = vendido + adicionalBase
-                const rawTotal = editandoQtdTotal[item.id]
-                const parsedTotal = rawTotal !== undefined ? parseNumero(rawTotal) : NaN
+                const isEditing = editandoQtdTotal[item.id] !== undefined;
+                const vendido = Number(item.quantidade_vendida ?? item.quantidade);
+                const adicionalBase = Number(item.quantidade_adicional ?? 0);
+                const salvoTotal = vendido + adicionalBase;
+                const rawTotal = editandoQtdTotal[item.id];
+                const parsedTotal = rawTotal !== undefined ? parseNumero(rawTotal) : NaN;
                 const totalQty =
-                  rawTotal !== undefined && Number.isFinite(parsedTotal) ? parsedTotal : salvoTotal
-                const sub = (item.preco_unitario ?? 0) * totalQty
+                  rawTotal !== undefined && Number.isFinite(parsedTotal) ? parsedTotal : salvoTotal;
+                const sub = (item.preco_unitario ?? 0) * totalQty;
                 return (
                   <tr
                     key={item.id}
                     style={{
-                      borderTop: idx > 0 ? '1px solid var(--ac-border)' : undefined,
-                      background: isEditing ? 'color-mix(in srgb, var(--ac-accent) 5%, transparent)' : undefined,
+                      borderTop: idx > 0 ? "1px solid var(--ac-border)" : undefined,
+                      background: isEditing
+                        ? "color-mix(in srgb, var(--ac-accent) 5%, transparent)"
+                        : undefined,
                     }}
                   >
-                    <td className="px-3 py-2.5 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>
-                      {item.materia_prima?.codigo ?? 'â€”'}
+                    <td
+                      className="px-3 py-2.5 font-mono text-xs"
+                      style={{ color: "var(--ac-muted)" }}
+                    >
+                      {item.materia_prima?.codigo ?? "—"}
                     </td>
-                    <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--ac-text)' }}>
-                      {item.materia_prima?.nome ?? 'â€”'}
+                    <td className="px-3 py-2.5 font-medium" style={{ color: "var(--ac-text)" }}>
+                      {item.materia_prima?.nome ?? "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
+                    <td className="px-3 py-2.5 text-right" style={{ color: "var(--ac-muted)" }}>
                       {fmtQtd(vendido)}
                     </td>
                     <td className="px-3 py-2.5 text-right">
-                      {perm.editar && oc.status === 'pendente' ? (
+                      {perm.editar && oc.status === "pendente" ? (
                         <input
                           type="number"
                           min={vendido > 0 ? vendido : 1}
                           step="any"
                           value={isEditing ? editandoQtdTotal[item.id] : String(salvoTotal)}
-                          onChange={(e) => setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          onChange={(e) =>
+                            setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: e.target.value }))
+                          }
                           onFocus={() => {
                             if (!isEditing) {
-                              setEditandoQtdTotal((prev) => ({ ...prev, [item.id]: String(salvoTotal) }))
+                              setEditandoQtdTotal((prev) => ({
+                                ...prev,
+                                [item.id]: String(salvoTotal),
+                              }));
                             }
                           }}
                           className="w-24 px-2 py-1 rounded text-sm text-right font-semibold"
                           style={{
-                            border: '1px solid var(--ac-border)',
-                            background: 'var(--ac-bg)',
-                            color: 'var(--ac-accent)',
+                            border: "1px solid var(--ac-border)",
+                            background: "var(--ac-bg)",
+                            color: "var(--ac-accent)",
                           }}
                         />
                       ) : (
-                        <span className="font-semibold" style={{ color: 'var(--ac-accent)' }}>
+                        <span className="font-semibold" style={{ color: "var(--ac-accent)" }}>
                           {fmtQtd(salvoTotal)}
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-right" style={{ color: 'var(--ac-muted)' }}>
-                      {item.preco_unitario != null ? fmt(item.preco_unitario) : 'â€”'}
+                    <td className="px-3 py-2.5 text-right" style={{ color: "var(--ac-muted)" }}>
+                      {item.preco_unitario != null ? fmt(item.preco_unitario) : "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--ac-text)' }}>
-                      {item.preco_unitario != null ? fmt(sub) : 'â€”'}
+                    <td
+                      className="px-3 py-2.5 text-right font-medium"
+                      style={{ color: "var(--ac-text)" }}
+                    >
+                      {item.preco_unitario != null ? fmt(sub) : "—"}
                     </td>
                   </tr>
-                )
+                );
               })}
               {/* Total */}
-              <tr style={{ borderTop: '2px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 20%, transparent)' }}>
-                <td colSpan={5} className="px-3 py-2.5 text-right font-semibold text-sm" style={{ color: 'var(--ac-muted)' }}>
+              <tr
+                style={{
+                  borderTop: "2px solid var(--ac-border)",
+                  background: "color-mix(in srgb, var(--ac-border) 20%, transparent)",
+                }}
+              >
+                <td
+                  colSpan={5}
+                  className="px-3 py-2.5 text-right font-semibold text-sm"
+                  style={{ color: "var(--ac-muted)" }}
+                >
                   TOTAL
                 </td>
-                <td className="px-3 py-2.5 text-right font-bold text-base" style={{ color: 'var(--ac-text)' }}>
+                <td
+                  className="px-3 py-2.5 text-right font-bold text-base"
+                  style={{ color: "var(--ac-text)" }}
+                >
                   {fmt(total)}
                 </td>
               </tr>
@@ -701,12 +790,12 @@ function OcDetalheModal({
           </table>
         </div>
 
-        {/* Adicionar matÃ©ria-prima */}
-        {perm.editar && oc.status === 'pendente' && (
+        {/* Adicionar matéria-prima */}
+        {perm.editar && oc.status === "pendente" && (
           <div ref={mpSectionRef} className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                Adicionar matÃ©ria-prima
+              <p className="text-sm font-semibold" style={{ color: "var(--ac-text)" }}>
+                Adicionar matéria-prima
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-2">
@@ -714,23 +803,26 @@ function OcDetalheModal({
                 <label
                   htmlFor="oc-mp-search"
                   className="text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--ac-muted)' }}
+                  style={{ color: "var(--ac-muted)" }}
                 >
-                  MatÃ©ria-prima
+                  Matéria-prima
                 </label>
                 <SearchableSelect
                   id="oc-mp-search"
                   value={materiaPrimaParaAdicionar}
                   onChange={setMateriaPrimaParaAdicionar}
                   options={opcoesMateriaPrima}
-                  placeholder="Pesquisar por cÃ³digo ou nomeâ€¦"
+                  placeholder="Pesquisar por código ou nome…"
                   loading={carregandoMateriasPrimas}
-                  emptyMessage="Nenhuma matÃ©ria-prima disponÃ­vel para este pedido"
+                  emptyMessage="Nenhuma matéria-prima disponível para este pedido"
                 />
               </div>
 
               <div className="w-[220px]">
-                <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+                <label
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--ac-muted)" }}
+                >
                   Unidades adicionais
                 </label>
                 <input
@@ -741,9 +833,9 @@ function OcDetalheModal({
                   onChange={(e) => setAdicionalParaAdicionar(e.target.value)}
                   className="w-full mt-1 px-3 py-2 rounded-lg text-sm text-right"
                   style={{
-                    background: 'var(--ac-bg)',
-                    border: '1px solid var(--ac-border)',
-                    color: 'var(--ac-text)',
+                    background: "var(--ac-bg)",
+                    border: "1px solid var(--ac-border)",
+                    color: "var(--ac-text)",
                   }}
                 />
               </div>
@@ -753,27 +845,27 @@ function OcDetalheModal({
                 loading={adicionandoItem}
                 disabled={!materiaPrimaParaAdicionar || adicionandoItem}
                 onClick={async () => {
-                  setAdicionandoItem(true)
-                  setErro('')
+                  setAdicionandoItem(true);
+                  setErro("");
                   try {
-                    const adicional = parseNumero(adicionalParaAdicionar)
+                    const adicional = parseNumero(adicionalParaAdicionar);
                     if (!Number.isFinite(adicional) || adicional <= 0) {
-                      setErro('Unidades adicionais devem ser maiores que zero.')
-                      return
+                      setErro("Unidades adicionais devem ser maiores que zero.");
+                      return;
                     }
                     await criarItemOrdemCompra(
                       oc.id,
                       materiaPrimaParaAdicionar,
                       adicional,
                       usuarioRegistroId || null,
-                    )
-                    setMateriaPrimaParaAdicionar('')
-                    setAdicionalParaAdicionar('')
-                    onRefresh()
+                    );
+                    setMateriaPrimaParaAdicionar("");
+                    setAdicionalParaAdicionar("");
+                    onRefresh();
                   } catch (e: unknown) {
-                    setErro(e instanceof Error ? e.message : 'Erro ao adicionar matÃ©ria-prima.')
+                    setErro(e instanceof Error ? e.message : "Erro ao adicionar matéria-prima.");
                   } finally {
-                    setAdicionandoItem(false)
+                    setAdicionandoItem(false);
                   }
                 }}
               >
@@ -783,11 +875,14 @@ function OcDetalheModal({
           </div>
         )}
 
-        {/* ObservaÃ§Ãµes */}
+        {/* Observações */}
         {perm.editar && (
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-              ObservaÃ§Ãµes
+            <label
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--ac-muted)" }}
+            >
+              Observações
             </label>
             <textarea
               rows={2}
@@ -796,264 +891,370 @@ function OcDetalheModal({
               placeholder="Notas para o fornecedor..."
               className="w-full px-3 py-2 rounded-lg text-sm resize-none"
               style={{
-                border: '1px solid var(--ac-border)',
-                background: 'var(--ac-bg)',
-                color: 'var(--ac-text)',
+                border: "1px solid var(--ac-border)",
+                background: "var(--ac-bg)",
+                color: "var(--ac-text)",
               }}
             />
           </div>
         )}
         {!perm.editar && oc.observacao && (
-          <div className="text-sm p-3 rounded-lg" style={{ background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)', color: 'var(--ac-text)' }}>
+          <div
+            className="text-sm p-3 rounded-lg"
+            style={{
+              background: "color-mix(in srgb, var(--ac-border) 30%, transparent)",
+              color: "var(--ac-text)",
+            }}
+          >
             {oc.observacao}
           </div>
         )}
 
         {/* Erro */}
         {erro && (
-          <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#fee2e2', color: '#dc2626' }}>
+          <p
+            className="text-sm px-3 py-2 rounded-lg"
+            style={{ background: "#fee2e2", color: "#dc2626" }}
+          >
             {erro}
           </p>
         )}
 
-        {/* RodapÃ©: campos de alteraÃ§Ã£o + aÃ§Ãµes */}
+        {/* Rodapé: campos de alteração + ações */}
         <div
           className="flex flex-col gap-3 pt-3"
-          style={{ borderTop: '1px solid var(--ac-border)' }}
+          style={{ borderTop: "1px solid var(--ac-border)" }}
         >
           {perm.editar ? (
             <>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
-              <div
-                className="flex flex-col gap-1 min-w-0"
-                title="Por padrÃ£o vem o usuÃ¡rio logado. Troque se outra pessoa efetivou a mudanÃ§a."
-              >
-                <label
-                  htmlFor="oc-registro-usuario"
-                  className="text-[11px] font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--ac-muted)' }}
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-end">
+                <div
+                  className="flex flex-col gap-1 min-w-0"
+                  title="Por padrão vem o usuário logado. Troque se outra pessoa efetivou a mudança."
                 >
-                  Quem registra a alteraÃ§Ã£o
-                </label>
-                <SearchableSelect
-                  id="oc-registro-usuario"
-                  value={usuarioRegistroId}
-                  onChange={setUsuarioRegistroId}
-                  options={opcoesUsuarioRegistro}
-                  placeholder="Selecione o usuÃ¡rioâ€¦"
-                  loading={carregandoUsuariosRegistro}
-                  emptyMessage="Nenhum usuÃ¡rio ativo encontrado"
-                  className="w-full"
-                  showThumbnails={false}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="oc-status-select"
-                  className="text-[11px] font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--ac-muted)' }}
-                >
-                  Status
-                </label>
-                <select
-                  id="oc-status-select"
-                  value={statusDraft}
-                  disabled={salvandoTudo}
-                  onChange={(e) => setStatusDraft(e.target.value as StatusOC)}
-                  className="text-sm rounded px-2 h-[34px]"
-                  style={{
-                    border: '1px solid var(--ac-border)',
-                    background: 'var(--ac-card)',
-                    color: 'var(--ac-text)',
-                    minWidth: 180,
-                  }}
-                >
-                  {(['pendente', 'enviada', 'recebida'] as StatusOC[]).map((s) => (
-                    <option key={s} value={s}>{STATUS_OC[s].label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span
-                  className="text-[11px] font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--ac-muted)' }}
-                >
-                  Pagamento
-                </span>
-                <label
-                  className="inline-flex items-center gap-2 cursor-pointer select-none text-sm rounded px-2.5 h-[34px]"
-                  style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={pagoDraft}
-                    disabled={salvandoTudo}
-                    onChange={(e) => setPagoDraft(e.target.checked)}
-                    className="w-4 h-4 rounded"
-                    style={{ accentColor: 'var(--ac-accent)' }}
+                  <label
+                    htmlFor="oc-registro-usuario"
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    Quem registra a alteração
+                  </label>
+                  <SearchableSelect
+                    id="oc-registro-usuario"
+                    value={usuarioRegistroId}
+                    onChange={setUsuarioRegistroId}
+                    options={opcoesUsuarioRegistro}
+                    placeholder="Selecione o usuário…"
+                    loading={carregandoUsuariosRegistro}
+                    emptyMessage="Nenhum usuário ativo encontrado"
+                    className="w-full"
+                    showThumbnails={false}
                   />
-                  <span style={{ color: 'var(--ac-text)' }}>Pago</span>
-                </label>
-              </div>
+                </div>
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="oc-forma-pagamento"
-                  className="text-[11px] font-semibold uppercase tracking-wide"
-                  style={{ color: 'var(--ac-muted)' }}
-                >
-                  Forma de pagamento
-                </label>
-                <select
-                  id="oc-forma-pagamento"
-                  value={formaPagamentoDraft}
-                  disabled={salvandoTudo}
-                  onChange={(e) => setFormaPagamentoDraft(e.target.value as FormaPagamentoOC | '')}
-                  className="text-sm rounded px-2 h-[34px]"
-                  style={{
-                    border: '1px solid var(--ac-border)',
-                    background: 'var(--ac-card)',
-                    color: 'var(--ac-text)',
-                    minWidth: 180,
-                  }}
-                >
-                  <option value="">â€” Selecione â€”</option>
-                  {(Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]).map(([k, v]) => (
-                    <option key={k} value={k}>{v.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Inline boleto form â€” aparece assim que a forma "boleto" Ã© escolhida */}
-            {formaPagamentoDraft === 'boleto' && !oc.pago && (
-              <div
-                className="flex flex-col gap-3 rounded-lg p-4"
-                style={{ background: 'var(--ac-bg)', border: '1px solid var(--ac-border)' }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                    Parcelas do boleto
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5, 6].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => {
-                          setQtdParcelas(n)
-                          const base = new Date().toISOString().slice(0, 10)
-                          const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0
-                          let acumulado = 0
-                          setBoletoParcelas(
-                            Array.from({ length: n }, (_, i) => {
-                              const ult = i === n - 1
-                              const v = ult ? Math.max(0, Number((total - acumulado).toFixed(2))) : vCada
-                              acumulado += v
-                              const d = new Date(base)
-                              d.setMonth(d.getMonth() + i + 1)
-                              return {
-                                numero: i + 1,
-                                vencimento: d.toISOString().slice(0, 10),
-                                valor: v > 0 ? v.toFixed(2) : '',
-                                pago: false,
-                                pago_em: '',
-                              }
-                            }),
-                          )
-                        }}
-                        className="px-2.5 py-1 rounded text-xs font-medium"
-                        style={{
-                          background: qtdParcelas === n ? 'var(--ac-accent)' : 'var(--ac-card)',
-                          color: qtdParcelas === n ? 'white' : 'var(--ac-text)',
-                          border: '1px solid var(--ac-border)',
-                        }}
-                      >
-                        {n}x
-                      </button>
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="oc-status-select"
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    Status
+                  </label>
+                  <select
+                    id="oc-status-select"
+                    value={statusDraft}
+                    disabled={salvandoTudo}
+                    onChange={(e) => setStatusDraft(e.target.value as StatusOC)}
+                    className="text-sm rounded px-2 h-[34px]"
+                    style={{
+                      border: "1px solid var(--ac-border)",
+                      background: "var(--ac-card)",
+                      color: "var(--ac-text)",
+                      minWidth: 180,
+                    }}
+                  >
+                    {(["pendente", "enviada", "recebida"] as StatusOC[]).map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_OC[s].label}
+                      </option>
                     ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    Pagamento
+                  </span>
+                  <label
+                    className="inline-flex items-center gap-2 cursor-pointer select-none text-sm rounded px-2.5 h-[34px]"
+                    style={{ border: "1px solid var(--ac-border)", background: "var(--ac-card)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={pagoDraft}
+                      disabled={salvandoTudo}
+                      onChange={(e) => setPagoDraft(e.target.checked)}
+                      className="w-4 h-4 rounded"
+                      style={{ accentColor: "var(--ac-accent)" }}
+                    />
+                    <span style={{ color: "var(--ac-text)" }}>Pago</span>
+                  </label>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor="oc-forma-pagamento"
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    Forma de pagamento
+                  </label>
+                  <select
+                    id="oc-forma-pagamento"
+                    value={formaPagamentoDraft}
+                    disabled={salvandoTudo}
+                    onChange={(e) =>
+                      setFormaPagamentoDraft(e.target.value as FormaPagamentoOC | "")
+                    }
+                    className="text-sm rounded px-2 h-[34px]"
+                    style={{
+                      border: "1px solid var(--ac-border)",
+                      background: "var(--ac-card)",
+                      color: "var(--ac-text)",
+                      minWidth: 180,
+                    }}
+                  >
+                    <option value="">— Selecione —</option>
+                    {(
+                      Object.entries(FORMAS_PAGAMENTO_OC) as [FormaPagamentoOC, { label: string }][]
+                    ).map(([k, v]) => (
+                      <option key={k} value={k}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Inline boleto form — aparece assim que a forma "boleto" é escolhida */}
+              {formaPagamentoDraft === "boleto" && !oc.pago && (
+                <div
+                  className="flex flex-col gap-3 rounded-lg p-4"
+                  style={{ background: "var(--ac-bg)", border: "1px solid var(--ac-border)" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold" style={{ color: "var(--ac-text)" }}>
+                      Parcelas do boleto
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setQtdParcelas(n);
+                            const base = new Date().toISOString().slice(0, 10);
+                            const vCada = total > 0 ? Number((total / n).toFixed(2)) : 0;
+                            let acumulado = 0;
+                            setBoletoParcelas(
+                              Array.from({ length: n }, (_, i) => {
+                                const ult = i === n - 1;
+                                const v = ult
+                                  ? Math.max(0, Number((total - acumulado).toFixed(2)))
+                                  : vCada;
+                                acumulado += v;
+                                const d = new Date(base);
+                                d.setMonth(d.getMonth() + i + 1);
+                                return {
+                                  numero: i + 1,
+                                  vencimento: d.toISOString().slice(0, 10),
+                                  valor: v > 0 ? v.toFixed(2) : "",
+                                  pago: false,
+                                  pago_em: "",
+                                };
+                              }),
+                            );
+                          }}
+                          className="px-2.5 py-1 rounded text-xs font-medium"
+                          style={{
+                            background: qtdParcelas === n ? "var(--ac-accent)" : "var(--ac-card)",
+                            color: qtdParcelas === n ? "white" : "var(--ac-text)",
+                            border: "1px solid var(--ac-border)",
+                          }}
+                        >
+                          {n}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg" style={{ border: "1px solid var(--ac-border)" }}>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ background: "var(--ac-bg)" }}>
+                          <th
+                            className="px-3 py-2 text-left text-xs uppercase font-semibold"
+                            style={{ color: "var(--ac-muted)" }}
+                          >
+                            #
+                          </th>
+                          <th
+                            className="px-3 py-2 text-left text-xs uppercase font-semibold"
+                            style={{ color: "var(--ac-muted)" }}
+                          >
+                            Vencimento
+                          </th>
+                          <th
+                            className="px-3 py-2 text-right text-xs uppercase font-semibold"
+                            style={{ color: "var(--ac-muted)" }}
+                          >
+                            Valor
+                          </th>
+                          <th
+                            className="px-3 py-2 text-center text-xs uppercase font-semibold"
+                            style={{ color: "var(--ac-muted)" }}
+                          >
+                            Pago
+                          </th>
+                          <th
+                            className="px-3 py-2 text-left text-xs uppercase font-semibold"
+                            style={{ color: "var(--ac-muted)" }}
+                          >
+                            Data pago
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {boletoParcelas.map((p, i) => (
+                          <tr
+                            key={i}
+                            style={{ borderTop: i > 0 ? "1px solid var(--ac-border)" : undefined }}
+                          >
+                            <td
+                              className="px-3 py-2 font-mono text-xs"
+                              style={{ color: "var(--ac-muted)" }}
+                            >
+                              {p.numero}
+                            </td>
+                            <td className="px-3 py-2">
+                              <DateInputBR
+                                value={p.vencimento}
+                                onChange={(iso) =>
+                                  setBoletoParcelas((prev) =>
+                                    prev.map((l, j) => (j === i ? { ...l, vencimento: iso } : l)),
+                                  )
+                                }
+                                className="rounded px-2 py-1 text-sm outline-none w-full"
+                                style={{
+                                  background: "var(--ac-card)",
+                                  border: "1px solid var(--ac-border)",
+                                  color: "var(--ac-text)",
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={p.valor}
+                                onChange={(e) =>
+                                  setBoletoParcelas((prev) =>
+                                    prev.map((l, j) =>
+                                      j === i ? { ...l, valor: e.target.value } : l,
+                                    ),
+                                  )
+                                }
+                                className="rounded px-2 py-1 text-sm outline-none w-full text-right"
+                                style={{
+                                  background: "var(--ac-card)",
+                                  border: "1px solid var(--ac-border)",
+                                  color: "var(--ac-text)",
+                                }}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={p.pago}
+                                onChange={(e) =>
+                                  setBoletoParcelas((prev) =>
+                                    prev.map((l, j) =>
+                                      j === i
+                                        ? {
+                                            ...l,
+                                            pago: e.target.checked,
+                                            pago_em:
+                                              e.target.checked && !l.pago_em
+                                                ? new Date().toISOString().slice(0, 10)
+                                                : l.pago_em,
+                                          }
+                                        : l,
+                                    ),
+                                  )
+                                }
+                                className="w-4 h-4 rounded"
+                                style={{ accentColor: "var(--ac-accent)" }}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              {p.pago && (
+                                <DateInputBR
+                                  value={p.pago_em}
+                                  onChange={(iso) =>
+                                    setBoletoParcelas((prev) =>
+                                      prev.map((l, j) => (j === i ? { ...l, pago_em: iso } : l)),
+                                    )
+                                  }
+                                  className="rounded px-2 py-1 text-sm outline-none w-full"
+                                  style={{
+                                    background: "var(--ac-card)",
+                                    border: "1px solid var(--ac-border)",
+                                    color: "var(--ac-text)",
+                                  }}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-
-                <div className="rounded-lg" style={{ border: '1px solid var(--ac-border)' }}>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ background: 'var(--ac-bg)' }}>
-                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>#</th>
-                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Vencimento</th>
-                        <th className="px-3 py-2 text-right text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Valor</th>
-                        <th className="px-3 py-2 text-center text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Pago</th>
-                        <th className="px-3 py-2 text-left text-xs uppercase font-semibold" style={{ color: 'var(--ac-muted)' }}>Data pago</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {boletoParcelas.map((p, i) => (
-                        <tr key={i} style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined }}>
-                          <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ac-muted)' }}>{p.numero}</td>
-                          <td className="px-3 py-2">
-                            <DateInputBR
-                              value={p.vencimento}
-                              onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? { ...l, vencimento: iso } : l))}
-                              className="rounded px-2 py-1 text-sm outline-none w-full"
-                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={p.valor}
-                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? { ...l, valor: e.target.value } : l))}
-                              className="rounded px-2 py-1 text-sm outline-none w-full text-right"
-                              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="checkbox"
-                              checked={p.pago}
-                              onChange={(e) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? {
-                                ...l,
-                                pago: e.target.checked,
-                                pago_em: e.target.checked && !l.pago_em ? new Date().toISOString().slice(0, 10) : l.pago_em,
-                              } : l))}
-                              className="w-4 h-4 rounded"
-                              style={{ accentColor: 'var(--ac-accent)' }}
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            {p.pago && (
-                              <DateInputBR
-                                value={p.pago_em}
-                                onChange={(iso) => setBoletoParcelas((prev) => prev.map((l, j) => j === i ? { ...l, pago_em: iso } : l))}
-                                className="rounded px-2 py-1 text-sm outline-none w-full"
-                                style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-                              />
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+              )}
             </>
           ) : (
-            <div className="text-sm flex flex-wrap gap-x-4 gap-y-1" style={{ color: 'var(--ac-muted)' }}>
-              <span>Pagamento: <strong style={{ color: 'var(--ac-text)' }}>{oc.pago ? 'sim' : 'nÃ£o'}</strong></span>
+            <div
+              className="text-sm flex flex-wrap gap-x-4 gap-y-1"
+              style={{ color: "var(--ac-muted)" }}
+            >
+              <span>
+                Pagamento:{" "}
+                <strong style={{ color: "var(--ac-text)" }}>{oc.pago ? "sim" : "não"}</strong>
+              </span>
               {oc.forma_pagamento && (
-                <span>Forma: <strong style={{ color: 'var(--ac-text)' }}>{FORMAS_PAGAMENTO_OC[oc.forma_pagamento]?.label ?? oc.forma_pagamento}</strong></span>
+                <span>
+                  Forma:{" "}
+                  <strong style={{ color: "var(--ac-text)" }}>
+                    {FORMAS_PAGAMENTO_OC[oc.forma_pagamento]?.label ?? oc.forma_pagamento}
+                  </strong>
+                </span>
               )}
             </div>
           )}
 
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={() => exportarPDF(oc)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                className="size-4"
+              >
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
                 <line x1="16" y1="13" x2="8" y2="13" />
@@ -1062,7 +1263,7 @@ function OcDetalheModal({
               Exportar PDF
             </Button>
 
-            {perm.deletar && oc.status === 'pendente' && onRequestExcluir && (
+            {perm.deletar && oc.status === "pendente" && onRequestExcluir && (
               <Button variant="danger" onClick={onRequestExcluir}>
                 Excluir OC
               </Button>
@@ -1077,41 +1278,46 @@ function OcDetalheModal({
                 loading={salvandoTudo}
                 disabled={!temAlteracoes || salvandoTudo}
               >
-                Salvar alteraÃ§Ãµes
+                Salvar alterações
               </Button>
             )}
           </div>
         </div>
       </div>
     </Modal>
-  )
+  );
 }
 
-// â”€â”€â”€ Modal: Nova OC manual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Modal: Nova OC manual ───────────────────────────────────────────────────
 
-type LinhaCriarOc = { key: string; materia_prima_id: string; quantidade: string; preco_unitario: string }
+type LinhaCriarOc = {
+  key: string;
+  materia_prima_id: string;
+  quantidade: string;
+  preco_unitario: string;
+};
 
 function OcCriarModal({
   open,
   onClose,
   onCriada,
 }: {
-  open: boolean
-  onClose: () => void
-  onCriada: (codigo: string) => void
+  open: boolean;
+  onClose: () => void;
+  onCriada: (codigo: string) => void;
 }) {
-  const [fornecedorId, setFornecedorId] = useState('')
-  const [observacao, setObservacao] = useState('')
+  const [fornecedorId, setFornecedorId] = useState("");
+  const [observacao, setObservacao] = useState("");
   const [linhas, setLinhas] = useState<LinhaCriarOc[]>(() => [
-    { key: `${Date.now()}-0`, materia_prima_id: '', quantidade: '1', preco_unitario: '' },
-  ])
-  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
-  const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([])
-  const [carregando, setCarregando] = useState(false)
-  const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState('')
+    { key: `${Date.now()}-0`, materia_prima_id: "", quantidade: "1", preco_unitario: "" },
+  ]);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
 
-  const mpById = useMemo(() => new Map(materiasPrimas.map((m) => [m.id, m])), [materiasPrimas])
+  const mpById = useMemo(() => new Map(materiasPrimas.map((m) => [m.id, m])), [materiasPrimas]);
 
   const opcoesMateria = useMemo(
     () =>
@@ -1121,147 +1327,167 @@ function OcCriarModal({
             width: 80,
             height: 80,
             quality: 72,
-            resize: 'cover',
-            fallbackUrl: '',
-          }) || null
+            resize: "cover",
+            fallbackUrl: "",
+          }) || null;
         return {
           value: mp.id,
-          label: `${mp.codigo} â€” ${mp.nome}`,
+          label: `${mp.codigo} — ${mp.nome}`,
           imageUrl,
-        }
+        };
       }),
-    [materiasPrimas]
-  )
+    [materiasPrimas],
+  );
 
   useEffect(() => {
-    if (!open) return
-    setErro('')
-    setFornecedorId('')
-    setObservacao('')
-    setLinhas([{ key: `${Date.now()}-0`, materia_prima_id: '', quantidade: '1', preco_unitario: '' }])
+    if (!open) return;
+    setErro("");
+    setFornecedorId("");
+    setObservacao("");
+    setLinhas([
+      { key: `${Date.now()}-0`, materia_prima_id: "", quantidade: "1", preco_unitario: "" },
+    ]);
 
-    let cancelled = false
+    let cancelled = false;
     async function load() {
-      setCarregando(true)
+      setCarregando(true);
       try {
-        const [f, m] = await Promise.all([getFornecedoresSemCache(1000), getMateriasPrimas(300)])
+        const [f, m] = await Promise.all([getFornecedoresSemCache(1000), getMateriasPrimas(300)]);
         if (!cancelled) {
-          setFornecedores(f)
-          setMateriasPrimas(m)
+          setFornecedores(f);
+          setMateriasPrimas(m);
         }
       } catch (e: unknown) {
-        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar dados.')
+        if (!cancelled) setErro(e instanceof Error ? e.message : "Erro ao carregar dados.");
       } finally {
-        if (!cancelled) setCarregando(false)
+        if (!cancelled) setCarregando(false);
       }
     }
-    load()
+    load();
     return () => {
-      cancelled = true
-    }
-  }, [open])
+      cancelled = true;
+    };
+  }, [open]);
 
   function parseNumero(raw: string): number {
-    const v = raw.trim().replace(',', '.')
-    const n = Number(v)
-    return Number.isFinite(n) ? n : NaN
+    const v = raw.trim().replace(",", ".");
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
   }
 
   function addLinha() {
-    setLinhas((prev) => [...prev, { key: `${Date.now()}-${prev.length}`, materia_prima_id: '', quantidade: '1', preco_unitario: '' }])
+    setLinhas((prev) => [
+      ...prev,
+      {
+        key: `${Date.now()}-${prev.length}`,
+        materia_prima_id: "",
+        quantidade: "1",
+        preco_unitario: "",
+      },
+    ]);
   }
 
   function removeLinha(key: string) {
-    setLinhas((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.key !== key)))
+    setLinhas((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.key !== key)));
   }
 
   function updateLinha(key: string, patch: Partial<LinhaCriarOc>) {
     setLinhas((prev) =>
       prev.map((l) => {
-        if (l.key !== key) return l
-        const next = { ...l, ...patch }
+        if (l.key !== key) return l;
+        const next = { ...l, ...patch };
         if (patch.materia_prima_id !== undefined && patch.materia_prima_id) {
-          const mp = mpById.get(patch.materia_prima_id)
-          if (mp) next.preco_unitario = String(mp.preco_custo ?? '')
+          const mp = mpById.get(patch.materia_prima_id);
+          if (mp) next.preco_unitario = String(mp.preco_custo ?? "");
         }
-        return next
-      })
-    )
+        return next;
+      }),
+    );
   }
 
   async function salvar() {
-    const itensValidos = linhas.filter((l) => l.materia_prima_id)
+    const itensValidos = linhas.filter((l) => l.materia_prima_id);
     if (itensValidos.length === 0) {
-      setErro('Selecione ao menos uma matÃ©ria-prima.')
-      return
+      setErro("Selecione ao menos uma matéria-prima.");
+      return;
     }
-    const payload: { materia_prima_id: string; quantidade: number; preco_unitario?: number | null }[] = []
+    const payload: {
+      materia_prima_id: string;
+      quantidade: number;
+      preco_unitario?: number | null;
+    }[] = [];
     for (const l of itensValidos) {
-      const q = parseNumero(l.quantidade)
+      const q = parseNumero(l.quantidade);
       if (!Number.isFinite(q) || q <= 0) {
-        setErro('Todas as quantidades devem ser maiores que zero.')
-        return
+        setErro("Todas as quantidades devem ser maiores que zero.");
+        return;
       }
-      const precoRaw = l.preco_unitario.trim()
-      let preco_unitario: number | null = null
-      if (precoRaw !== '') {
-        const p = parseNumero(precoRaw)
+      const precoRaw = l.preco_unitario.trim();
+      let preco_unitario: number | null = null;
+      if (precoRaw !== "") {
+        const p = parseNumero(precoRaw);
         if (!Number.isFinite(p) || p < 0) {
-          setErro('PreÃ§o unitÃ¡rio invÃ¡lido em um dos itens.')
-          return
+          setErro("Preço unitário inválido em um dos itens.");
+          return;
         }
-        preco_unitario = p
+        preco_unitario = p;
       }
-      payload.push({ materia_prima_id: l.materia_prima_id, quantidade: q, preco_unitario })
+      payload.push({ materia_prima_id: l.materia_prima_id, quantidade: q, preco_unitario });
     }
 
-    setErro('')
-    setSalvando(true)
+    setErro("");
+    setSalvando(true);
     try {
       const codigo = await criarOrdemCompraManual({
         fornecedor_id: fornecedorId || null,
         observacao: observacao.trim() || null,
         itens: payload,
-      })
-      onCriada(codigo)
-      onClose()
+      });
+      onCriada(codigo);
+      onClose();
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao criar ordem de compra.')
+      setErro(e instanceof Error ? e.message : "Erro ao criar ordem de compra.");
     } finally {
-      setSalvando(false)
+      setSalvando(false);
     }
   }
 
   const totalEstimado = useMemo(() => {
-    let s = 0
+    let s = 0;
     for (const l of linhas) {
-      if (!l.materia_prima_id) continue
-      const q = parseNumero(l.quantidade)
-      if (!Number.isFinite(q) || q <= 0) continue
-      let unit: number
-      const precoRaw = l.preco_unitario.trim()
-      if (precoRaw !== '') {
-        const p = parseNumero(precoRaw)
-        unit = Number.isFinite(p) ? p : NaN
+      if (!l.materia_prima_id) continue;
+      const q = parseNumero(l.quantidade);
+      if (!Number.isFinite(q) || q <= 0) continue;
+      let unit: number;
+      const precoRaw = l.preco_unitario.trim();
+      if (precoRaw !== "") {
+        const p = parseNumero(precoRaw);
+        unit = Number.isFinite(p) ? p : NaN;
       } else {
-        unit = mpById.get(l.materia_prima_id)?.preco_custo ?? 0
+        unit = mpById.get(l.materia_prima_id)?.preco_custo ?? 0;
       }
-      if (Number.isFinite(unit)) s += q * unit
+      if (Number.isFinite(unit)) s += q * unit;
     }
-    return s
-  }, [linhas, mpById])
+    return s;
+  }, [linhas, mpById]);
 
   return (
     <Modal open={open} onClose={onClose} title="Nova ordem de compra" width="920px">
       <div className="flex flex-col gap-4 max-h-[min(85vh,720px)]">
         {erro && (
-          <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#fee2e2', color: '#dc2626' }}>
+          <p
+            className="text-sm px-3 py-2 rounded-lg"
+            style={{ background: "#fee2e2", color: "#dc2626" }}
+          >
             {erro}
           </p>
         )}
 
         <div className="space-y-1.5 shrink-0">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+          <label
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--ac-muted)" }}
+          >
             Fornecedor
           </label>
           <Select
@@ -1279,8 +1505,11 @@ function OcCriarModal({
         </div>
 
         <div className="space-y-1.5 shrink-0">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-            ObservaÃ§Ãµes (opcional)
+          <label
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--ac-muted)" }}
+          >
+            Observações (opcional)
           </label>
           <textarea
             value={observacao}
@@ -1288,17 +1517,20 @@ function OcCriarModal({
             rows={2}
             className="w-full rounded-lg px-3 py-2 text-sm resize-y min-h-[3rem]"
             style={{
-              border: '1px solid var(--ac-border)',
-              background: 'var(--ac-bg)',
-              color: 'var(--ac-text)',
+              border: "1px solid var(--ac-border)",
+              background: "var(--ac-bg)",
+              color: "var(--ac-text)",
             }}
-            placeholder="Notas internas sobre esta OCâ€¦"
+            placeholder="Notas internas sobre esta OC…"
           />
         </div>
 
         <div className="min-h-0 flex flex-col gap-2 flex-1">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
+            <span
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--ac-muted)" }}
+            >
               Itens
             </span>
             <Button type="button" variant="secondary" onClick={addLinha} disabled={carregando}>
@@ -1309,28 +1541,37 @@ function OcCriarModal({
           <div>
             <table className="w-full text-sm table-fixed">
               <thead>
-                <tr style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
-                  <th className="px-2 py-2 text-left text-xs font-semibold uppercase" style={{ color: 'var(--ac-muted)' }}>
-                    MatÃ©ria-prima
+                <tr style={{ background: "color-mix(in srgb, var(--ac-border) 40%, transparent)" }}>
+                  <th
+                    className="px-2 py-2 text-left text-xs font-semibold uppercase"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    Matéria-prima
                   </th>
-                  <th className="px-2 py-2 text-right text-xs font-semibold uppercase w-[100px]" style={{ color: 'var(--ac-muted)' }}>
+                  <th
+                    className="px-2 py-2 text-right text-xs font-semibold uppercase w-[100px]"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
                     Qtd
                   </th>
-                  <th className="px-2 py-2 text-right text-xs font-semibold uppercase w-[120px]" style={{ color: 'var(--ac-muted)' }}>
-                    PreÃ§o unit.
+                  <th
+                    className="px-2 py-2 text-right text-xs font-semibold uppercase w-[120px]"
+                    style={{ color: "var(--ac-muted)" }}
+                  >
+                    Preço unit.
                   </th>
                   <th className="w-10 px-1 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {linhas.map((l) => (
-                  <tr key={l.key} style={{ borderTop: '1px solid var(--ac-border)' }}>
+                  <tr key={l.key} style={{ borderTop: "1px solid var(--ac-border)" }}>
                     <td className="px-2 py-2 align-top">
                       <SearchableSelect
                         value={l.materia_prima_id}
                         onChange={(v) => updateLinha(l.key, { materia_prima_id: v })}
                         options={opcoesMateria}
-                        placeholder="Escolherâ€¦"
+                        placeholder="Escolher…"
                         disabled={carregando}
                         loading={carregando}
                         className="w-full"
@@ -1344,9 +1585,9 @@ function OcCriarModal({
                         onChange={(e) => updateLinha(l.key, { quantidade: e.target.value })}
                         className="w-full px-2 py-1.5 rounded text-sm text-right"
                         style={{
-                          border: '1px solid var(--ac-border)',
-                          background: 'var(--ac-bg)',
-                          color: 'var(--ac-text)',
+                          border: "1px solid var(--ac-border)",
+                          background: "var(--ac-bg)",
+                          color: "var(--ac-text)",
                         }}
                       />
                     </td>
@@ -1359,9 +1600,9 @@ function OcCriarModal({
                         placeholder="Custo MP"
                         className="w-full px-2 py-1.5 rounded text-sm text-right"
                         style={{
-                          border: '1px solid var(--ac-border)',
-                          background: 'var(--ac-bg)',
-                          color: 'var(--ac-text)',
+                          border: "1px solid var(--ac-border)",
+                          background: "var(--ac-bg)",
+                          color: "var(--ac-text)",
                         }}
                       />
                     </td>
@@ -1372,9 +1613,15 @@ function OcCriarModal({
                         disabled={linhas.length <= 1}
                         onClick={() => removeLinha(l.key)}
                         className="p-1.5 rounded-lg disabled:opacity-40"
-                        style={{ color: '#dc2626' }}
+                        style={{ color: "#dc2626" }}
                       >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          className="size-4"
+                        >
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6l-1 14H6L5 6" />
                         </svg>
@@ -1385,12 +1632,15 @@ function OcCriarModal({
               </tbody>
             </table>
           </div>
-          <p className="text-sm text-right font-medium" style={{ color: 'var(--ac-text)' }}>
-            Total estimado: <span style={{ color: 'var(--ac-accent)' }}>{fmt(totalEstimado)}</span>
+          <p className="text-sm text-right font-medium" style={{ color: "var(--ac-text)" }}>
+            Total estimado: <span style={{ color: "var(--ac-accent)" }}>{fmt(totalEstimado)}</span>
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 justify-end pt-2 shrink-0" style={{ borderTop: '1px solid var(--ac-border)' }}>
+        <div
+          className="flex flex-wrap gap-2 justify-end pt-2 shrink-0"
+          style={{ borderTop: "1px solid var(--ac-border)" }}
+        >
           <Button variant="secondary" onClick={onClose} disabled={salvando}>
             Cancelar
           </Button>
@@ -1400,213 +1650,222 @@ function OcCriarModal({
         </div>
       </div>
     </Modal>
-  )
+  );
 }
 
-// â”€â”€â”€ Componente Principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Componente Principal ─────────────────────────────────────────────────────
 
-export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistroInicial }: Props) {  const { refreshActiveTab } = useErpTabs()
-  const queryClient = useQueryClient()
-  const [aba, setAba] = useState<'fila' | 'historico'>('fila')
-  const { data: ordensLista = ordens } = useOrdensCompra({ initialData: ordens })
-  const { data: filaLista = fila } = useFilaReposicao({ initialData: fila })
-  const [loadingHistorico, setLoadingHistorico] = useState(false)
-
-  useEffect(() => {
-    queryClient.setQueryData(qk.ordensCompra.list(), ordens)
-  }, [ordens, queryClient])
+export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistroInicial }: Props) {
+  const { refreshActiveTab } = useErpTabs();
+  const queryClient = useQueryClient();
+  const [aba, setAba] = useState<"fila" | "historico">("fila");
+  const { data: ordensLista = ordens } = useOrdensCompra({ initialData: ordens });
+  const { data: filaLista = fila } = useFilaReposicao({ initialData: fila });
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
 
   useEffect(() => {
-    queryClient.setQueryData(qk.ordensCompra.fila(), fila)
-  }, [fila, queryClient])
+    queryClient.setQueryData(qk.ordensCompra.list(), ordens);
+  }, [ordens, queryClient]);
 
-  const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null)
+  useEffect(() => {
+    queryClient.setQueryData(qk.ordensCompra.fila(), fila);
+  }, [fila, queryClient]);
+
+  const [ocAberta, setOcAberta] = useState<OrdemCompra | null>(null);
 
   useEffect(() => {
     setOcAberta((prev) => {
-      if (!prev) return prev
-      const atual = ordensLista.find((o) => o.id === prev.id)
-      return atual ?? prev
-    })
-  }, [ordensLista])
+      if (!prev) return prev;
+      const atual = ordensLista.find((o) => o.id === prev.id);
+      return atual ?? prev;
+    });
+  }, [ordensLista]);
 
-  const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null)
-  const [deletando, setDeletando] = useState<OrdemCompra | null>(null)
-  const [loadingDelete, setLoadingDelete] = useState(false)
-  const [erroDelete, setErroDelete] = useState('')
-  const [filtroStatus, setFiltroStatus] = useState<FiltroListaOC>('todas')
-  const [ocCriarOpen, setOcCriarOpen] = useState(false)
-  const [erro, setErro] = useState('')
-  const [sucesso, setSucesso] = useState('')
-  const gerarTodasInFlightRef = useRef(false)
+  const [filaAberta, setFilaAberta] = useState<FilaReposicao | null>(null);
+  const [deletando, setDeletando] = useState<OrdemCompra | null>(null);
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [erroDelete, setErroDelete] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<FiltroListaOC>("todas");
+  const [ocCriarOpen, setOcCriarOpen] = useState(false);
+  const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
+  const gerarTodasInFlightRef = useRef(false);
 
   // Cache + in-flight de detalhes de fila para abrir o modal sem espera.
   // Disparamos a busca no mouseEnter (e no focus, p/ teclado). Quando o clique
-  // chega, na maioria das vezes a resposta jÃ¡ chegou ou estÃ¡ perto de chegar.
-  const filaDetalheCacheRef = useRef<Map<string, FilaReposicaoDetalhe>>(new Map())
-  const filaDetalheInFlightRef = useRef<Map<string, Promise<FilaReposicaoDetalhe>>>(new Map())
+  // chega, na maioria das vezes a resposta já chegou ou está perto de chegar.
+  const filaDetalheCacheRef = useRef<Map<string, FilaReposicaoDetalhe>>(new Map());
+  const filaDetalheInFlightRef = useRef<Map<string, Promise<FilaReposicaoDetalhe>>>(new Map());
   function prefetchFilaDetalhe(fila_id: string) {
-    if (filaDetalheCacheRef.current.has(fila_id)) return
-    if (filaDetalheInFlightRef.current.has(fila_id)) return
+    if (filaDetalheCacheRef.current.has(fila_id)) return;
+    if (filaDetalheInFlightRef.current.has(fila_id)) return;
     const p = getFilaReposicaoDetalhe(fila_id)
       .then((d) => {
-        filaDetalheCacheRef.current.set(fila_id, d)
-        return d
+        filaDetalheCacheRef.current.set(fila_id, d);
+        return d;
       })
-      .catch((e) => { throw e })
-      .finally(() => { filaDetalheInFlightRef.current.delete(fila_id) })
-    filaDetalheInFlightRef.current.set(fila_id, p)
+      .catch((e) => {
+        throw e;
+      })
+      .finally(() => {
+        filaDetalheInFlightRef.current.delete(fila_id);
+      });
+    filaDetalheInFlightRef.current.set(fila_id, p);
   }
 
   useEffect(() => {
-    if (aba !== 'historico' || ordensLista.length > 0 || loadingHistorico) return
+    if (aba !== "historico" || ordensLista.length > 0 || loadingHistorico) return;
 
-    let cancelled = false
+    let cancelled = false;
     async function carregarHistorico() {
-      setLoadingHistorico(true)
+      setLoadingHistorico(true);
       try {
-        const data = await getOrdensCompra()
-        if (!cancelled) queryClient.setQueryData(qk.ordensCompra.list(), data)
+        const data = await getOrdensCompra();
+        if (!cancelled) queryClient.setQueryData(qk.ordensCompra.list(), data);
       } catch (e: unknown) {
-        if (!cancelled) setErro(e instanceof Error ? e.message : 'Erro ao carregar histÃ³rico.')
+        if (!cancelled) setErro(e instanceof Error ? e.message : "Erro ao carregar histórico.");
       } finally {
-        if (!cancelled) setLoadingHistorico(false)
+        if (!cancelled) setLoadingHistorico(false);
       }
     }
 
-    carregarHistorico()
+    carregarHistorico();
     return () => {
-      cancelled = true
-    }
-  }, [aba, ordensLista.length, loadingHistorico, queryClient])
+      cancelled = true;
+    };
+  }, [aba, ordensLista.length, loadingHistorico, queryClient]);
 
   async function refresh() {
-    setLoadingHistorico(true)
+    setLoadingHistorico(true);
     try {
       const [filaAtualizada, ordensAtualizadas] = await Promise.all([
         getFilaReposicaoList(),
         getOrdensCompra(),
-      ])
-      queryClient.setQueryData(qk.ordensCompra.fila(), filaAtualizada)
-      queryClient.setQueryData(qk.ordensCompra.list(), ordensAtualizadas)
+      ]);
+      queryClient.setQueryData(qk.ordensCompra.fila(), filaAtualizada);
+      queryClient.setQueryData(qk.ordensCompra.list(), ordensAtualizadas);
     } catch (e: unknown) {
-      setErro(e instanceof Error ? e.message : 'Erro ao atualizar.')
+      setErro(e instanceof Error ? e.message : "Erro ao atualizar.");
     } finally {
-      setLoadingHistorico(false)
+      setLoadingHistorico(false);
     }
-    refreshActiveTab()
+    refreshActiveTab();
   }
 
   function flash(msg: string) {
-    setSucesso(msg)
-    setTimeout(() => setSucesso(''), 3500)
+    setSucesso(msg);
+    setTimeout(() => setSucesso(""), 3500);
   }
 
   async function handleDeleteOC() {
-    if (!deletando) return
-    setLoadingDelete(true); setErroDelete('')
+    if (!deletando) return;
+    setLoadingDelete(true);
+    setErroDelete("");
     try {
-      await deletarOC(deletando.id)
-      setDeletando(null)
-      refresh()
+      await deletarOC(deletando.id);
+      setDeletando(null);
+      refresh();
     } catch (e: unknown) {
-      setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
+      setErroDelete(e instanceof Error ? e.message : "Erro ao excluir.");
     } finally {
-      setLoadingDelete(false)
+      setLoadingDelete(false);
     }
   }
 
-  const [agruparPorPedido, setAgruparPorPedido] = useState(true)
-  const [periodoIni, setPeriodoIni] = useState('')
-  const [periodoFim, setPeriodoFim] = useState('')
-  const [filaPeriodoIni, setFilaPeriodoIni] = useState('')
-  const [filaPeriodoFim, setFilaPeriodoFim] = useState('')
-  const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set())
+  const [agruparPorPedido, setAgruparPorPedido] = useState(true);
+  const [periodoIni, setPeriodoIni] = useState("");
+  const [periodoFim, setPeriodoFim] = useState("");
+  const [filaPeriodoIni, setFilaPeriodoIni] = useState("");
+  const [filaPeriodoFim, setFilaPeriodoFim] = useState("");
+  const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set());
 
   const filaFiltrada = useMemo(() => {
-    if (!filaPeriodoIni && !filaPeriodoFim) return filaLista
+    if (!filaPeriodoIni && !filaPeriodoFim) return filaLista;
     return filaLista.filter((item) => {
-      const d = (item.created_at || '').slice(0, 10)
-      if (filaPeriodoIni && d < filaPeriodoIni) return false
-      if (filaPeriodoFim && d > filaPeriodoFim) return false
-      return true
-    })
-  }, [filaLista, filaPeriodoIni, filaPeriodoFim])
+      const d = (item.created_at || "").slice(0, 10);
+      if (filaPeriodoIni && d < filaPeriodoIni) return false;
+      if (filaPeriodoFim && d > filaPeriodoFim) return false;
+      return true;
+    });
+  }, [filaLista, filaPeriodoIni, filaPeriodoFim]);
 
   const ordensFiltradas = useMemo(() => {
     let lista =
-      filtroStatus === 'todas'
+      filtroStatus === "todas"
         ? ordensLista
-        : filtroStatus === 'pagas'
+        : filtroStatus === "pagas"
           ? ordensLista.filter((o) => o.pago)
-          : ordensLista.filter((o) => o.status === filtroStatus)
+          : ordensLista.filter((o) => o.status === filtroStatus);
     if (periodoIni || periodoFim) {
       lista = lista.filter((o) => {
-        const d = (o.data_geracao || '').slice(0, 10)
-        if (periodoIni && d < periodoIni) return false
-        if (periodoFim && d > periodoFim) return false
-        return true
-      })
+        const d = (o.data_geracao || "").slice(0, 10);
+        if (periodoIni && d < periodoIni) return false;
+        if (periodoFim && d > periodoFim) return false;
+        return true;
+      });
     }
-    return lista
-  }, [ordensLista, filtroStatus, periodoIni, periodoFim])
+    return lista;
+  }, [ordensLista, filtroStatus, periodoIni, periodoFim]);
 
-  // Limpa seleÃ§Ãµes que saÃ­ram do filtro para evitar imprimir OCs invisÃ­veis.
+  // Limpa seleções que saíram do filtro para evitar imprimir OCs invisíveis.
   useEffect(() => {
     setSelecionadasIds((prev) => {
-      const visiveis = new Set(ordensFiltradas.map((o) => o.id))
-      let mudou = false
-      const next = new Set<string>()
+      const visiveis = new Set(ordensFiltradas.map((o) => o.id));
+      let mudou = false;
+      const next = new Set<string>();
       for (const id of prev) {
-        if (visiveis.has(id)) next.add(id)
-        else mudou = true
+        if (visiveis.has(id)) next.add(id);
+        else mudou = true;
       }
-      return mudou ? next : prev
-    })
-  }, [ordensFiltradas])
+      return mudou ? next : prev;
+    });
+  }, [ordensFiltradas]);
 
   function toggleSelecionada(id: string) {
     setSelecionadasIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function toggleSelecionarTudo() {
     setSelecionadasIds((prev) => {
-      const todasIds = ordensFiltradas.map((o) => o.id)
-      const todasMarcadas = todasIds.length > 0 && todasIds.every((id) => prev.has(id))
-      return todasMarcadas ? new Set() : new Set(todasIds)
-    })
+      const todasIds = ordensFiltradas.map((o) => o.id);
+      const todasMarcadas = todasIds.length > 0 && todasIds.every((id) => prev.has(id));
+      return todasMarcadas ? new Set() : new Set(todasIds);
+    });
   }
 
   function imprimirSelecionadas() {
-    const mapa = new Map(ordensFiltradas.map((o) => [o.id, o]))
-    const ocs = Array.from(selecionadasIds).map((id) => mapa.get(id)).filter((o): o is OrdemCompra => !!o)
-    exportarPDFMultiplas(ocs)
+    const mapa = new Map(ordensFiltradas.map((o) => [o.id, o]));
+    const ocs = Array.from(selecionadasIds)
+      .map((id) => mapa.get(id))
+      .filter((o): o is OrdemCompra => !!o);
+    exportarPDFMultiplas(ocs);
   }
 
   // Agrupa OCs pelo pedido de origem. OCs manuais (sem pedido_id) ficam num
-  // grupo "Sem pedido (manuais)". MantÃ©m a ordem decrescente de created_at ao
+  // grupo "Sem pedido (manuais)". Mantém a ordem decrescente de created_at ao
   // posicionar cada grupo pelo created_at mais recente entre seus filhos.
   const gruposPorPedido = useMemo(() => {
-    if (!agruparPorPedido) return null
+    if (!agruparPorPedido) return null;
     type Grupo = {
-      key: string
-      pedido_codigo: string | null
-      pedido_sequencial: number | null
-      cliente_nome: string | null
-      ocs: OrdemCompra[]
-      maisRecente: string
-    }
-    const map = new Map<string, Grupo>()
+      key: string;
+      pedido_codigo: string | null;
+      pedido_sequencial: number | null;
+      cliente_nome: string | null;
+      ocs: OrdemCompra[];
+      maisRecente: string;
+    };
+    const map = new Map<string, Grupo>();
     for (const oc of ordensFiltradas) {
-      const key = oc.pedido_id ?? '__manuais__'
-      const existente = map.get(key)
+      const key = oc.pedido_id ?? "__manuais__";
+      const existente = map.get(key);
       if (existente) {
-        existente.ocs.push(oc)
-        if (oc.created_at > existente.maisRecente) existente.maisRecente = oc.created_at
+        existente.ocs.push(oc);
+        if (oc.created_at > existente.maisRecente) existente.maisRecente = oc.created_at;
       } else {
         map.set(key, {
           key,
@@ -1615,40 +1874,48 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           cliente_nome: oc.cliente_nome ?? null,
           ocs: [oc],
           maisRecente: oc.created_at,
-        })
+        });
       }
     }
-    return Array.from(map.values()).sort((a, b) => b.maisRecente.localeCompare(a.maisRecente))
-  }, [ordensFiltradas, agruparPorPedido])
+    return Array.from(map.values()).sort((a, b) => b.maisRecente.localeCompare(a.maisRecente));
+  }, [ordensFiltradas, agruparPorPedido]);
 
   const statusTabs: { value: FiltroListaOC; label: string }[] = [
-    { value: 'todas', label: 'Todas' },
-    { value: 'pendente', label: 'Pendentes' },
-    { value: 'enviada', label: 'Enviadas' },
-    { value: 'pagas', label: 'Pagas' },
-    { value: 'recebida', label: 'Recebidas' },
-  ]
+    { value: "todas", label: "Todas" },
+    { value: "pendente", label: "Pendentes" },
+    { value: "enviada", label: "Enviadas" },
+    { value: "pagas", label: "Pagas" },
+    { value: "recebida", label: "Recebidas" },
+  ];
 
-  void gerarTodasInFlightRef
+  void gerarTodasInFlightRef;
 
   return (
     <>
       {/* Header */}
       <div
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-8 py-6"
-        style={{ borderBottom: '1px solid var(--ac-border)' }}
+        style={{ borderBottom: "1px solid var(--ac-border)" }}
       >
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Ordens de Compra</h2>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
+          <h2 className="text-2xl font-bold" style={{ color: "var(--ac-text)" }}>
+            Ordens de Compra
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color: "var(--ac-muted)" }}>
             {filaLista.length > 0
-              ? `${filaLista.length} ${filaLista.length === 1 ? 'pedido' : 'pedidos'} aguardando reposiÃ§Ã£o`
-              : 'Fila de reposiÃ§Ã£o vazia'}
+              ? `${filaLista.length} ${filaLista.length === 1 ? "pedido" : "pedidos"} aguardando reposição`
+              : "Fila de reposição vazia"}
           </p>
         </div>
         {perm.criar && (
           <Button variant="primary" onClick={() => setOcCriarOpen(true)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className="size-4"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -1659,31 +1926,40 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
 
       {/* Alertas */}
       {erro && (
-        <div className="mx-4 sm:mx-8 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>
+        <div
+          className="mx-4 sm:mx-8 mt-4 px-4 py-3 rounded-lg text-sm"
+          style={{ background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5" }}
+        >
           {erro}
         </div>
       )}
       {sucesso && (
-        <div className="mx-4 sm:mx-8 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
+        <div
+          className="mx-4 sm:mx-8 mt-4 px-4 py-3 rounded-lg text-sm"
+          style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}
+        >
           {sucesso}
         </div>
       )}
 
       {/* Tabs */}
       <div className="px-4 sm:px-8 pt-5">
-        <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)' }}>
+        <div
+          className="flex gap-1 p-1 rounded-lg w-fit"
+          style={{ background: "color-mix(in srgb, var(--ac-border) 40%, transparent)" }}
+        >
           {[
-            { key: 'fila' as const, label: 'Fila de ReposiÃ§Ã£o', count: filaLista.length },
-            { key: 'historico' as const, label: 'Ordens de Compra', count: ordensLista.length },
+            { key: "fila" as const, label: "Fila de Reposição", count: filaLista.length },
+            { key: "historico" as const, label: "Ordens de Compra", count: ordensLista.length },
           ].map((tab) => (
             <button
               key={tab.key}
               onClick={() => setAba(tab.key)}
               className="flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all"
               style={{
-                background: aba === tab.key ? 'var(--ac-card)' : 'transparent',
-                color: aba === tab.key ? 'var(--ac-text)' : 'var(--ac-muted)',
-                boxShadow: aba === tab.key ? '0 1px 3px rgba(0,0,0,.08)' : undefined,
+                background: aba === tab.key ? "var(--ac-card)" : "transparent",
+                color: aba === tab.key ? "var(--ac-text)" : "var(--ac-muted)",
+                boxShadow: aba === tab.key ? "0 1px 3px rgba(0,0,0,.08)" : undefined,
               }}
             >
               {tab.label}
@@ -1691,8 +1967,8 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                 <span
                   className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
                   style={{
-                    background: aba === tab.key ? 'var(--ac-accent)' : 'var(--ac-border)',
-                    color: aba === tab.key ? '#111827' : 'var(--ac-muted)',
+                    background: aba === tab.key ? "var(--ac-accent)" : "var(--ac-border)",
+                    color: aba === tab.key ? "#111827" : "var(--ac-muted)",
                   }}
                 >
                   {tab.count}
@@ -1703,13 +1979,16 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         </div>
       </div>
 
-      {/* â”€â”€ Aba: Fila de ReposiÃ§Ã£o â”€â”€ */}
-      {aba === 'fila' && (
+      {/* ── Aba: Fila de Reposição ── */}
+      {aba === "fila" && (
         <div className="px-4 sm:px-8 py-6">
           {filaLista.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-                PerÃ­odo:
+              <span
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: "var(--ac-muted)" }}
+              >
+                Período:
               </span>
               <input
                 type="date"
@@ -1717,28 +1996,44 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                 onChange={(e) => setFilaPeriodoIni(e.target.value)}
                 max={filaPeriodoFim || undefined}
                 className="px-2 py-1 rounded text-sm"
-                style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+                style={{
+                  border: "1px solid var(--ac-border)",
+                  background: "var(--ac-bg)",
+                  color: "var(--ac-text)",
+                }}
               />
-              <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>atÃ©</span>
+              <span className="text-sm" style={{ color: "var(--ac-muted)" }}>
+                até
+              </span>
               <input
                 type="date"
                 value={filaPeriodoFim}
                 onChange={(e) => setFilaPeriodoFim(e.target.value)}
                 min={filaPeriodoIni || undefined}
                 className="px-2 py-1 rounded text-sm"
-                style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+                style={{
+                  border: "1px solid var(--ac-border)",
+                  background: "var(--ac-bg)",
+                  color: "var(--ac-text)",
+                }}
               />
               {(filaPeriodoIni || filaPeriodoFim) && (
                 <button
-                  onClick={() => { setFilaPeriodoIni(''); setFilaPeriodoFim('') }}
+                  onClick={() => {
+                    setFilaPeriodoIni("");
+                    setFilaPeriodoFim("");
+                  }}
                   className="px-2 py-1 rounded text-xs font-medium"
-                  style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)', color: 'var(--ac-muted)' }}
-                  title="Limpar perÃ­odo"
+                  style={{
+                    background: "color-mix(in srgb, var(--ac-border) 40%, transparent)",
+                    color: "var(--ac-muted)",
+                  }}
+                  title="Limpar período"
                 >
                   Limpar
                 </button>
               )}
-              <span className="ml-auto text-xs" style={{ color: 'var(--ac-muted)' }}>
+              <span className="ml-auto text-xs" style={{ color: "var(--ac-muted)" }}>
                 {filaFiltrada.length} de {filaLista.length}
               </span>
             </div>
@@ -1747,35 +2042,63 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           {filaLista.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-20 rounded-xl text-center"
-              style={{ border: '2px dashed var(--ac-border)' }}
+              style={{ border: "2px dashed var(--ac-border)" }}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="size-12 mb-3" style={{ color: 'var(--ac-border)' }}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.5}
+                className="size-12 mb-3"
+                style={{ color: "var(--ac-border)" }}
+              >
                 <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
                 <rect x="9" y="3" width="6" height="4" rx="1" />
               </svg>
-              <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Fila vazia</p>
-              <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                Quando vendas forem entregues e houver estoques abaixo do mÃ­nimo, os pedidos aparecerÃ£o aqui.
+              <p className="font-semibold mb-1" style={{ color: "var(--ac-text)" }}>
+                Fila vazia
+              </p>
+              <p className="text-sm" style={{ color: "var(--ac-muted)" }}>
+                Quando vendas forem entregues e houver estoques abaixo do mínimo, os pedidos
+                aparecerão aqui.
               </p>
             </div>
           ) : filaFiltrada.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-16 rounded-xl text-center"
-              style={{ border: '2px dashed var(--ac-border)' }}
+              style={{ border: "2px dashed var(--ac-border)" }}
             >
-              <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>Nenhum pedido neste perÃ­odo</p>
-              <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>Ajuste as datas ou clique em Limpar.</p>
+              <p className="font-semibold mb-1" style={{ color: "var(--ac-text)" }}>
+                Nenhum pedido neste período
+              </p>
+              <p className="text-sm" style={{ color: "var(--ac-muted)" }}>
+                Ajuste as datas ou clique em Limpar.
+              </p>
             </div>
           ) : (
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ border: "1px solid var(--ac-border)", background: "var(--ac-card)" }}
+            >
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)' }}>
-                    {['Pedido', 'Cliente', 'Detectado em', 'MPs para repor', 'Status', ''].map((h) => (
-                      <th key={h} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left" style={{ color: 'var(--ac-muted)' }}>
-                        {h}
-                      </th>
-                    ))}
+                  <tr
+                    style={{
+                      borderBottom: "1px solid var(--ac-border)",
+                      background: "color-mix(in srgb, var(--ac-border) 30%, transparent)",
+                    }}
+                  >
+                    {["Pedido", "Cliente", "Detectado em", "MPs para repor", "Status", ""].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left"
+                          style={{ color: "var(--ac-muted)" }}
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -1783,33 +2106,43 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                     <tr
                       key={item.id}
                       className="cursor-pointer transition-colors"
-                      style={{ borderTop: idx > 0 ? '1px solid var(--ac-border)' : undefined }}
+                      style={{ borderTop: idx > 0 ? "1px solid var(--ac-border)" : undefined }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-border) 20%, transparent)'
-                        prefetchFilaDetalhe(item.id)
+                        e.currentTarget.style.background =
+                          "color-mix(in srgb, var(--ac-border) 20%, transparent)";
+                        prefetchFilaDetalhe(item.id);
                       }}
                       onFocus={() => prefetchFilaDetalhe(item.id)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       onClick={() => setFilaAberta(item)}
                     >
-                      <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
+                      <td
+                        className="px-4 py-3 font-mono font-semibold text-xs"
+                        style={{ color: "var(--ac-accent)" }}
+                      >
                         {item.pedido_sequencial != null && (
-                          <>#{item.pedido_sequencial}<span className="mx-1 opacity-60">Â·</span></>
+                          <>
+                            #{item.pedido_sequencial}
+                            <span className="mx-1 opacity-60">·</span>
+                          </>
                         )}
                         {item.pedido_codigo}
                       </td>
-                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
+                      <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
                         {item.cliente_nome}
                       </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
+                      <td className="px-4 py-3" style={{ color: "var(--ac-muted)" }}>
                         {fmtData(item.created_at)}
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                          style={{ background: 'color-mix(in srgb, var(--ac-accent) 15%, transparent)', color: 'var(--ac-accent)' }}
+                          style={{
+                            background: "color-mix(in srgb, var(--ac-accent) 15%, transparent)",
+                            color: "var(--ac-accent)",
+                          }}
                         >
-                          {item.itens_count} {item.itens_count === 1 ? 'item' : 'itens'}
+                          {item.itens_count} {item.itens_count === 1 ? "item" : "itens"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -1818,10 +2151,13 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                       <td className="px-4 py-3 text-right">
                         <button
                           className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                          style={{ background: 'var(--ac-accent)', color: '#111827' }}
+                          style={{ background: "var(--ac-accent)", color: "#111827" }}
                           onMouseEnter={() => prefetchFilaDetalhe(item.id)}
                           onFocus={() => prefetchFilaDetalhe(item.id)}
-                          onClick={(e) => { e.stopPropagation(); setFilaAberta(item) }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilaAberta(item);
+                          }}
                         >
                           Revisar
                         </button>
@@ -1835,52 +2171,59 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         </div>
       )}
 
-      {/* â”€â”€ Aba: HistÃ³rico â”€â”€ */}
-      {aba === 'historico' && (
+      {/* ── Aba: Histórico ── */}
+      {aba === "historico" && (
         <div className="px-4 sm:px-8 py-6">
           {/* Filtro de status + agrupamento */}
           <div className="flex gap-2 mb-5 flex-wrap items-center">
             <div className="flex gap-2 flex-wrap">
-            {statusTabs.map((tab) => {
-              const count =
-                tab.value === 'todas'
-                  ? ordensLista.length
-                  : tab.value === 'pagas'
-                    ? ordensLista.filter((o) => o.pago).length
-                    : ordensLista.filter((o) => o.status === tab.value).length
-              return (
-                <button
-                  key={tab.value}
-                  onClick={() => setFiltroStatus(tab.value)}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-                  style={{
-                    background: filtroStatus === tab.value
-                      ? 'var(--ac-accent)'
-                      : 'color-mix(in srgb, var(--ac-border) 40%, transparent)',
-                    color: filtroStatus === tab.value ? '#111827' : 'var(--ac-muted)',
-                  }}
-                >
-                  {tab.label} {count > 0 && `(${count})`}
-                </button>
-              )
-            })}
+              {statusTabs.map((tab) => {
+                const count =
+                  tab.value === "todas"
+                    ? ordensLista.length
+                    : tab.value === "pagas"
+                      ? ordensLista.filter((o) => o.pago).length
+                      : ordensLista.filter((o) => o.status === tab.value).length;
+                return (
+                  <button
+                    key={tab.value}
+                    onClick={() => setFiltroStatus(tab.value)}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                    style={{
+                      background:
+                        filtroStatus === tab.value
+                          ? "var(--ac-accent)"
+                          : "color-mix(in srgb, var(--ac-border) 40%, transparent)",
+                      color: filtroStatus === tab.value ? "#111827" : "var(--ac-muted)",
+                    }}
+                  >
+                    {tab.label} {count > 0 && `(${count})`}
+                  </button>
+                );
+              })}
             </div>
-            <label className="ml-auto flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--ac-muted)' }}>
+            <label
+              className="ml-auto flex items-center gap-2 text-sm cursor-pointer"
+              style={{ color: "var(--ac-muted)" }}
+            >
               <input
                 type="checkbox"
                 checked={agruparPorPedido}
                 onChange={(e) => setAgruparPorPedido(e.target.checked)}
                 className="w-4 h-4 cursor-pointer rounded"
-                style={{ accentColor: 'var(--ac-accent)' }}
+                style={{ accentColor: "var(--ac-accent)" }}
               />
               Agrupar por pedido
             </label>
           </div>
 
-          {/* Filtro de perÃ­odo + aÃ§Ã£o de impressÃ£o em massa */}
+          {/* Filtro de período + ação de impressão em massa */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>
-              PerÃ­odo:
+            <span
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "var(--ac-muted)" }}
+            >
+              Período:
             </span>
             <input
               type="date"
@@ -1888,76 +2231,107 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
               onChange={(e) => setPeriodoIni(e.target.value)}
               max={periodoFim || undefined}
               className="px-2 py-1 rounded text-sm"
-              style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+              style={{
+                border: "1px solid var(--ac-border)",
+                background: "var(--ac-bg)",
+                color: "var(--ac-text)",
+              }}
             />
-            <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>atÃ©</span>
+            <span className="text-sm" style={{ color: "var(--ac-muted)" }}>
+              até
+            </span>
             <input
               type="date"
               value={periodoFim}
               onChange={(e) => setPeriodoFim(e.target.value)}
               min={periodoIni || undefined}
               className="px-2 py-1 rounded text-sm"
-              style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-bg)', color: 'var(--ac-text)' }}
+              style={{
+                border: "1px solid var(--ac-border)",
+                background: "var(--ac-bg)",
+                color: "var(--ac-text)",
+              }}
             />
             {(periodoIni || periodoFim) && (
               <button
-                onClick={() => { setPeriodoIni(''); setPeriodoFim('') }}
+                onClick={() => {
+                  setPeriodoIni("");
+                  setPeriodoFim("");
+                }}
                 className="px-2 py-1 rounded text-xs font-medium"
-                style={{ background: 'color-mix(in srgb, var(--ac-border) 40%, transparent)', color: 'var(--ac-muted)' }}
-                title="Limpar perÃ­odo"
+                style={{
+                  background: "color-mix(in srgb, var(--ac-border) 40%, transparent)",
+                  color: "var(--ac-muted)",
+                }}
+                title="Limpar período"
               >
                 Limpar
               </button>
             )}
             {selecionadasIds.size > 0 && (
               <div className="ml-auto flex items-center gap-2">
-                <span className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                  {selecionadasIds.size} {selecionadasIds.size === 1 ? 'selecionada' : 'selecionadas'}
+                <span className="text-sm" style={{ color: "var(--ac-muted)" }}>
+                  {selecionadasIds.size}{" "}
+                  {selecionadasIds.size === 1 ? "selecionada" : "selecionadas"}
                 </span>
                 <Button variant="secondary" onClick={() => setSelecionadasIds(new Set())}>
                   Limpar
                 </Button>
                 <Button variant="primary" onClick={imprimirSelecionadas}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    className="size-4"
+                  >
                     <polyline points="6 9 6 2 18 2 18 9" />
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
                     <rect x="6" y="14" width="12" height="8" />
                   </svg>
-                  Imprimir {selecionadasIds.size} {selecionadasIds.size === 1 ? 'OC' : 'OCs'}
+                  Imprimir {selecionadasIds.size} {selecionadasIds.size === 1 ? "OC" : "OCs"}
                 </Button>
               </div>
             )}
           </div>
 
           {loadingHistorico && (
-            <div className="py-8 text-sm" style={{ color: 'var(--ac-muted)' }}>
-              Carregando histÃ³rico de ordens...
+            <div className="py-8 text-sm" style={{ color: "var(--ac-muted)" }}>
+              Carregando histórico de ordens...
             </div>
           )}
 
           {!loadingHistorico && ordensFiltradas.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center py-16 rounded-xl text-center"
-              style={{ border: '2px dashed var(--ac-border)' }}
+              style={{ border: "2px dashed var(--ac-border)" }}
             >
-              <p className="font-semibold mb-1" style={{ color: 'var(--ac-text)' }}>
-                {filtroStatus === 'todas'
-                  ? 'Nenhuma OC gerada ainda'
-                  : filtroStatus === 'pagas'
-                    ? 'Nenhuma OC marcada como paga'
+              <p className="font-semibold mb-1" style={{ color: "var(--ac-text)" }}>
+                {filtroStatus === "todas"
+                  ? "Nenhuma OC gerada ainda"
+                  : filtroStatus === "pagas"
+                    ? "Nenhuma OC marcada como paga"
                     : `Nenhuma OC ${STATUS_OC[filtroStatus].label.toLowerCase()}`}
               </p>
-              <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-                {filtroStatus === 'todas'
-                  ? 'Use "Nova ordem de compra" no topo ou gere OCs pela aba "Fila de ReposiÃ§Ã£o".'
-                  : 'Altere o filtro para ver outras.'}
+              <p className="text-sm" style={{ color: "var(--ac-muted)" }}>
+                {filtroStatus === "todas"
+                  ? 'Use "Nova ordem de compra" no topo ou gere OCs pela aba "Fila de Reposição".'
+                  : "Altere o filtro para ver outras."}
               </p>
             </div>
           ) : (
-            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ border: "1px solid var(--ac-border)", background: "var(--ac-card)" }}
+            >
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--ac-border)', background: 'color-mix(in srgb, var(--ac-border) 30%, transparent)' }}>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid var(--ac-border)",
+                      background: "color-mix(in srgb, var(--ac-border) 30%, transparent)",
+                    }}
+                  >
                     <th className="px-3 py-3 w-10 text-left">
                       <input
                         type="checkbox"
@@ -1968,18 +2342,33 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                         }
                         ref={(el) => {
                           if (el) {
-                            const algumas = ordensFiltradas.some((o) => selecionadasIds.has(o.id))
-                            const todas = ordensFiltradas.length > 0 && ordensFiltradas.every((o) => selecionadasIds.has(o.id))
-                            el.indeterminate = algumas && !todas
+                            const algumas = ordensFiltradas.some((o) => selecionadasIds.has(o.id));
+                            const todas =
+                              ordensFiltradas.length > 0 &&
+                              ordensFiltradas.every((o) => selecionadasIds.has(o.id));
+                            el.indeterminate = algumas && !todas;
                           }
                         }}
                         onChange={toggleSelecionarTudo}
                         className="w-4 h-4 cursor-pointer rounded"
-                        style={{ accentColor: 'var(--ac-accent)' }}
+                        style={{ accentColor: "var(--ac-accent)" }}
                       />
                     </th>
-                    {['CÃ³digo', 'Pedido', 'Fornecedor', 'Data', 'Qtd Final', 'Total Estimado', 'Status', ''].map((h) => (
-                      <th key={h} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left ${h === '' ? 'w-20' : ''}`} style={{ color: 'var(--ac-muted)' }}>
+                    {[
+                      "Código",
+                      "Pedido",
+                      "Fornecedor",
+                      "Data",
+                      "Qtd Final",
+                      "Total Estimado",
+                      "Status",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-left ${h === "" ? "w-20" : ""}`}
+                        style={{ color: "var(--ac-muted)" }}
+                      >
                         {h}
                       </th>
                     ))}
@@ -1988,114 +2377,159 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                 <tbody>
                   {(() => {
                     const renderRow = (oc: OrdemCompra, idx: number) => {
-                    const itens = oc.itens ?? []
-                    const quantidadeFinal = itens.reduce((acc, item) => acc + Number(item.quantidade ?? 0), 0)
-                    const total = totalOC(itens)
-                    return (
-                      <tr
-                        key={oc.id}
-                        className="cursor-pointer transition-colors"
-                        style={{ borderTop: idx > 0 ? '1px solid var(--ac-border)' : undefined }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--ac-border) 20%, transparent)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                        onClick={() => setOcAberta(oc)}
-                      >
-                        <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selecionadasIds.has(oc.id)}
-                            onChange={() => toggleSelecionada(oc.id)}
-                            className="w-4 h-4 cursor-pointer rounded"
-                            style={{ accentColor: 'var(--ac-accent)' }}
-                          />
-                        </td>
-                        <td className="px-4 py-3 font-mono font-semibold text-xs" style={{ color: 'var(--ac-accent)' }}>
-                          {oc.sequencial_fornecedor != null && (
-                            <>#{oc.sequencial_fornecedor}<span className="mx-1 opacity-60">Â·</span></>
-                          )}
-                          {oc.codigo}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {oc.pedido_codigo ? (
-                            <div>
-                              <div className="font-mono font-semibold" style={{ color: 'var(--ac-text)' }}>
-                                {oc.pedido_sequencial != null && (
-                                  <span style={{ color: 'var(--ac-accent)' }}>#{oc.pedido_sequencial} Â· </span>
-                                )}
-                                {oc.pedido_codigo}
+                      const itens = oc.itens ?? [];
+                      const quantidadeFinal = itens.reduce(
+                        (acc, item) => acc + Number(item.quantidade ?? 0),
+                        0,
+                      );
+                      const total = totalOC(itens);
+                      return (
+                        <tr
+                          key={oc.id}
+                          className="cursor-pointer transition-colors"
+                          style={{ borderTop: idx > 0 ? "1px solid var(--ac-border)" : undefined }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.background =
+                              "color-mix(in srgb, var(--ac-border) 20%, transparent)")
+                          }
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                          onClick={() => setOcAberta(oc)}
+                        >
+                          <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selecionadasIds.has(oc.id)}
+                              onChange={() => toggleSelecionada(oc.id)}
+                              className="w-4 h-4 cursor-pointer rounded"
+                              style={{ accentColor: "var(--ac-accent)" }}
+                            />
+                          </td>
+                          <td
+                            className="px-4 py-3 font-mono font-semibold text-xs"
+                            style={{ color: "var(--ac-accent)" }}
+                          >
+                            {oc.sequencial_fornecedor != null && (
+                              <>
+                                #{oc.sequencial_fornecedor}
+                                <span className="mx-1 opacity-60">·</span>
+                              </>
+                            )}
+                            {oc.codigo}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {oc.pedido_codigo ? (
+                              <div>
+                                <div
+                                  className="font-mono font-semibold"
+                                  style={{ color: "var(--ac-text)" }}
+                                >
+                                  {oc.pedido_sequencial != null && (
+                                    <span style={{ color: "var(--ac-accent)" }}>
+                                      #{oc.pedido_sequencial} ·{" "}
+                                    </span>
+                                  )}
+                                  {oc.pedido_codigo}
+                                </div>
+                                <div style={{ color: "var(--ac-muted)" }}>
+                                  {oc.cliente_nome ?? "—"}
+                                </div>
                               </div>
-                              <div style={{ color: 'var(--ac-muted)' }}>{oc.cliente_nome ?? 'â€”'}</div>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--ac-muted)' }}>Manual</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
-                          {oc.fornecedor?.nome ?? 'â€”'}
-                        </td>
-                        <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
-                          {fmtData(oc.data_geracao)}
-                        </td>
-                        <td className="px-4 py-3" style={{ color: 'var(--ac-muted)' }}>
-                          {fmtQtd(quantidadeFinal)}
-                        </td>
-                        <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
-                          {fmt(total)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <BadgeStatus status={oc.status} pago={oc.pago} />
-                        </td>
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <button
-                              title="Exportar PDF"
-                              onClick={() => exportarPDF(oc)}
-                              className="p-1.5 rounded-lg transition-colors"
-                              style={{ color: 'var(--ac-muted)' }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-border)')}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                              </svg>
-                            </button>
-                            {perm.deletar && oc.status === 'pendente' && (
+                            ) : (
+                              <span style={{ color: "var(--ac-muted)" }}>Manual</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
+                            {oc.fornecedor?.nome ?? "—"}
+                          </td>
+                          <td className="px-4 py-3" style={{ color: "var(--ac-muted)" }}>
+                            {fmtData(oc.data_geracao)}
+                          </td>
+                          <td className="px-4 py-3" style={{ color: "var(--ac-muted)" }}>
+                            {fmtQtd(quantidadeFinal)}
+                          </td>
+                          <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
+                            {fmt(total)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <BadgeStatus status={oc.status} pago={oc.pago} />
+                          </td>
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1">
                               <button
-                                title="Excluir"
-                                onClick={() => { setDeletando(oc); setErroDelete('') }}
+                                title="Exportar PDF"
+                                onClick={() => exportarPDF(oc)}
                                 className="p-1.5 rounded-lg transition-colors"
-                                style={{ color: '#dc2626' }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = '#fee2e2')}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                style={{ color: "var(--ac-muted)" }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.background = "var(--ac-border)")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background = "transparent")
+                                }
                               >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-4">
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6l-1 14H6L5 6" />
-                                  <path d="M10 11v6M14 11v6" />
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  className="size-4"
+                                >
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                  <line x1="16" y1="13" x2="8" y2="13" />
                                 </svg>
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                    }
+                              {perm.deletar && oc.status === "pendente" && (
+                                <button
+                                  title="Excluir"
+                                  onClick={() => {
+                                    setDeletando(oc);
+                                    setErroDelete("");
+                                  }}
+                                  className="p-1.5 rounded-lg transition-colors"
+                                  style={{ color: "#dc2626" }}
+                                  onMouseEnter={(e) =>
+                                    (e.currentTarget.style.background = "#fee2e2")
+                                  }
+                                  onMouseLeave={(e) =>
+                                    (e.currentTarget.style.background = "transparent")
+                                  }
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    className="size-4"
+                                  >
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6M14 11v6" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    };
 
                     if (gruposPorPedido) {
-                      let globalIdx = 0
+                      let globalIdx = 0;
                       return gruposPorPedido.flatMap((grupo, grupoIdx) => {
-                        const totalGrupo = grupo.ocs.reduce((s, oc) => s + totalOC(oc.itens ?? []), 0)
-                        const idsGrupo = grupo.ocs.map((oc) => oc.id)
-                        const todasGrupoMarcadas = idsGrupo.every((id) => selecionadasIds.has(id))
-                        const algumasGrupoMarcadas = idsGrupo.some((id) => selecionadasIds.has(id))
+                        const totalGrupo = grupo.ocs.reduce(
+                          (s, oc) => s + totalOC(oc.itens ?? []),
+                          0,
+                        );
+                        const idsGrupo = grupo.ocs.map((oc) => oc.id);
+                        const todasGrupoMarcadas = idsGrupo.every((id) => selecionadasIds.has(id));
+                        const algumasGrupoMarcadas = idsGrupo.some((id) => selecionadasIds.has(id));
                         const header = (
                           <tr
                             key={`header-${grupo.key}`}
                             style={{
-                              background: 'color-mix(in srgb, var(--ac-accent) 8%, transparent)',
-                              borderTop: grupoIdx > 0 ? '2px solid var(--ac-border)' : undefined,
+                              background: "color-mix(in srgb, var(--ac-accent) 8%, transparent)",
+                              borderTop: grupoIdx > 0 ? "2px solid var(--ac-border)" : undefined,
                             }}
                           >
                             <td className="px-3 py-2 w-10">
@@ -2104,18 +2538,20 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                                 title="Selecionar todas deste pedido"
                                 checked={todasGrupoMarcadas}
                                 ref={(el) => {
-                                  if (el) el.indeterminate = algumasGrupoMarcadas && !todasGrupoMarcadas
+                                  if (el)
+                                    el.indeterminate = algumasGrupoMarcadas && !todasGrupoMarcadas;
                                 }}
                                 onChange={() => {
                                   setSelecionadasIds((prev) => {
-                                    const next = new Set(prev)
-                                    if (todasGrupoMarcadas) idsGrupo.forEach((id) => next.delete(id))
-                                    else idsGrupo.forEach((id) => next.add(id))
-                                    return next
-                                  })
+                                    const next = new Set(prev);
+                                    if (todasGrupoMarcadas)
+                                      idsGrupo.forEach((id) => next.delete(id));
+                                    else idsGrupo.forEach((id) => next.add(id));
+                                    return next;
+                                  });
                                 }}
                                 className="w-4 h-4 cursor-pointer rounded"
-                                style={{ accentColor: 'var(--ac-accent)' }}
+                                style={{ accentColor: "var(--ac-accent)" }}
                               />
                             </td>
                             <td colSpan={8} className="px-4 py-2">
@@ -2123,30 +2559,53 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                                 {grupo.pedido_codigo ? (
                                   <>
                                     {grupo.pedido_sequencial != null && (
-                                      <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>#{grupo.pedido_sequencial}</span>
+                                      <span
+                                        className="font-mono font-bold"
+                                        style={{ color: "var(--ac-accent)" }}
+                                      >
+                                        #{grupo.pedido_sequencial}
+                                      </span>
                                     )}
-                                    <span className="font-mono font-bold" style={{ color: 'var(--ac-accent)' }}>{grupo.pedido_sequencial != null ? `Â· ${grupo.pedido_codigo}` : grupo.pedido_codigo}</span>
-                                    <span style={{ color: 'var(--ac-text)' }}>Â· {grupo.cliente_nome ?? 'â€”'}</span>
+                                    <span
+                                      className="font-mono font-bold"
+                                      style={{ color: "var(--ac-accent)" }}
+                                    >
+                                      {grupo.pedido_sequencial != null
+                                        ? `· ${grupo.pedido_codigo}`
+                                        : grupo.pedido_codigo}
+                                    </span>
+                                    <span style={{ color: "var(--ac-text)" }}>
+                                      · {grupo.cliente_nome ?? "—"}
+                                    </span>
                                   </>
                                 ) : (
-                                  <span className="font-semibold" style={{ color: 'var(--ac-muted)' }}>Ordens manuais (sem pedido)</span>
+                                  <span
+                                    className="font-semibold"
+                                    style={{ color: "var(--ac-muted)" }}
+                                  >
+                                    Ordens manuais (sem pedido)
+                                  </span>
                                 )}
-                                <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
-                                  Â· {grupo.ocs.length} {grupo.ocs.length === 1 ? 'OC' : 'OCs'}
+                                <span className="text-xs" style={{ color: "var(--ac-muted)" }}>
+                                  · {grupo.ocs.length} {grupo.ocs.length === 1 ? "OC" : "OCs"}
                                 </span>
-                                <span className="ml-auto text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
-                                  Total: <span style={{ color: 'var(--ac-text)' }}>{fmt(totalGrupo)}</span>
+                                <span
+                                  className="ml-auto text-xs font-medium"
+                                  style={{ color: "var(--ac-muted)" }}
+                                >
+                                  Total:{" "}
+                                  <span style={{ color: "var(--ac-text)" }}>{fmt(totalGrupo)}</span>
                                 </span>
                               </div>
                             </td>
                           </tr>
-                        )
-                        const linhas = grupo.ocs.map((oc) => renderRow(oc, globalIdx++))
-                        return [header, ...linhas]
-                      })
+                        );
+                        const linhas = grupo.ocs.map((oc) => renderRow(oc, globalIdx++));
+                        return [header, ...linhas];
+                      });
                     }
 
-                    return ordensFiltradas.map((oc, idx) => renderRow(oc, idx))
+                    return ordensFiltradas.map((oc, idx) => renderRow(oc, idx));
                   })()}
                 </tbody>
               </table>
@@ -2155,7 +2614,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         </div>
       )}
 
-      {/* Modal detalhe Fila de ReposiÃ§Ã£o */}
+      {/* Modal detalhe Fila de Reposição */}
       {filaAberta && (
         <FilaReposicaoDetalheModal
           fila={filaAberta}
@@ -2164,10 +2623,10 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           initialDetalhePromise={filaDetalheInFlightRef.current.get(filaAberta.id)}
           onClose={() => setFilaAberta(null)}
           onRefresh={() => {
-            setFilaAberta(null)
-            flash('OperaÃ§Ã£o realizada com sucesso.')
-            refresh()
-            setAba('historico')
+            setFilaAberta(null);
+            flash("Operação realizada com sucesso.");
+            refresh();
+            setAba("historico");
           }}
         />
       )}
@@ -2182,9 +2641,9 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           onClose={() => setOcAberta(null)}
           onRefresh={refresh}
           onRequestExcluir={() => {
-            setDeletando(ocAberta)
-            setOcAberta(null)
-            setErroDelete('')
+            setDeletando(ocAberta);
+            setOcAberta(null);
+            setErroDelete("");
           }}
         />
       )}
@@ -2193,35 +2652,43 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
         open={ocCriarOpen}
         onClose={() => setOcCriarOpen(false)}
         onCriada={(codigo) => {
-          flash(`OC ${codigo} criada com sucesso.`)
-          refresh()
-          setAba('historico')
+          flash(`OC ${codigo} criada com sucesso.`);
+          refresh();
+          setAba("historico");
         }}
       />
 
       {/* Modal confirmar delete */}
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir Ordem de Compra">
         <div className="space-y-4">
-          <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-            Tem certeza que deseja excluir a OC{' '}
-            <strong style={{ color: 'var(--ac-text)' }}>
-              {deletando?.sequencial_fornecedor != null ? `#${deletando.sequencial_fornecedor} Â· ` : ''}
+          <p className="text-sm" style={{ color: "var(--ac-muted)" }}>
+            Tem certeza que deseja excluir a OC{" "}
+            <strong style={{ color: "var(--ac-text)" }}>
+              {deletando?.sequencial_fornecedor != null
+                ? `#${deletando.sequencial_fornecedor} · `
+                : ""}
               {deletando?.codigo}
-            </strong>?
-            Esta aÃ§Ã£o nÃ£o pode ser desfeita.
+            </strong>
+            ? Esta ação não pode ser desfeita.
           </p>
           {erroDelete && (
-            <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#fee2e2', color: '#dc2626' }}>
+            <p
+              className="text-sm px-3 py-2 rounded-lg"
+              style={{ background: "#fee2e2", color: "#dc2626" }}
+            >
               {erroDelete}
             </p>
           )}
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setDeletando(null)}>Cancelar</Button>
-            <Button variant="danger" loading={loadingDelete} onClick={handleDeleteOC}>Excluir</Button>
+            <Button variant="secondary" onClick={() => setDeletando(null)}>
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={loadingDelete} onClick={handleDeleteOC}>
+              Excluir
+            </Button>
           </div>
         </div>
       </Modal>
     </>
-  )
+  );
 }
-

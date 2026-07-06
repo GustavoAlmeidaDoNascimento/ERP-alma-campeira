@@ -1,43 +1,49 @@
-﻿'use client'
+﻿"use client";
 
-import { useState, useMemo } from 'react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Modal } from '@/components/ui/modal'
-import { FacaModal } from './faca-modal'
-import { deletarFaca, type DeletarFacaModo } from '@/lib/actions/facas'
-import { BadgeEstoque } from '@/components/ui/badge-estoque'
-import { statusEstoqueFaca, type Faca, type CategoriaFacaDB, type MateriaPrima, type StatusEstoque } from '@/types'
-import { lucroUnitarioFaca } from '@/types'
-import { useErpTabs } from '@/components/layout/erp-tabs'
-import { useFacas, useCategoriasFaca, useMateriasPrimas } from '@/lib/query/hooks'
-import { getOptimizedImageUrl } from '@/lib/images'
+import { useState, useMemo } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { FacaModal } from "./faca-modal";
+import { deletarFaca, type DeletarFacaModo } from "@/lib/actions/facas";
+import { BadgeEstoque } from "@/components/ui/badge-estoque";
+import {
+  statusEstoqueFaca,
+  type Faca,
+  type CategoriaFacaDB,
+  type MateriaPrima,
+  type StatusEstoque,
+} from "@/types";
+import { lucroUnitarioFaca } from "@/types";
+import { useErpTabs } from "@/components/layout/erp-tabs";
+import { useFacas, useCategoriasFaca, useMateriasPrimas } from "@/lib/query/hooks";
+import { getOptimizedImageUrl } from "@/lib/images";
 
-type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean }
-type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number }
+type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean };
+type TaxasLucro = { taxa_producao: number; margem_lucro: number; taxa_comissao: number };
 
-const STATUS_ESTOQUE_ORDEM: Record<StatusEstoque, number> = { critico: 0, atencao: 1, ok: 2 }
+const STATUS_ESTOQUE_ORDEM: Record<StatusEstoque, number> = { critico: 0, atencao: 1, ok: 2 };
 
 type OrdemColunaFacas =
-  | 'codigo'
-  | 'nome'
-  | 'categoria'
-  | 'preco_custo'
-  | 'preco_venda'
-  | 'lucro'
-  | 'estoque'
-  | 'status'
+  | "codigo"
+  | "nome"
+  | "categoria"
+  | "preco_custo"
+  | "preco_venda"
+  | "lucro"
+  | "estoque"
+  | "status";
 
 type Props = {
-  facas: Faca[]
-  categorias: CategoriaFacaDB[]
-  // Carregada lazy via React Query â€” sÃ³ usada no modal de ediÃ§Ã£o.
-  materiasPrimas: MateriaPrima[] | undefined
-  perm: Perm
-  verPrecoVenda: boolean
-  verLucro: boolean
-  taxasLucro: TaxasLucro
-}
+  facas: Faca[];
+  categorias: CategoriaFacaDB[];
+  // Carregada lazy via React Query — só usada no modal de edição.
+  materiasPrimas: MateriaPrima[] | undefined;
+  perm: Perm;
+  verPrecoVenda: boolean;
+  verLucro: boolean;
+  taxasLucro: TaxasLucro;
+};
 
 export function FacasClient({
   facas: initialFacas,
@@ -48,153 +54,183 @@ export function FacasClient({
   verLucro,
   taxasLucro,
 }: Props) {
-  const { refreshActiveTab, openTab } = useErpTabs()
-  const { data: facas = initialFacas } = useFacas({ initialData: initialFacas })
-  const { data: categorias = initialCategorias } = useCategoriasFaca({ initialData: initialCategorias })
+  const { refreshActiveTab, openTab } = useErpTabs();
+  const { data: facas = initialFacas } = useFacas({ initialData: initialFacas });
+  const { data: categorias = initialCategorias } = useCategoriasFaca({
+    initialData: initialCategorias,
+  });
   const { data: materiasPrimas = initialMP ?? [] } = useMateriasPrimas(
     initialMP ? { initialData: initialMP } : {},
-  )
+  );
   const badgeCategoria = useMemo(() => {
-    const map: Record<string, React.CSSProperties> = {}
+    const map: Record<string, React.CSSProperties> = {};
     for (const cat of categorias) {
-      map[cat.nome] = { color: cat.cor_texto, background: cat.cor_fundo, border: `1px solid ${cat.cor_borda}` }
+      map[cat.nome] = {
+        color: cat.cor_texto,
+        background: cat.cor_fundo,
+        border: `1px solid ${cat.cor_borda}`,
+      };
     }
-    return map
-  }, [categorias])
-  const [modalAberto, setModalAberto] = useState(false)
-  const [editando, setEditando] = useState<Faca | null>(null)
-  const [deletando, setDeletando] = useState<Faca | null>(null)
-  const [modoDelete, setModoDelete] = useState<DeletarFacaModo>('desmontar')
-  const [erroDelete, setErroDelete] = useState('')
-  const [loadingDelete, setLoadingDelete] = useState(false)
-  const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>('')
-  const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>('')
-  const [modalCatalogoAberto, setModalCatalogoAberto] = useState(false)
-  const [busca, setBusca] = useState('')
-  const [filtroCategoria, setFiltroCategoria] = useState('')
-  const [ordenacao, setOrdenacao] = useState<{ coluna: OrdemColunaFacas | null; dir: 'asc' | 'desc' }>({
+    return map;
+  }, [categorias]);
+  const [modalAberto, setModalAberto] = useState(false);
+  const [editando, setEditando] = useState<Faca | null>(null);
+  const [deletando, setDeletando] = useState<Faca | null>(null);
+  const [modoDelete, setModoDelete] = useState<DeletarFacaModo>("desmontar");
+  const [erroDelete, setErroDelete] = useState("");
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [fotoLightboxSrc, setFotoLightboxSrc] = useState<string>("");
+  const [fotoLightboxAlt, setFotoLightboxAlt] = useState<string>("");
+  const [modalCatalogoAberto, setModalCatalogoAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [ordenacao, setOrdenacao] = useState<{
+    coluna: OrdemColunaFacas | null;
+    dir: "asc" | "desc";
+  }>({
     coluna: null,
-    dir: 'asc',
-  })
+    dir: "asc",
+  });
 
   function toggleOrdem(coluna: OrdemColunaFacas) {
     setOrdenacao((prev) => {
       if (prev.coluna === coluna) {
-        return { coluna, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        return { coluna, dir: prev.dir === "asc" ? "desc" : "asc" };
       }
-      return { coluna, dir: 'asc' }
-    })
+      return { coluna, dir: "asc" };
+    });
   }
 
   const filtradas = useMemo(() => {
     return facas.filter((f) => {
-      const matchBusca = !busca.trim() ||
+      const matchBusca =
+        !busca.trim() ||
         f.nome.toLowerCase().includes(busca.toLowerCase()) ||
-        f.codigo.toLowerCase().includes(busca.toLowerCase())
-      const matchCategoria = !filtroCategoria || f.categoria === filtroCategoria
-      return matchBusca && matchCategoria
-    })
-  }, [facas, busca, filtroCategoria])
+        f.codigo.toLowerCase().includes(busca.toLowerCase());
+      const matchCategoria = !filtroCategoria || f.categoria === filtroCategoria;
+      return matchBusca && matchCategoria;
+    });
+  }, [facas, busca, filtroCategoria]);
 
   const ordenadas = useMemo(() => {
-    const col = ordenacao.coluna
-    if (!col) return filtradas
-    const dir = ordenacao.dir === 'asc' ? 1 : -1
+    const col = ordenacao.coluna;
+    if (!col) return filtradas;
+    const dir = ordenacao.dir === "asc" ? 1 : -1;
     return [...filtradas].sort((a, b) => {
       switch (col) {
-        case 'codigo':
-          return a.codigo.localeCompare(b.codigo, 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
-        case 'nome':
-          return a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }) * dir
-        case 'categoria':
-          return a.categoria.localeCompare(b.categoria, 'pt-BR', { sensitivity: 'base' }) * dir
-        case 'preco_custo':
-          return ((a.preco_custo ?? 0) - (b.preco_custo ?? 0)) * dir
-        case 'preco_venda':
-          return (a.preco_venda - b.preco_venda) * dir
-        case 'lucro':
-          return (lucroUnitarioFaca(a, taxasLucro) - lucroUnitarioFaca(b, taxasLucro)) * dir
-        case 'estoque': {
-          const diff = a.estoque_atual - b.estoque_atual
-          if (diff !== 0) return diff * dir
-          return a.codigo.localeCompare(b.codigo, 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
+        case "codigo":
+          return (
+            a.codigo.localeCompare(b.codigo, "pt-BR", { sensitivity: "base", numeric: true }) * dir
+          );
+        case "nome":
+          return a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }) * dir;
+        case "categoria":
+          return a.categoria.localeCompare(b.categoria, "pt-BR", { sensitivity: "base" }) * dir;
+        case "preco_custo":
+          return ((a.preco_custo ?? 0) - (b.preco_custo ?? 0)) * dir;
+        case "preco_venda":
+          return (a.preco_venda - b.preco_venda) * dir;
+        case "lucro":
+          return (lucroUnitarioFaca(a, taxasLucro) - lucroUnitarioFaca(b, taxasLucro)) * dir;
+        case "estoque": {
+          const diff = a.estoque_atual - b.estoque_atual;
+          if (diff !== 0) return diff * dir;
+          return (
+            a.codigo.localeCompare(b.codigo, "pt-BR", { sensitivity: "base", numeric: true }) * dir
+          );
         }
-        case 'status': {
-          const sa = STATUS_ESTOQUE_ORDEM[statusEstoqueFaca(a)]
-          const sb = STATUS_ESTOQUE_ORDEM[statusEstoqueFaca(b)]
-          const diff = sa - sb
-          if (diff !== 0) return diff * dir
-          return a.codigo.localeCompare(b.codigo, 'pt-BR', { sensitivity: 'base', numeric: true }) * dir
+        case "status": {
+          const sa = STATUS_ESTOQUE_ORDEM[statusEstoqueFaca(a)];
+          const sb = STATUS_ESTOQUE_ORDEM[statusEstoqueFaca(b)];
+          const diff = sa - sb;
+          if (diff !== 0) return diff * dir;
+          return (
+            a.codigo.localeCompare(b.codigo, "pt-BR", { sensitivity: "base", numeric: true }) * dir
+          );
         }
         default:
-          return 0
+          return 0;
       }
-    })
-  }, [filtradas, ordenacao, taxasLucro])
+    });
+  }, [filtradas, ordenacao, taxasLucro]);
 
-  const categoriasDisponiveis = useMemo(() => [...new Set(facas.map((f) => f.categoria))].sort(), [facas])
+  const categoriasDisponiveis = useMemo(
+    () => [...new Set(facas.map((f) => f.categoria))].sort(),
+    [facas],
+  );
 
   const fotoUrlByFacaId = useMemo(() => {
-    const map = new Map<string, string>()
+    const map = new Map<string, string>();
     for (const f of facas) {
-      if (!f.foto_url) continue
+      if (!f.foto_url) continue;
       map.set(
         f.id,
         getOptimizedImageUrl(f.foto_url, {
           width: 64,
           height: 64,
           quality: 65,
-          resize: 'cover',
-        })
-      )
+          resize: "cover",
+        }),
+      );
     }
-    return map
-  }, [facas])
+    return map;
+  }, [facas]);
 
-  function abrirNovo() { setEditando(null); setModalAberto(true) }
-  function abrirEditar(f: Faca) { setEditando(f); setModalAberto(true) }
+  function abrirNovo() {
+    setEditando(null);
+    setModalAberto(true);
+  }
+  function abrirEditar(f: Faca) {
+    setEditando(f);
+    setModalAberto(true);
+  }
 
   function abrirFotoLightbox(faca: Faca, thumbFallback: string) {
-    if (!faca.foto_url) return
+    if (!faca.foto_url) return;
     const srcGrande = getOptimizedImageUrl(faca.foto_url, {
       width: 520,
       height: 520,
       quality: 80,
-      resize: 'contain',
+      resize: "contain",
       fallbackUrl: thumbFallback,
-    })
+    });
 
-    setFotoLightboxSrc(srcGrande || thumbFallback)
-    setFotoLightboxAlt(faca.nome)
+    setFotoLightboxSrc(srcGrande || thumbFallback);
+    setFotoLightboxAlt(faca.nome);
   }
 
   async function confirmarDelete() {
-    if (!deletando) return
-    setErroDelete('')
-    setLoadingDelete(true)
+    if (!deletando) return;
+    setErroDelete("");
+    setLoadingDelete(true);
     try {
-      await deletarFaca(deletando.id, modoDelete)
-      setDeletando(null)
-      refreshActiveTab()
+      await deletarFaca(deletando.id, modoDelete);
+      setDeletando(null);
+      refreshActiveTab();
     } catch (e: unknown) {
-      setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
+      setErroDelete(e instanceof Error ? e.message : "Erro ao excluir.");
     } finally {
-      setLoadingDelete(false)
+      setLoadingDelete(false);
     }
   }
 
   function navegarDetalhe(faca: Faca) {
-    openTab(`/facas/${faca.id}`)
+    openTab(`/facas/${faca.id}`);
   }
 
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid var(--ac-border)' }}>
+      <div
+        className="flex items-center justify-between px-8 py-6"
+        style={{ borderBottom: "1px solid var(--ac-border)" }}
+      >
         <div>
-          <h2 className="text-2xl font-bold" style={{ color: 'var(--ac-text)' }}>Facas</h2>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--ac-muted)' }}>
-            {facas.length} {facas.length === 1 ? 'faca no catÃ¡logo' : 'facas no catÃ¡logo'}
+          <h2 className="text-2xl font-bold" style={{ color: "var(--ac-text)" }}>
+            Facas
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color: "var(--ac-muted)" }}>
+            {facas.length} {facas.length === 1 ? "faca no catálogo" : "facas no catálogo"}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -203,17 +239,23 @@ export function FacasClient({
             onClick={() => setModalCatalogoAberto(true)}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-all hover:brightness-95"
             style={{
-              background: 'transparent',
-              color: 'var(--ac-text)',
-              border: '1px solid var(--ac-border)',
+              background: "transparent",
+              color: "var(--ac-text)",
+              border: "1px solid var(--ac-border)",
               fontWeight: 500,
             }}
           >
-            Ver catÃ¡logo pÃºblico
+            Ver catálogo público
           </button>
           {perm.criar && (
             <Button onClick={abrirNovo}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="size-4">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                className="size-4"
+              >
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
@@ -226,21 +268,37 @@ export function FacasClient({
       {/* Filtros */}
       <div className="flex items-center gap-3 px-8 py-4">
         <div className="relative flex-1 max-w-sm">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
             className="absolute left-3 top-1/2 -translate-y-1/2 size-4 pointer-events-none"
-            style={{ color: 'var(--ac-muted)' }}
+            style={{ color: "var(--ac-muted)" }}
           >
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
             type="text"
-            placeholder="Buscar por nome ou cÃ³digo..."
+            placeholder="Buscar por nome ou código..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all"
-            style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--ac-accent) 20%, transparent)' }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)'; e.currentTarget.style.boxShadow = 'none' }}
+            style={{
+              background: "var(--ac-card)",
+              border: "1px solid var(--ac-border)",
+              color: "var(--ac-text)",
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = "var(--ac-accent)";
+              e.currentTarget.style.boxShadow =
+                "0 0 0 3px color-mix(in srgb, var(--ac-accent) 20%, transparent)";
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = "var(--ac-border)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
           />
         </div>
         <select
@@ -248,101 +306,192 @@ export function FacasClient({
           onChange={(e) => setFiltroCategoria(e.target.value)}
           className="py-2.5 px-3 rounded-lg text-sm outline-none transition-all appearance-none"
           style={{
-            background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)',
+            background: "var(--ac-card)",
+            border: "1px solid var(--ac-border)",
+            color: "var(--ac-text)",
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-            backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '16px', paddingRight: '32px',
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 8px center",
+            backgroundSize: "16px",
+            paddingRight: "32px",
           }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--ac-accent)' }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--ac-border)' }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = "var(--ac-accent)";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = "var(--ac-border)";
+          }}
         >
           <option value="">Todas as categorias</option>
-          {categoriasDisponiveis.map((c) => <option key={c} value={c}>{c}</option>)}
+          {categoriasDisponiveis.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
         </select>
       </div>
 
       {/* Tabela */}
       <div className="px-8 pb-8">
-        <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--ac-border)' }}>
+        <div
+          className="rounded-xl overflow-x-auto"
+          style={{ border: "1px solid var(--ac-border)" }}
+        >
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: 'var(--ac-bg)', borderBottom: '1px solid var(--ac-border)' }}>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide" style={{ color: 'var(--ac-muted)' }}>Foto</th>
-                {(['codigo', 'nome', 'categoria'] as const).map((col) => (
+              <tr
+                style={{ background: "var(--ac-bg)", borderBottom: "1px solid var(--ac-border)" }}
+              >
+                <th
+                  className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide"
+                  style={{ color: "var(--ac-muted)" }}
+                >
+                  Foto
+                </th>
+                {(["codigo", "nome", "categoria"] as const).map((col) => (
                   <th
                     key={col}
                     onClick={() => toggleOrdem(col)}
                     className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                    style={{ color: ordenacao.coluna === col ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                    style={{
+                      color: ordenacao.coluna === col ? "var(--ac-accent)" : "var(--ac-muted)",
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     <span className="inline-flex items-center gap-1">
-                      {col === 'codigo' ? 'CÃ³digo' : col === 'nome' ? 'Nome' : 'Categoria'}
-                      <span style={{ opacity: ordenacao.coluna === col ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordenacao.coluna === col ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
+                      {col === "codigo" ? "Código" : col === "nome" ? "Nome" : "Categoria"}
+                      <span
+                        style={{ opacity: ordenacao.coluna === col ? 1 : 0.3, fontSize: "10px" }}
+                      >
+                        {ordenacao.coluna === col
+                          ? ordenacao.dir === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "▲"}
                       </span>
                     </span>
                   </th>
                 ))}
                 <th
-                  onClick={() => toggleOrdem('preco_custo')}
+                  onClick={() => toggleOrdem("preco_custo")}
                   className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                  style={{ color: ordenacao.coluna === 'preco_custo' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  style={{
+                    color:
+                      ordenacao.coluna === "preco_custo" ? "var(--ac-accent)" : "var(--ac-muted)",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   <span className="inline-flex w-full items-center justify-end gap-1">
-                    PreÃ§o Custo
-                    <span style={{ opacity: ordenacao.coluna === 'preco_custo' ? 1 : 0.3, fontSize: '10px' }}>
-                      {ordenacao.coluna === 'preco_custo' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
+                    Preço Custo
+                    <span
+                      style={{
+                        opacity: ordenacao.coluna === "preco_custo" ? 1 : 0.3,
+                        fontSize: "10px",
+                      }}
+                    >
+                      {ordenacao.coluna === "preco_custo"
+                        ? ordenacao.dir === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "▲"}
                     </span>
                   </span>
                 </th>
                 {verPrecoVenda && (
                   <th
-                    onClick={() => toggleOrdem('preco_venda')}
+                    onClick={() => toggleOrdem("preco_venda")}
                     className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                    style={{ color: ordenacao.coluna === 'preco_venda' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                    style={{
+                      color:
+                        ordenacao.coluna === "preco_venda" ? "var(--ac-accent)" : "var(--ac-muted)",
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     <span className="inline-flex w-full items-center justify-end gap-1">
-                      PreÃ§o Venda
-                      <span style={{ opacity: ordenacao.coluna === 'preco_venda' ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordenacao.coluna === 'preco_venda' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
+                      Preço Venda
+                      <span
+                        style={{
+                          opacity: ordenacao.coluna === "preco_venda" ? 1 : 0.3,
+                          fontSize: "10px",
+                        }}
+                      >
+                        {ordenacao.coluna === "preco_venda"
+                          ? ordenacao.dir === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "▲"}
                       </span>
                     </span>
                   </th>
                 )}
                 {verLucro && verPrecoVenda && (
                   <th
-                    onClick={() => toggleOrdem('lucro')}
+                    onClick={() => toggleOrdem("lucro")}
                     className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                    style={{ color: ordenacao.coluna === 'lucro' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                    style={{
+                      color: ordenacao.coluna === "lucro" ? "var(--ac-accent)" : "var(--ac-muted)",
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     <span className="inline-flex w-full items-center justify-end gap-1">
                       Lucro
-                      <span style={{ opacity: ordenacao.coluna === 'lucro' ? 1 : 0.3, fontSize: '10px' }}>
-                        {ordenacao.coluna === 'lucro' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
+                      <span
+                        style={{
+                          opacity: ordenacao.coluna === "lucro" ? 1 : 0.3,
+                          fontSize: "10px",
+                        }}
+                      >
+                        {ordenacao.coluna === "lucro"
+                          ? ordenacao.dir === "asc"
+                            ? "▲"
+                            : "▼"
+                          : "▲"}
                       </span>
                     </span>
                   </th>
                 )}
                 <th
-                  onClick={() => toggleOrdem('estoque')}
+                  onClick={() => toggleOrdem("estoque")}
                   className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                  style={{ color: ordenacao.coluna === 'estoque' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  style={{
+                    color: ordenacao.coluna === "estoque" ? "var(--ac-accent)" : "var(--ac-muted)",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   <span className="inline-flex w-full items-center justify-end gap-1">
-                    Estoque / MÃ­n.
-                    <span style={{ opacity: ordenacao.coluna === 'estoque' ? 1 : 0.3, fontSize: '10px' }}>
-                      {ordenacao.coluna === 'estoque' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
+                    Estoque / Mín.
+                    <span
+                      style={{
+                        opacity: ordenacao.coluna === "estoque" ? 1 : 0.3,
+                        fontSize: "10px",
+                      }}
+                    >
+                      {ordenacao.coluna === "estoque"
+                        ? ordenacao.dir === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "▲"}
                     </span>
                   </span>
                 </th>
                 <th
-                  onClick={() => toggleOrdem('status')}
+                  onClick={() => toggleOrdem("status")}
                   className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer"
-                  style={{ color: ordenacao.coluna === 'status' ? 'var(--ac-accent)' : 'var(--ac-muted)', whiteSpace: 'nowrap' }}
+                  style={{
+                    color: ordenacao.coluna === "status" ? "var(--ac-accent)" : "var(--ac-muted)",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   <span className="inline-flex w-full items-center justify-center gap-1">
                     Status
-                    <span style={{ opacity: ordenacao.coluna === 'status' ? 1 : 0.3, fontSize: '10px' }}>
-                      {ordenacao.coluna === 'status' ? (ordenacao.dir === 'asc' ? 'â–²' : 'â–¼') : 'â–²'}
+                    <span
+                      style={{ opacity: ordenacao.coluna === "status" ? 1 : 0.3, fontSize: "10px" }}
+                    >
+                      {ordenacao.coluna === "status"
+                        ? ordenacao.dir === "asc"
+                          ? "▲"
+                          : "▼"
+                        : "▲"}
                     </span>
                   </span>
                 </th>
@@ -355,29 +504,35 @@ export function FacasClient({
                   <td
                     colSpan={8 + (verPrecoVenda ? 1 : 0) + (verLucro && verPrecoVenda ? 1 : 0)}
                     className="text-center py-12 text-sm"
-                    style={{ color: 'var(--ac-muted)' }}
+                    style={{ color: "var(--ac-muted)" }}
                   >
-                    {busca || filtroCategoria ? 'Nenhum resultado para esse filtro.' : 'Nenhuma faca cadastrada ainda.'}
+                    {busca || filtroCategoria
+                      ? "Nenhum resultado para esse filtro."
+                      : "Nenhuma faca cadastrada ainda."}
                   </td>
                 </tr>
               )}
               {ordenadas.map((faca, i) => {
-                const catStyle = badgeCategoria[faca.categoria] ?? badgeCategoria['Outro']
-                const statusEstoque = statusEstoqueFaca(faca)
+                const catStyle = badgeCategoria[faca.categoria] ?? badgeCategoria["Outro"];
+                const statusEstoque = statusEstoqueFaca(faca);
                 return (
                   <tr
                     key={faca.id}
-                    style={{ borderTop: i > 0 ? '1px solid var(--ac-border)' : undefined, background: 'var(--ac-card)', cursor: 'pointer' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ac-bg)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--ac-card)')}
+                    style={{
+                      borderTop: i > 0 ? "1px solid var(--ac-border)" : undefined,
+                      background: "var(--ac-card)",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--ac-bg)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "var(--ac-card)")}
                     onClick={(e) => {
-                      if ((e.target as HTMLElement).closest('button')) return
-                      navegarDetalhe(faca)
+                      if ((e.target as HTMLElement).closest("button")) return;
+                      navegarDetalhe(faca);
                     }}
                   >
                     <td className="px-4 py-3">
                       {(() => {
-                        const thumbUrl = fotoUrlByFacaId.get(faca.id)
+                        const thumbUrl = fotoUrlByFacaId.get(faca.id);
                         if (thumbUrl) {
                           return (
                             <button
@@ -385,11 +540,11 @@ export function FacasClient({
                               onClick={() => abrirFotoLightbox(faca, thumbUrl)}
                               aria-label={`Expandir foto de ${faca.nome}`}
                               style={{
-                                background: 'transparent',
-                                border: 'none',
+                                background: "transparent",
+                                border: "none",
                                 padding: 0,
                                 borderRadius: 10,
-                                cursor: 'zoom-in',
+                                cursor: "zoom-in",
                               }}
                             >
                               <img
@@ -399,14 +554,14 @@ export function FacasClient({
                                 height={64}
                                 loading="lazy"
                                 style={{
-                                  borderRadius: '10px',
-                                  objectFit: 'cover',
-                                  border: '1px solid var(--ac-border)',
-                                  display: 'block',
+                                  borderRadius: "10px",
+                                  objectFit: "cover",
+                                  border: "1px solid var(--ac-border)",
+                                  display: "block",
                                 }}
                               />
                             </button>
-                          )
+                          );
                         }
                         return (
                           <div
@@ -415,11 +570,12 @@ export function FacasClient({
                               width: 64,
                               height: 64,
                               borderRadius: 10,
-                              background: 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.06))',
-                              border: '1px solid var(--ac-border)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
+                              background:
+                                "linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.06))",
+                              border: "1px solid var(--ac-border)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                             }}
                           >
                             <img
@@ -427,44 +583,69 @@ export function FacasClient({
                               alt="Sem foto"
                               width={28}
                               height={28}
-                              style={{ objectFit: 'contain' }}
+                              style={{ objectFit: "contain" }}
                             />
                           </div>
-                        )
+                        );
                       })()}
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--ac-muted)' }}>
+                    <td
+                      className="px-4 py-3 font-mono text-xs font-medium"
+                      style={{ color: "var(--ac-muted)" }}
+                    >
                       {faca.codigo}
                     </td>
-                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--ac-text)' }}>
+                    <td className="px-4 py-3 font-medium" style={{ color: "var(--ac-text)" }}>
                       {faca.nome}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold" style={catStyle}>
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"
+                        style={catStyle}
+                      >
                         {faca.categoria}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
-                      {(faca.preco_custo ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    <td
+                      className="px-4 py-3 text-right tabular-nums font-semibold"
+                      style={{ color: "var(--ac-text)" }}
+                    >
+                      {(faca.preco_custo ?? 0).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
                     </td>
                     {verPrecoVenda && (
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold" style={{ color: 'var(--ac-text)' }}>
-                        {faca.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      <td
+                        className="px-4 py-3 text-right tabular-nums font-semibold"
+                        style={{ color: "var(--ac-text)" }}
+                      >
+                        {faca.preco_venda.toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
                       </td>
                     )}
                     {verLucro && verPrecoVenda && (
                       <td
                         className="px-4 py-3 text-right tabular-nums font-semibold"
                         style={{
-                          color: lucroUnitarioFaca(faca, taxasLucro) < 0 ? '#dc2626' : 'var(--ac-text)',
+                          color:
+                            lucroUnitarioFaca(faca, taxasLucro) < 0 ? "#dc2626" : "var(--ac-text)",
                         }}
                       >
-                        {lucroUnitarioFaca(faca, taxasLucro).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        {lucroUnitarioFaca(faca, taxasLucro).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
                       </td>
                     )}
-                    <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--ac-text)' }}>
+                    <td
+                      className="px-4 py-3 text-right tabular-nums"
+                      style={{ color: "var(--ac-text)" }}
+                    >
                       <span className="font-semibold">{faca.estoque_atual}</span>
-                      <span className="text-xs ml-1" style={{ color: 'var(--ac-muted)' }}>
+                      <span className="text-xs ml-1" style={{ color: "var(--ac-muted)" }}>
                         / {faca.estoque_minimo}
                       </span>
                     </td>
@@ -474,26 +655,58 @@ export function FacasClient({
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {perm.editar && (
-                          <button onClick={() => abrirEditar(faca)} className="p-1.5 rounded-lg transition-colors"
-                            style={{ color: 'var(--ac-muted)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ac-border)'; e.currentTarget.style.color = 'var(--ac-text)' }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
+                          <button
+                            onClick={() => abrirEditar(faca)}
+                            className="p-1.5 rounded-lg transition-colors"
+                            style={{ color: "var(--ac-muted)" }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "var(--ac-border)";
+                              e.currentTarget.style.color = "var(--ac-text)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.color = "var(--ac-muted)";
+                            }}
                             title="Editar"
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-4">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              className="size-4"
+                            >
                               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                             </svg>
                           </button>
                         )}
                         {perm.deletar && (
-                          <button onClick={() => { setDeletando(faca); setModoDelete('desmontar'); setErroDelete('') }} className="p-1.5 rounded-lg transition-colors"
-                            style={{ color: 'var(--ac-muted)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626' }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ac-muted)' }}
+                          <button
+                            onClick={() => {
+                              setDeletando(faca);
+                              setModoDelete("desmontar");
+                              setErroDelete("");
+                            }}
+                            className="p-1.5 rounded-lg transition-colors"
+                            style={{ color: "var(--ac-muted)" }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#fee2e2";
+                              e.currentTarget.style.color = "#dc2626";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.color = "var(--ac-muted)";
+                            }}
                             title="Excluir"
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="size-4">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={1.8}
+                              className="size-4"
+                            >
                               <polyline points="3 6 5 6 21 6" />
                               <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                               <path d="M10 11v6M14 11v6" />
@@ -504,7 +717,7 @@ export function FacasClient({
                       </div>
                     </td>
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
@@ -524,63 +737,80 @@ export function FacasClient({
       <Modal
         open={modalCatalogoAberto}
         onClose={() => setModalCatalogoAberto(false)}
-        title="Abrir catÃ¡logo pÃºblico"
+        title="Abrir catálogo público"
         width="420px"
       >
-        <p className="text-sm" style={{ color: 'var(--ac-muted)' }}>
-          Escolha se deseja exibir preÃ§os (como fica hoje) ou somente modelos, ideal para compartilhar.
+        <p className="text-sm" style={{ color: "var(--ac-muted)" }}>
+          Escolha se deseja exibir preços (como fica hoje) ou somente modelos, ideal para
+          compartilhar.
         </p>
         <div className="mt-5 flex flex-col gap-3">
           <Link
             href="/catalogo"
             onClick={() => setModalCatalogoAberto(false)}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-all hover:brightness-95"
-            style={{ background: 'var(--ac-accent)', color: '#0c0a09' }}
+            style={{ background: "var(--ac-accent)", color: "#0c0a09" }}
           >
-            Com preÃ§os
+            Com preços
           </Link>
           <Link
             href="/catalogo?sem_precos=1"
             onClick={() => setModalCatalogoAberto(false)}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all hover:brightness-95"
             style={{
-              background: 'transparent',
-              color: 'var(--ac-text)',
-              border: '1px solid var(--ac-border)',
+              background: "transparent",
+              color: "var(--ac-text)",
+              border: "1px solid var(--ac-border)",
             }}
           >
-            Sem preÃ§os
+            Sem preços
           </Link>
         </div>
       </Modal>
 
       <Modal open={!!deletando} onClose={() => setDeletando(null)} title="Excluir faca">
         <div className="flex flex-col gap-4">
-          <p className="text-sm" style={{ color: 'var(--ac-text)' }}>
-            Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>? Esta aÃ§Ã£o nÃ£o pode ser desfeita.
+          <p className="text-sm" style={{ color: "var(--ac-text)" }}>
+            Tem certeza que deseja excluir <strong>{deletando?.nome}</strong>? Esta ação não pode
+            ser desfeita.
           </p>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" style={{ color: 'var(--ac-text)' }}>
-              Como tratar as matÃ©rias-primas?
+            <label className="text-sm font-medium" style={{ color: "var(--ac-text)" }}>
+              Como tratar as matérias-primas?
             </label>
             <select
               value={modoDelete}
               onChange={(e) => setModoDelete(e.target.value as DeletarFacaModo)}
               className="w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-all appearance-none"
-              style={{ background: 'var(--ac-card)', border: '1px solid var(--ac-border)', color: 'var(--ac-text)' }}
+              style={{
+                background: "var(--ac-card)",
+                border: "1px solid var(--ac-border)",
+                color: "var(--ac-text)",
+              }}
             >
-              <option value="apagar_materias_primas">{deletando?.nome}: apagar materias primas tambÃ©m</option>
-              <option value="desmontar">desmontar: retornar matÃ©rias primas ao estoque</option>
+              <option value="apagar_materias_primas">
+                {deletando?.nome}: apagar materias primas também
+              </option>
+              <option value="desmontar">desmontar: retornar matérias primas ao estoque</option>
             </select>
           </div>
 
           {erroDelete && (
-            <p className="text-sm rounded-lg px-3 py-2" style={{ color: '#dc2626', background: '#fee2e2' }}>{erroDelete}</p>
+            <p
+              className="text-sm rounded-lg px-3 py-2"
+              style={{ color: "#dc2626", background: "#fee2e2" }}
+            >
+              {erroDelete}
+            </p>
           )}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setDeletando(null)}>Cancelar</Button>
-            <Button variant="danger" loading={loadingDelete} onClick={confirmarDelete}>Excluir</Button>
+            <Button variant="secondary" onClick={() => setDeletando(null)}>
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={loadingDelete} onClick={confirmarDelete}>
+              Excluir
+            </Button>
           </div>
         </div>
       </Modal>
@@ -588,21 +818,27 @@ export function FacasClient({
       <Modal
         open={!!fotoLightboxSrc}
         onClose={() => {
-          setFotoLightboxSrc('')
-          setFotoLightboxAlt('')
+          setFotoLightboxSrc("");
+          setFotoLightboxAlt("");
         }}
         title="Foto da faca"
         width="620px"
       >
-        <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--ac-border)', background: 'var(--ac-card)' }}>
+        <div
+          style={{
+            borderRadius: 14,
+            overflow: "hidden",
+            border: "1px solid var(--ac-border)",
+            background: "var(--ac-card)",
+          }}
+        >
           <img
             src={fotoLightboxSrc}
             alt={`Foto de ${fotoLightboxAlt}`}
-            style={{ width: '100%', height: 'auto', display: 'block' }}
+            style={{ width: "100%", height: "auto", display: "block" }}
           />
         </div>
       </Modal>
     </>
-  )
+  );
 }
-

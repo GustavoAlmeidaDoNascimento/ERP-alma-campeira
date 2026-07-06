@@ -11,7 +11,7 @@ import { permissoesFromArray } from '@/lib/permissoes'
 import { MODULOS } from '@/types'
 
 export async function getUsuariosPerfisList(): Promise<{ id: string; nome: string }[]> {
-  await assertPermissao('usuarios', 'ver')
+  await requireAuthenticatedUserId()
   return prisma.usuarioPerfil.findMany({
     where: { ativo: true },
     select: { id: true, nome: true },
