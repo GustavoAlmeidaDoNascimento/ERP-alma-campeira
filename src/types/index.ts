@@ -430,7 +430,7 @@ export type OrdemCompraItem = {
   quantidade_vendida: number
   quantidade_adicional: number
   preco_unitario: number | null
-  materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome'>
+  materia_prima?: Pick<MateriaPrima, 'id' | 'codigo' | 'nome' | 'categoria'>
 }
 
 export type OrdemCompra = {
@@ -499,6 +499,7 @@ export type FilaReposicaoItem = {
   materia_prima_id: string
   mp_nome: string
   mp_codigo: string
+  categoria: string
   mp_preco_custo: number
   fornecedor_id: string | null
   fornecedor_nome: string | null

@@ -35,6 +35,29 @@ async function revalidateOCLists(opts: { estoque?: boolean } = {}) {
 }
 
 const STATUS_OC_VALIDOS: readonly StatusOC[] = ['pendente', 'enviada', 'recebida']
+const ERRO_CATEGORIA_MISTURADA = 'Uma ordem de compra não pode misturar matérias-primas de categorias diferentes.'
+
+function normalizarCategoriaOC(categoria: string | null | undefined): string {
+  return (categoria ?? '').trim()
+}
+
+function nomeCategoriaOC(categoria: string | null | undefined): string {
+  const nome = normalizarCategoriaOC(categoria)
+  return nome || 'Sem categoria'
+}
+
+function validarCategoriasUnicasOC(categorias: Iterable<string | null | undefined>): string {
+  const unicas = new Set<string>()
+  for (const categoria of categorias) {
+    unicas.add(normalizarCategoriaOC(categoria))
+  }
+
+  if (unicas.size > 1) {
+    throw new Error(ERRO_CATEGORIA_MISTURADA)
+  }
+
+  return unicas.values().next().value ?? ''
+}
 
 function normalizarStatusEPago(row: { status?: unknown; pago?: unknown }): { status: StatusOC; pago: boolean } {
   let status = String(row.status ?? 'pendente')
@@ -86,6 +109,20 @@ async function marcarUltimaAlteracaoOC(ordemCompraId: string, usuarioId: string)
     data: camposRegistroAlteracao(usuarioId),
   })
   await revalidateOCLists()
+}
+
+async function getCategoriaEfetivaOC(ordemCompraId: string): Promise<string | null> {
+  const itens = await prisma.ordemCompraItem.findMany({
+    where: { ordemCompraId },
+    select: {
+      materiaPrima: {
+        select: { categoria: true },
+      },
+    },
+  })
+
+  if (itens.length === 0) return null
+  return validarCategoriasUnicasOC(itens.map((item) => item.materiaPrima?.categoria))
 }
 
 async function nextSequencialFornecedor(
@@ -192,6 +229,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
                         select: {
                           id: true,
                           codigo: true,
+                          categoria: true,
                           nome: true,
                           estoqueAtual: true,
                           estoqueMinimo: true,
@@ -262,6 +300,7 @@ export async function getFilaReposicaoDetalhe(fila_id: string): Promise<FilaRepo
     materia_prima_id: row.materiaPrimaId,
     mp_nome: row.materiaPrima.nome,
     mp_codigo: row.materiaPrima.codigo,
+    categoria: row.materiaPrima.categoria,
     mp_preco_custo: numberFrom(row.materiaPrima.precoCusto),
     fornecedor_id: row.materiaPrima.fornecedorId ?? null,
     fornecedor_nome: row.materiaPrima.fornecedor?.nome ?? null,
@@ -351,6 +390,7 @@ export type CriarOcItemManual = {
 
 export async function criarOrdemCompraManual(input: {
   fornecedor_id: string | null
+  categoria: string | null
   observacao?: string | null
   itens: CriarOcItemManual[]
 }): Promise<string> {
@@ -358,15 +398,22 @@ export async function criarOrdemCompraManual(input: {
 
   const linhas = input.itens?.filter((i) => i.materia_prima_id) ?? []
   if (linhas.length === 0) throw new Error('Adicione ao menos um item com matéria-prima.')
+  const categoriaSelecionada = normalizarCategoriaOC(input.categoria)
+  if (!categoriaSelecionada) throw new Error('Selecione a categoria da ordem de compra.')
 
   const mpIds = [...new Set(linhas.map((i) => i.materia_prima_id))]
   const mps = await prisma.materiaPrima.findMany({
     where: { id: { in: mpIds } },
-    select: { id: true, precoCusto: true },
+    select: { id: true, precoCusto: true, categoria: true },
   })
 
   if (mps.length !== mpIds.length) {
     throw new Error('Uma ou mais matérias-primas não foram encontradas.')
+  }
+
+  const categoriaItens = validarCategoriasUnicasOC(mps.map((mp) => mp.categoria))
+  if (categoriaItens !== categoriaSelecionada) {
+    throw new Error(ERRO_CATEGORIA_MISTURADA)
   }
 
   const custoPorId = new Map(mps.map((m) => [m.id, numberFrom(m.precoCusto)]))
@@ -509,10 +556,16 @@ export async function criarItemOrdemCompra(
   const uid = await resolverUsuarioRegistroOC(usuarioRegistroId)
   const mp = await prisma.materiaPrima.findUnique({
     where: { id: materia_prima_id },
-    select: { precoCusto: true },
+    select: { precoCusto: true, categoria: true },
   })
 
   if (!mp) throw new Error('Matéria-prima não encontrada.')
+
+  const categoriaAtualOC = await getCategoriaEfetivaOC(ordem_compra_id)
+  const categoriaNova = normalizarCategoriaOC(mp.categoria)
+  if (categoriaAtualOC && categoriaAtualOC !== categoriaNova) {
+    throw new Error(`Esta ordem de compra aceita apenas itens da categoria "${nomeCategoriaOC(categoriaAtualOC)}".`)
+  }
 
   await prisma.ordemCompraItem.create({
     data: {

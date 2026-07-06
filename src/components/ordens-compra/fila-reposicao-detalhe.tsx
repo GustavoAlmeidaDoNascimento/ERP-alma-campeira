@@ -182,17 +182,21 @@ export function FilaReposicaoDetalheModal({
     return s + i.mp_preco_custo * totalCompradoLocal(i)
   }, 0)
 
-  // Agrupa por fornecedor na mesma ordem do backend (gerarOCsDaFila cria uma OC
-  // por fornecedor distinto, incluindo "Sem fornecedor"). Assim o modal espelha
-  // exatamente quantas OCs sairão e como ficarão divididas.
+  // Agrupa por categoria + fornecedor na mesma ordem do backend. Assim o modal
+  // espelha exatamente quantas OCs sairão e como ficarão divididas.
   const grupos = useMemo(() => {
-    const map = new Map<string, { key: string; fornecedorNome: string; itens: FilaReposicaoItem[] }>()
+    const map = new Map<
+      string,
+      { key: string; categoria: string; fornecedorNome: string; itens: FilaReposicaoItem[] }
+    >()
     for (const item of itens) {
-      const key = item.fornecedor_id ?? '__sem_fornecedor__'
+      const categoria = item.categoria?.trim() || 'Sem categoria'
+      const fornecedorKey = item.fornecedor_id ?? '__sem_fornecedor__'
+      const key = `${categoria}::${fornecedorKey}`
       const nome = item.fornecedor_nome ?? 'Sem fornecedor'
       const grupo = map.get(key)
       if (grupo) grupo.itens.push(item)
-      else map.set(key, { key, fornecedorNome: nome, itens: [item] })
+      else map.set(key, { key, categoria, fornecedorNome: nome, itens: [item] })
     }
     return Array.from(map.values())
   }, [itens])
@@ -390,7 +394,10 @@ export function FilaReposicaoDetalheModal({
                             {geraOC ? `OC ${grupoIdx + 1}` : 'Sem OC'}
                           </span>
                           <span className="text-sm font-semibold" style={{ color: 'var(--ac-text)' }}>
-                            {grupo.fornecedorNome}
+                            {grupo.categoria}
+                          </span>
+                          <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
+                            · {grupo.fornecedorNome}
                           </span>
                           <span className="text-xs" style={{ color: 'var(--ac-muted)' }}>
                             · {itensSelGrupo.length}/{grupo.itens.length} {grupo.itens.length === 1 ? 'item' : 'itens'}

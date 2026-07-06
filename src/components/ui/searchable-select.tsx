@@ -5,6 +5,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 export type SearchableSelectOption = {
   value: string;
   label: string;
+  secondaryLabel?: string;
+  searchText?: string;
   /** URL já otimizada (ex.: `getOptimizedImageUrl`); se ausente ou vazio, mostra placeholder */
   imageUrl?: string | null;
 };
@@ -98,7 +100,7 @@ export function SearchableSelect({
     const q = normalize(query.trim());
     if (!q) return options;
     return options.filter((o) => {
-      const hay = normalize(o.label);
+      const hay = normalize(o.searchText ?? `${o.label} ${o.secondaryLabel ?? ""}`);
       return hay.includes(q);
     });
   }, [options, query]);
@@ -268,7 +270,17 @@ export function SearchableSelect({
                   onClick={() => pick(o.value, o.label)}
                 >
                   {showThumbnails ? <OptionThumb src={o.imageUrl} title={o.label} /> : null}
-                  <span className="min-w-0 flex-1 leading-snug">{o.label}</span>
+                  <span className="min-w-0 flex-1 leading-snug">
+                    <span className="block truncate">{o.label}</span>
+                    {o.secondaryLabel ? (
+                      <span
+                        className="mt-0.5 block truncate text-xs"
+                        style={{ color: "var(--ac-muted)" }}
+                      >
+                        {o.secondaryLabel}
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
               </li>
             ))

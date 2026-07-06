@@ -18,7 +18,7 @@ async function revalidateFornecedoresList() {
 
 export async function getFornecedores(limit = 50): Promise<Fornecedor[]> {
   const userId = await requireAuthenticatedUserId()
-  await assertPermissao('fornecedores', 'ver')
+  // Lista compartilhada por boletos, consumíveis e OCs; não deve herdar permissão administrativa.
   const rows = await fetchFornecedoresFullList(userId)
   return rows.slice(0, limit)
 }
