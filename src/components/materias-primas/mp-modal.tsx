@@ -108,8 +108,40 @@ function createBulkRows(count = BULK_ROWS_STEP): BulkRow[] {
 }
 
 function parseDecimal(value: string): number {
-  const normalized = value.trim().replace(",", ".");
+  const normalized = sanitizeNumericValue(value).replace(",", ".");
   return normalized ? Number(normalized) : NaN;
+}
+
+function isNumericBulkField(
+  field: BulkField,
+): field is "preco_custo" | "estoque_atual" | "estoque_minimo" {
+  return field === "preco_custo" || field === "estoque_atual" || field === "estoque_minimo";
+}
+
+function sanitizeNumericValue(value: string): string {
+  const cleaned = value.replace(/[^\d,.-]/g, "").trim();
+  if (!cleaned) return "";
+
+  const signal = cleaned.startsWith("-") ? "-" : "";
+  const unsigned = cleaned.replace(/-/g, "");
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastDot = unsigned.lastIndexOf(".");
+  const decimalIndex = Math.max(lastComma, lastDot);
+
+  if (decimalIndex === -1) {
+    const digits = unsigned.replace(/[^\d]/g, "");
+    return digits ? `${signal}${digits}` : "";
+  }
+
+  const integerPart = unsigned.slice(0, decimalIndex).replace(/[^\d]/g, "");
+  const decimalPart = unsigned.slice(decimalIndex + 1).replace(/[^\d]/g, "");
+  if (!integerPart && !decimalPart) return "";
+  if (!decimalPart) return `${signal}${integerPart}`;
+  return `${signal}${integerPart || "0"},${decimalPart}`;
+}
+
+function normalizeBulkCellValue(field: BulkField, value: string): string {
+  return isNumericBulkField(field) ? sanitizeNumericValue(value) : value.trim();
 }
 
 function isSpreadsheetPaste(text: string): boolean {
@@ -187,7 +219,10 @@ export function MPModal({
   }
 
   function setBulkCell(rowId: string, field: BulkField, value: string) {
-    setBulkRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)));
+    const normalizedValue = normalizeBulkCellValue(field, value);
+    setBulkRows((rows) =>
+      rows.map((row) => (row.id === rowId ? { ...row, [field]: normalizedValue } : row)),
+    );
   }
 
   function addBulkRows(count = BULK_ROWS_STEP) {
@@ -218,7 +253,7 @@ export function MPModal({
           const rowIndex = startRowIndex + rowOffset;
           nextRows[rowIndex] = {
             ...nextRows[rowIndex],
-            [field]: value.trim(),
+            [field]: normalizeBulkCellValue(field, value),
           };
         });
       });
