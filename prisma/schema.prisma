@@ -277,7 +277,7 @@ model Faca {
 model MateriaPrima {
   id                   String                @id @default(uuid()) @db.Uuid
   codigo               String                @unique
-  sku                  String                @unique
+  sku                  String
   nome                 String
   categoria            String                @default("")
   fornecedorId         String?               @map("fornecedor_id") @db.Uuid
@@ -292,6 +292,7 @@ model MateriaPrima {
   ordemCompraItens     OrdemCompraItem[]
   movimentacoesEstoque MovimentacaoEstoque[]
 
+  @@unique([categoria, sku], map: "materias_primas_categoria_sku_key")
   @@map("materias_primas")
 }
 

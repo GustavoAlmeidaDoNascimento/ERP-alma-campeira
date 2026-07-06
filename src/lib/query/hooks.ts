@@ -65,7 +65,7 @@ function queryOptsWithInitialData<T>(opts: Opts<T>) {
 export function useMateriasPrimas(opts: Opts<MateriaPrima[]> = {}) {
   return useQuery({
     queryKey: qk.materiasPrimas.list(),
-    queryFn: () => getMatériasPrimas(120),
+    queryFn: () => getMatériasPrimas(),
     ...queryOptsWithInitialData(opts),
   })
 }

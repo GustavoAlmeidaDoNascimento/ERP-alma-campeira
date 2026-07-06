@@ -344,6 +344,13 @@ export function MPModal({
       errors.push("Preencha ao menos uma linha válida para criar em massa.");
     }
 
+    const skuCategoriaKeys = items.map(
+      (item) => `${item.categoria.trim().toLowerCase()}::${item.sku.trim().toLowerCase()}`,
+    );
+    if (new Set(skuCategoriaKeys).size !== skuCategoriaKeys.length) {
+      errors.push("Existem linhas com SKU duplicado dentro da mesma categoria.");
+    }
+
     return { items, errors };
   }
 

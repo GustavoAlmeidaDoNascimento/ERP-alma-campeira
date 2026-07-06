@@ -51,8 +51,11 @@ function isFileLike(v: unknown): v is Blob & { type?: string; name?: string } {
 function throwFriendlyUniqueError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : []
-    if (targets.includes('sku')) {
-      throw new Error('Já existe uma matéria-prima com este SKU.')
+    if (
+      (targets.includes('categoria') && targets.includes('sku')) ||
+      targets.includes('materias_primas_categoria_sku_key')
+    ) {
+      throw new Error('Já existe uma matéria-prima com este SKU nesta categoria.')
     }
     if (targets.includes('codigo')) {
       throw new Error('Já existe uma matéria-prima com este código.')

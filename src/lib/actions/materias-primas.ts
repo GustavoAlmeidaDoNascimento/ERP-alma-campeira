@@ -28,12 +28,12 @@ async function revalidateMPLists() {
   revalidateTag(`list-facas-${userId}`, "max");
 }
 
-export async function getMatériasPrimas(limit = 120): Promise<MateriaPrima[]> {
+export async function getMatériasPrimas(limit?: number): Promise<MateriaPrima[]> {
   return withTiming("getMatériasPrimas", async () => {
     const userId = await requireAuthenticatedUserId();
     await assertPermissao("materias_primas", "ver");
     const rows = await fetchMatériasPrimasList(userId);
-    return rows.slice(0, limit);
+    return typeof limit === "number" ? rows.slice(0, limit) : rows;
   });
 }
 
@@ -60,8 +60,11 @@ function round3(value: number): number {
 function throwFriendlyUniqueError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
     const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
-    if (targets.includes("sku")) {
-      throw new Error("Já existe uma matéria-prima com este SKU.");
+    if (
+      (targets.includes("categoria") && targets.includes("sku")) ||
+      targets.includes("materias_primas_categoria_sku_key")
+    ) {
+      throw new Error("Já existe uma matéria-prima com este SKU nesta categoria.");
     }
     if (targets.includes("codigo")) {
       throw new Error("Já existe uma matéria-prima com este código.");
@@ -262,9 +265,11 @@ export async function criarMateriasPrimasEmLote(inputs: MPInput[]) {
   }
 
   const normalizedInputs = inputs.map((input, index) => normalizeMPInput(input, index + 1));
-  const skusNormalizados = normalizedInputs.map((input) => input.sku.toLowerCase());
-  if (new Set(skusNormalizados).size !== skusNormalizados.length) {
-    throw new Error("Existem SKUs duplicados na planilha de criação em massa.");
+  const skuCategoriaKeys = normalizedInputs.map(
+    (input) => `${input.categoria.trim().toLowerCase()}::${input.sku.trim().toLowerCase()}`,
+  );
+  if (new Set(skuCategoriaKeys).size !== skuCategoriaKeys.length) {
+    throw new Error("Existem SKUs duplicados na mesma categoria na planilha de criação em massa.");
   }
   const fornecedorIds = [
     ...new Set(

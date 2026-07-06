@@ -18,7 +18,7 @@ export default async function MatériasPrimasPage() {
 async function MateriasPrimasPageData() {
   const perms = await getPermissoesEfetivas()
   if (!perms.materias_primas.ver) redirect('/')
-  const materiasPrimas = await getMatériasPrimas(120)
+  const materiasPrimas = await getMatériasPrimas()
 
   return (
     <div data-nav-content-ready="Matérias-Primas">

@@ -552,7 +552,7 @@ CREATE UNIQUE INDEX "facas_sku_key" ON "facas"("sku");
 CREATE UNIQUE INDEX "materias_primas_codigo_key" ON "materias_primas"("codigo");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "materias_primas_sku_key" ON "materias_primas"("sku");
+CREATE UNIQUE INDEX "materias_primas_categoria_sku_key" ON "materias_primas"("categoria", "sku");
 
 -- CreateIndex
 CREATE INDEX "idx_faca_mp_faca_id" ON "faca_materias_primas"("faca_id");

@@ -141,7 +141,6 @@ function materiasPrimasCache(userId: string) {
     async (): Promise<MateriaPrima[]> => {
       const data = await prisma.materiaPrima.findMany({
         orderBy: { codigo: "asc" },
-        take: 120,
         include: {
           fornecedor: {
             select: { id: true, nome: true },
