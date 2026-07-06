@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { MPSelectorModal, type BomItemDraft } from "./mp-selector-modal";
 import { getFacaBOM } from "@/lib/actions/facas";
 import { salvarFacaComFoto } from "@/lib/actions/facas-upload";
 import type { Faca, CategoriaFacaDB, MateriaPrima, FacaMateriaPrima } from "@/types";
@@ -61,11 +62,6 @@ const fiscalVazio: Fiscal = {
   ean_gtin: "",
 };
 
-type BomItem = {
-  materia_prima_id: string;
-  quantidade: string;
-};
-
 export function FacaModal({
   open,
   onClose,
@@ -83,12 +79,13 @@ export function FacaModal({
     estoque_atual: "0",
     estoque_minimo: "0",
   });
-  const [bomItens, setBomItens] = useState<BomItem[]>([]);
+  const [bomItens, setBomItens] = useState<BomItemDraft[]>([]);
   const [fiscal, setFiscal] = useState<Fiscal>(fiscalVazio);
   const [fiscalOpen, setFiscalOpen] = useState(false);
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingBom, setLoadingBom] = useState(false);
+  const [selectorOpen, setSelectorOpen] = useState(false);
   const [fotoFile, setFotoFile] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string>("");
   const [fotoDragActive, setFotoDragActive] = useState(false);
@@ -125,6 +122,7 @@ export function FacaModal({
     }
   }, []);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (editando) {
       setForm({
@@ -157,10 +155,12 @@ export function FacaModal({
       setFiscal(fiscalVazio);
     }
     setFiscalOpen(false);
+    setSelectorOpen(false);
     setErro("");
     setFotoFile(null);
     setFotoPreview("");
   }, [editando, open, categorias, carregarBOM]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     return () => {
@@ -188,28 +188,24 @@ export function FacaModal({
     setForm((f) => ({ ...f, [field]: value }));
   }
 
-  // BOM helpers
-  function adicionarBomItem() {
-    setBomItens((prev) => [...prev, { materia_prima_id: "", quantidade: "1" }]);
-  }
-
   function removerBomItem(index: number) {
     setBomItens((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function atualizarBomItem(index: number, field: keyof BomItem, value: string) {
+  function atualizarBomItem(index: number, field: keyof BomItemDraft, value: string) {
     setBomItens((prev) =>
       prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
     );
   }
 
-  // MPs já selecionadas (para filtrar dos dropdowns)
-  function mpsSelecionadas(excluirIndex: number): Set<string> {
-    const set = new Set<string>();
-    bomItens.forEach((item, i) => {
-      if (i !== excluirIndex && item.materia_prima_id) set.add(item.materia_prima_id);
+  function adicionarBomItens(itens: BomItemDraft[]) {
+    setBomItens((prev) => {
+      const existentes = new Set(prev.map((item) => item.materia_prima_id));
+      const novos = itens.filter((item) => item.materia_prima_id && !existentes.has(item.materia_prima_id));
+      return [...prev, ...novos];
     });
-    return set;
+    setSelectorOpen(false);
+    setErro("");
   }
 
   const materiasById = useMemo(() => {
@@ -434,12 +430,12 @@ export function FacaModal({
               })}
             </p>
             <p className="text-xs mt-0.5 leading-snug" style={{ color: "var(--ac-muted)" }}>
-              Custo í— (1 + {taxasLucro.margem_lucro}% margem)
+              Custo x (1 + {taxasLucro.margem_lucro}% margem)
             </p>
           </div>
         </div>
 
-        {/* ========== SEÇíƒO BOM (Matérias-Primas) ========== */}
+        {/* ========== SECAO BOM (Materias-Primas) ========== */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium" style={{ color: "var(--ac-text)" }}>
@@ -447,7 +443,7 @@ export function FacaModal({
             </label>
             <button
               type="button"
-              onClick={adicionarBomItem}
+              onClick={() => setSelectorOpen(true)}
               className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md transition-colors"
               style={{
                 color: "var(--ac-accent)",
@@ -480,6 +476,17 @@ export function FacaModal({
             <div className="text-xs py-3 text-center" style={{ color: "var(--ac-muted)" }}>
               Carregando matérias-primas...
             </div>
+          ) : materiasPrimas.length === 0 ? (
+            <div
+              className="text-xs py-4 text-center rounded-lg"
+              style={{
+                color: "var(--ac-muted)",
+                background: "var(--ac-bg)",
+                border: "1px dashed var(--ac-border)",
+              }}
+            >
+              Nenhuma matéria-prima cadastrada. Cadastre matérias-primas antes de montar a BOM.
+            </div>
           ) : bomItens.length === 0 ? (
             <div
               className="text-xs py-4 text-center rounded-lg"
@@ -494,44 +501,44 @@ export function FacaModal({
           ) : (
             <div className="flex flex-col gap-2">
               {bomItens.map((item, idx) => {
-                const selecionadas = mpsSelecionadas(idx);
-                const disponiveis = materiasPrimas.filter((mp) => !selecionadas.has(mp.id));
+                const mp = materiasById.get(item.materia_prima_id);
 
                 return (
-                  <div key={idx} className="flex items-center gap-2">
-                    <select
-                      value={item.materia_prima_id}
-                      onChange={(e) => atualizarBomItem(idx, "materia_prima_id", e.target.value)}
-                      className="flex-1 rounded-lg px-3 py-2 text-sm outline-none transition-all appearance-none"
-                      style={{
-                        background: "var(--ac-card)",
-                        border: "1px solid var(--ac-border)",
-                        color: "var(--ac-text)",
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%236b7280' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: "no-repeat",
-                        backgroundPosition: "right 8px center",
-                        backgroundSize: "14px",
-                        paddingRight: "30px",
-                      }}
-                    >
-                      <option value="">Selecione...</option>
-                      {disponiveis.map((mp) => (
-                        <option key={mp.id} value={mp.id}>
-                          {mp.codigo} — {mp.nome}
-                        </option>
-                      ))}
-                      {/* Se o item já selecionado não está em disponiveis (porque foi selecionado antes), inclui-lo */}
-                      {item.materia_prima_id &&
-                        !disponiveis.some((mp) => mp.id === item.materia_prima_id) &&
-                        (() => {
-                          const mp = materiasPrimas.find((m) => m.id === item.materia_prima_id);
-                          return mp ? (
-                            <option key={mp.id} value={mp.id}>
-                              {mp.codigo} — {mp.nome}
-                            </option>
-                          ) : null;
-                        })()}
-                    </select>
+                  <div
+                    key={item.materia_prima_id || idx}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2"
+                    style={{ border: "1px solid var(--ac-border)", background: "var(--ac-bg)" }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs" style={{ color: "var(--ac-muted)" }}>
+                          {mp?.codigo ?? "Sem codigo"}
+                        </span>
+                        {mp?.categoria ? (
+                          <span
+                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
+                            style={{
+                              color: "var(--ac-accent)",
+                              background: "color-mix(in srgb, var(--ac-accent) 12%, transparent)",
+                            }}
+                          >
+                            {mp.categoria}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-sm font-medium mt-1" style={{ color: "var(--ac-text)" }}>
+                        {mp?.nome ?? "Matéria-prima não encontrada"}
+                      </div>
+                      {mp ? (
+                        <div className="text-xs mt-1" style={{ color: "var(--ac-muted)" }}>
+                          Estoque: {Number(mp.estoque_atual).toLocaleString("pt-BR")} | Custo:{" "}
+                          {Number(mp.preco_custo).toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
 
                     <input
                       type="number"
@@ -954,6 +961,15 @@ export function FacaModal({
           </Button>
         </div>
       </form>
+
+      {selectorOpen ? (
+        <MPSelectorModal
+          onClose={() => setSelectorOpen(false)}
+          materiasPrimas={materiasPrimas}
+          existingItems={bomItens}
+          onConfirm={adicionarBomItens}
+        />
+      ) : null}
 
       <Modal open={fotoLightboxOpen} onClose={closeFotoLightbox} title="Foto da faca" width="520px">
         <div className="flex flex-col gap-3">
