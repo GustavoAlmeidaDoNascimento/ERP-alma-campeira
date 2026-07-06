@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getVendas } from '@/lib/actions/vendas'
 import { getClientes } from '@/lib/actions/clientes'
-import { getFacas } from '@/lib/actions/facas'
+import { getFacasCatalogoList } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { VendasClient } from '@/components/vendas/vendas-client'
@@ -24,7 +24,7 @@ async function VendasPageData() {
   const [pedidos, clientes, facas, usuarios, authUser] = await Promise.all([
     getVendas(80),
     getClientes(80),
-    getFacas(120, { comCusto: false }),
+    getFacasCatalogoList(120),
     getUsuariosPerfisList(),
     getAuthenticatedUser(),
   ])

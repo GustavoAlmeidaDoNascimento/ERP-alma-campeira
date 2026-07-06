@@ -254,6 +254,12 @@ export async function getFacas(limit = 80, options?: { comCusto?: boolean }): Pr
   });
 }
 
+export async function getFacasCatalogoList(limit = 120): Promise<Faca[]> {
+  await requireAuthenticatedUserId();
+  const rows = await getFacaRows(limit);
+  return rows.map((row) => mapFacaRow(row, { preco_custo: 0 }));
+}
+
 export async function gerarCodigoFaca(): Promise<string> {
   return gerarCodigoForte("FK");
 }

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { getOrcamentos } from '@/lib/actions/orcamentos'
 import { getClientes } from '@/lib/actions/clientes'
-import { getFacas } from '@/lib/actions/facas'
+import { getFacasCatalogoList } from '@/lib/actions/facas'
 import { getUsuariosPerfisList } from '@/lib/actions/usuarios'
 import { getAuthenticatedUser, getPermissoesEfetivas } from '@/lib/auth'
 import { OrcamentosClient } from '@/components/orcamentos/orcamentos-client'
@@ -26,7 +26,7 @@ async function OrcamentosPageData() {
   const [orcamentos, clientes, facas, usuarios, authUser] = await Promise.all([
     getOrcamentos(80),
     getClientes(80),
-    getFacas(120, { comCusto: false }),
+    getFacasCatalogoList(120),
     getUsuariosPerfisList(),
     getAuthenticatedUser(),
   ])

@@ -239,7 +239,11 @@ export async function criarMateriasPrimasEmLote(inputs: MPInput[]) {
 
   const normalizedInputs = inputs.map((input, index) => normalizeMPInput(input, index + 1));
   const fornecedorIds = [
-    ...new Set(normalizedInputs.map((input) => input.fornecedor_id).filter(Boolean)),
+    ...new Set(
+      normalizedInputs
+        .map((input) => input.fornecedor_id)
+        .filter((fornecedorId): fornecedorId is string => fornecedorId !== null),
+    ),
   ];
 
   if (fornecedorIds.length > 0) {
