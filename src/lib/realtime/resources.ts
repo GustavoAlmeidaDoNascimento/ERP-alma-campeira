@@ -66,7 +66,9 @@ function dedupeQueryKeys(keys: ReadonlyArray<QueryKey>): QueryKey[] {
 }
 
 export function getQueryKeysForResources(resources: ReadonlyArray<RealtimeResource>): QueryKey[] {
-  return dedupeQueryKeys(resources.flatMap((resource) => RESOURCE_TO_KEYS[resource] ?? []))
+  return dedupeQueryKeys(
+    resources.flatMap((resource) => (RESOURCE_TO_KEYS[resource] ?? []) as ReadonlyArray<QueryKey>)
+  )
 }
 
 export function getResourcesForPath(path: string): RealtimeResource[] {
