@@ -4,22 +4,24 @@
  * Shim de compatibilidade do antigo sistema de abas customizado.
  *
  * O motor real foi removido — agora a navegação usa o router nativo do Next.js
- * e os dados vivem no cache do TanStack Query (com Realtime invalidando entre
- * abas/sessões automaticamente).
+ * e os dados vivem no cache do TanStack Query, com invalidação dirigida por
+ * recurso e sincronização entre abas.
  *
  * Este arquivo mantém a API pública (`useErpTabs`, `ErpTabsProvider`, `ErpTabs`)
  * para os ~19 componentes que ainda chamam `refreshActiveTab()` / `openTab()`,
  * sem precisar refatorar todos de uma vez.
  *
  * - `openTab(href)` → `router.push(href)`
- * - `refreshActiveTab()` / `refreshTab()` → invalida TODAS as queries
- *   (forçando refetch imediato após mutações locais) + `router.refresh()`
+ * - `refreshActiveTab()` → invalida as queries mapeadas para a rota ativa,
+ *   propaga para outras abas e mantém `router.refresh()` como fallback da rota ativa
+ * - `refreshTab(href)` → invalida as queries mapeadas para a rota informada
  * - `activeHref` → `usePathname()`
  */
 
-import { useQueryClient } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+
+import { useResourceRefresh } from '@/lib/realtime/client'
 
 type OpenTab = { href: string; label: string }
 
@@ -47,7 +49,7 @@ export function useErpTabs(): ErpTabsContextValue {
 export function ErpTabsProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname() || '/'
-  const queryClient = useQueryClient()
+  const { refreshActivePath, refreshPath } = useResourceRefresh()
 
   const openTab = useCallback(
     (href: string) => {
@@ -56,22 +58,15 @@ export function ErpTabsProvider({ children }: { children: ReactNode }) {
     [router],
   )
 
-  /**
-   * Após mutação local, invalida tudo (refetch imediato) e dá um `router.refresh()`
-   * para revalidar o RSC. As outras abas também recebem invalidação imediata via
-   * `BroadcastChannel`; isto aqui cobre a aba que originou a mutação.
-   */
   const refreshActiveTab = useCallback(() => {
-    queryClient.invalidateQueries()
-    router.refresh()
-  }, [router, queryClient])
+    void refreshActivePath({ refreshRoute: true })
+  }, [refreshActivePath])
 
   const refreshTab = useCallback(
-    (_href: string) => {
-      queryClient.invalidateQueries()
-      router.refresh()
+    (href: string) => {
+      void refreshPath(href)
     },
-    [router, queryClient],
+    [refreshPath],
   )
 
   const noop = useCallback(() => {}, [])

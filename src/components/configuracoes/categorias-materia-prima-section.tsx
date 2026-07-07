@@ -9,14 +9,16 @@ import {
   deletarCategoriaMateriaPrima,
 } from '@/lib/actions/categorias-materia-prima'
 import type { CategoriaMateriaPrimaDB } from '@/types'
-import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useCategoriasMateriaPrima } from '@/lib/query/hooks'
+import { useResourceRefresh } from '@/lib/realtime/client'
 
 type Props = {
   categorias: CategoriaMateriaPrimaDB[]
 }
 
 export function CategoriasMateriaPrimaSection({ categorias }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+  const { data: categoriasAtuais = categorias } = useCategoriasMateriaPrima({ initialData: categorias })
+  const { refreshResources } = useResourceRefresh()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<CategoriaMateriaPrimaDB | null>(null)
   const [deletando, setDeletando] = useState<CategoriaMateriaPrimaDB | null>(null)
@@ -53,7 +55,7 @@ export function CategoriasMateriaPrimaSection({ categorias }: Props) {
       if (editando) await atualizarCategoriaMateriaPrima(editando.id, { nome: nome.trim() })
       else await criarCategoriaMateriaPrima({ nome: nome.trim() })
       setModalAberto(false)
-      refreshActiveTab()
+      await refreshResources(['categorias_materia_prima'], { refreshRoute: true })
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {
@@ -68,7 +70,7 @@ export function CategoriasMateriaPrimaSection({ categorias }: Props) {
     try {
       await deletarCategoriaMateriaPrima(deletando.id)
       setDeletando(null)
-      refreshActiveTab()
+      await refreshResources(['categorias_materia_prima'], { refreshRoute: true })
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -99,13 +101,13 @@ export function CategoriasMateriaPrimaSection({ categorias }: Props) {
           <Button onClick={abrirNova} variant="secondary">Nova categoria</Button>
         </div>
 
-        {categorias.length === 0 ? (
+        {categoriasAtuais.length === 0 ? (
           <p className="text-sm text-center py-8" style={{ color: 'var(--ac-muted)' }}>
             Nenhuma categoria cadastrada.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {categorias.map((cat) => (
+            {categoriasAtuais.map((cat) => (
               <div
                 key={cat.id}
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2"

@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { criarGasto, atualizarGasto } from '@/lib/actions/gastos'
 import { TipoGastoInput } from './tipo-gasto-input'
 import { useTiposGasto } from '@/lib/query/hooks'
-import { qk } from '@/lib/query/keys'
+import { useResourceRefresh } from '@/lib/realtime/client'
 import { FORMAS_PAGAMENTO } from '@/types'
 import type { FormaPagamento, Gasto, TipoGasto } from '@/types'
 
@@ -45,7 +44,7 @@ function hoje() {
 }
 
 export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId, perm, onSaved }: Props) {
-  const queryClient = useQueryClient()
+  const { refreshResources } = useResourceRefresh()
   const { data: tipos = [] } = useTiposGasto()
   const [tipo, setTipo] = useState<TipoGasto>('')
   const [descricao, setDescricao] = useState('')
@@ -61,33 +60,42 @@ export function GastoModal({ open, onClose, editando, usuarios, usuarioLogadoId,
 
   useEffect(() => {
     if (!open) return
-    if (editando) {
-      setTipo(editando.tipo)
-      setDescricao(editando.descricao)
-      setValor(String(editando.valor ?? ''))
-      setFormaPagamento(editando.forma_pagamento)
-      setDataGasto(editando.data_gasto.slice(0, 10))
-      setObservacao(editando.observacao ?? '')
-      setUsuarioId(editando.usuario_id ?? '')
-    } else {
-      setTipo('')
-      setDescricao('')
-      setValor('')
-      setFormaPagamento('pix')
-      setDataGasto(hoje())
-      setObservacao('')
-      // Padrão: usuário logado se ele estiver na lista de ativos.
-      const defaultId = usuarioLogadoId && usuarios.some((u) => u.id === usuarioLogadoId)
-        ? usuarioLogadoId
-        : ''
-      setUsuarioId(defaultId)
+    let cancelled = false
+
+    queueMicrotask(() => {
+      if (cancelled) return
+
+      if (editando) {
+        setTipo(editando.tipo)
+        setDescricao(editando.descricao)
+        setValor(String(editando.valor ?? ''))
+        setFormaPagamento(editando.forma_pagamento)
+        setDataGasto(editando.data_gasto.slice(0, 10))
+        setObservacao(editando.observacao ?? '')
+        setUsuarioId(editando.usuario_id ?? '')
+      } else {
+        setTipo('')
+        setDescricao('')
+        setValor('')
+        setFormaPagamento('pix')
+        setDataGasto(hoje())
+        setObservacao('')
+        // Padrão: usuário logado se ele estiver na lista de ativos.
+        const defaultId = usuarioLogadoId && usuarios.some((u) => u.id === usuarioLogadoId)
+          ? usuarioLogadoId
+          : ''
+        setUsuarioId(defaultId)
+      }
+      setErro('')
+    })
+
+    return () => {
+      cancelled = true
     }
-    setErro('')
   }, [open, editando, usuarioLogadoId, usuarios])
 
   function refreshTipos() {
-    queryClient.invalidateQueries({ queryKey: qk.tiposGasto.all })
-    queryClient.invalidateQueries({ queryKey: qk.gastos.all })
+    void refreshResources(['tipos_gasto'])
   }
 
   async function salvar() {

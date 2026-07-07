@@ -3,6 +3,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
+import {
+  invalidateResourceQueries,
+  type RealtimeBroadcastMessage,
+} from '@/lib/realtime/client'
+
 const LOG = process.env.NODE_ENV === 'development'
 
 /**
@@ -19,8 +24,6 @@ const LOG = process.env.NODE_ENV === 'development'
 const POLL_INTERVAL_MS = 30_000
 const BROADCAST_NAME = 'erp-sync'
 
-type BroadcastMsg = { type: 'invalidate-all' }
-
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
 
@@ -29,10 +32,16 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     let bc: BroadcastChannel | null = null
     try {
       bc = new BroadcastChannel(BROADCAST_NAME)
-      bc.onmessage = (ev: MessageEvent<BroadcastMsg>) => {
+      bc.onmessage = (ev: MessageEvent<RealtimeBroadcastMessage>) => {
         if (ev.data?.type === 'invalidate-all') {
           if (LOG) console.log('[REALTIME] cross-tab invalidate')
           queryClient.invalidateQueries({ type: 'active' })
+          return
+        }
+
+        if (ev.data?.type === 'invalidate-resources') {
+          if (LOG) console.log('[REALTIME] cross-tab invalidate resources', ev.data.resources)
+          void invalidateResourceQueries(queryClient, ev.data.resources)
         }
       }
     } catch {
@@ -61,7 +70,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 export function broadcastInvalidate() {
   try {
     const bc = new BroadcastChannel(BROADCAST_NAME)
-    bc.postMessage({ type: 'invalidate-all' } satisfies BroadcastMsg)
+    bc.postMessage({ type: 'invalidate-all' } satisfies RealtimeBroadcastMessage)
     bc.close()
   } catch {
     // sem suporte a BroadcastChannel — ignora

@@ -9,14 +9,16 @@ import {
   deletarCategoriaConsumivel,
 } from '@/lib/actions/categorias-consumivel'
 import type { CategoriaConsumivelDB } from '@/types'
-import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useCategoriasConsumivel } from '@/lib/query/hooks'
+import { useResourceRefresh } from '@/lib/realtime/client'
 
 type Props = {
   categorias: CategoriaConsumivelDB[]
 }
 
 export function CategoriasConsumivelSection({ categorias }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+  const { data: categoriasAtuais = categorias } = useCategoriasConsumivel({ initialData: categorias })
+  const { refreshResources } = useResourceRefresh()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<CategoriaConsumivelDB | null>(null)
   const [deletando, setDeletando] = useState<CategoriaConsumivelDB | null>(null)
@@ -53,7 +55,7 @@ export function CategoriasConsumivelSection({ categorias }: Props) {
       if (editando) await atualizarCategoriaConsumivel(editando.id, { nome: nome.trim() })
       else await criarCategoriaConsumivel({ nome: nome.trim() })
       setModalAberto(false)
-      refreshActiveTab()
+      await refreshResources(['categorias_consumivel'], { refreshRoute: true })
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {
@@ -68,7 +70,7 @@ export function CategoriasConsumivelSection({ categorias }: Props) {
     try {
       await deletarCategoriaConsumivel(deletando.id)
       setDeletando(null)
-      refreshActiveTab()
+      await refreshResources(['categorias_consumivel'], { refreshRoute: true })
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -99,13 +101,13 @@ export function CategoriasConsumivelSection({ categorias }: Props) {
           <Button onClick={abrirNova} variant="secondary">Nova categoria</Button>
         </div>
 
-        {categorias.length === 0 ? (
+        {categoriasAtuais.length === 0 ? (
           <p className="text-sm text-center py-8" style={{ color: 'var(--ac-muted)' }}>
             Nenhuma categoria cadastrada.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {categorias.map((cat) => (
+            {categoriasAtuais.map((cat) => (
               <div
                 key={cat.id}
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2"

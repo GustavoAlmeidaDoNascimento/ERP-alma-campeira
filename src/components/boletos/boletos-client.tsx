@@ -20,6 +20,7 @@ import { useErpTabs } from '@/components/layout/erp-tabs'
 import { useBoletos } from '@/lib/query/hooks'
 import { qk } from '@/lib/query/keys'
 import { DateInputBR } from '@/components/ui/date-input-br'
+import { useResourceRefresh } from '@/lib/realtime/client'
 
 const MESES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -77,6 +78,7 @@ export function BoletosClient({
   perm: Perm
 }) {
   const { refreshActiveTab } = useErpTabs()
+  const { refreshResources } = useResourceRefresh()
   const queryClient = useQueryClient()
   const { data: boletos = initialBoletos } = useBoletos(undefined, { initialData: initialBoletos })
   const [marcandoIds, setMarcandoIds] = useState<Set<string>>(new Set())
@@ -211,8 +213,8 @@ export function BoletosClient({
     setMarcandoIds((prev) => new Set(prev).add(parcelaId))
     try {
       await marcarParcela(parcelaId, novoPago, novoPago ? { valor_pago: valor } : undefined)
-      // Realtime invalida boletos e gastos; invalidação explícita cobre polling lento.
-      void queryClient.invalidateQueries({ queryKey: qk.gastos.all })
+      // Atualiza a aba atual e sincroniza outras abas imediatamente.
+      void refreshResources(['boletos'])
     } catch (e: unknown) {
       // Rollback se falhar
       if (snapshot) queryClient.setQueryData(queryKey, snapshot)

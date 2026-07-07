@@ -10,7 +10,8 @@ import {
   type PaletaCategoria,
 } from '@/lib/categoria-faca-paleta'
 import type { CategoriaFacaDB } from '@/types'
-import { useErpTabs } from '@/components/layout/erp-tabs'
+import { useCategoriasFaca } from '@/lib/query/hooks'
+import { useResourceRefresh } from '@/lib/realtime/client'
 
 type FormCat = {
   nome: string
@@ -78,7 +79,8 @@ type Props = {
 }
 
 export function CategoriasFacaSection({ categorias }: Props) {
-  const { refreshActiveTab } = useErpTabs()
+  const { data: categoriasAtuais = categorias } = useCategoriasFaca({ initialData: categorias })
+  const { refreshResources } = useResourceRefresh()
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<CategoriaFacaDB | null>(null)
   const [deletando, setDeletando] = useState<CategoriaFacaDB | null>(null)
@@ -135,7 +137,7 @@ export function CategoriasFacaSection({ categorias }: Props) {
         await criarCategoriaFaca(payload)
       }
       setModalAberto(false)
-      refreshActiveTab()
+      await refreshResources(['categorias_faca'], { refreshRoute: true })
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : 'Erro ao salvar.')
     } finally {
@@ -150,7 +152,7 @@ export function CategoriasFacaSection({ categorias }: Props) {
     try {
       await deletarCategoriaFaca(deletando.id)
       setDeletando(null)
-      refreshActiveTab()
+      await refreshResources(['categorias_faca'], { refreshRoute: true })
     } catch (e: unknown) {
       setErroDelete(e instanceof Error ? e.message : 'Erro ao excluir.')
     } finally {
@@ -187,13 +189,13 @@ export function CategoriasFacaSection({ categorias }: Props) {
           </Button>
         </div>
 
-        {categorias.length === 0 ? (
+        {categoriasAtuais.length === 0 ? (
           <p className="text-sm text-center py-8" style={{ color: 'var(--ac-muted)' }}>
             Nenhuma categoria cadastrada.
           </p>
         ) : (
           <div className="flex flex-col gap-1">
-            {categorias.map((cat, i) => (
+            {categoriasAtuais.map((cat, i) => (
               <div
                 key={cat.id}
                 className="flex items-center gap-4 px-4 py-3 rounded-lg"
