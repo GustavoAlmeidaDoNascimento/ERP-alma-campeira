@@ -39,6 +39,7 @@ import { FilaReposicaoDetalheModal } from "@/components/ordens-compra/fila-repos
 type Perm = { ver: boolean; criar: boolean; editar: boolean; deletar: boolean };
 
 type FiltroListaOC = "todas" | StatusOC | "pagas";
+type ModoExportacaoOc = "producao" | "fornecedor";
 
 type Props = {
   fila: FilaReposicao[];
@@ -126,248 +127,684 @@ async function carregarLogoLetreiroDataUrl(): Promise<string | null> {
 
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 
-async function exportarPDF(oc: OrdemCompra) {
-  const itens = oc.itens ?? [];
-  const subtotal = subtotalOC(itens);
-  const desconto = oc.desconto_total ?? 0;
-  const total = calcularTotalFinalOC(subtotal, desconto);
-  const logoDataUrl = await carregarLogoLetreiroDataUrl();
-  const linhasItens = itens
-    .map((item) => {
-      const sub = (item.preco_unitario ?? 0) * item.quantidade;
-      return `
-        <tr>
-          <td>${item.materia_prima?.codigo ?? "—"}</td>
-          <td>${item.materia_prima?.nome ?? "—"}</td>
-          <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : "—"}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : "—"}</td>
-        </tr>`;
-    })
-    .join("");
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-  const html = `<!DOCTYPE html>
+function labelFormaPagamentoOc(formaPagamento: FormaPagamentoOC | null | undefined) {
+  if (!formaPagamento) return "Não informado";
+  return FORMAS_PAGAMENTO_OC[formaPagamento]?.label ?? formaPagamento;
+}
+
+function statusOcExportacao(oc: OrdemCompra) {
+  return `${STATUS_OC[oc.status].label}${oc.pago ? " · Pago" : ""}`;
+}
+
+function htmlDocumentoOc(titulo: string, conteudo: string) {
+  return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"/>
-  <title>${oc.codigo}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>${escapeHtml(titulo)}</title>
   <style>
+    :root {
+      --ink: #16181d;
+      --muted: #667085;
+      --line: #d7dce3;
+      --line-strong: #c4cad4;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --surface-accent: #fffbeb;
+      --accent: #ca8a04;
+      --accent-soft: #fef3c7;
+      --success: #166534;
+      --success-soft: #dcfce7;
+      --violet: #6d28d9;
+      --violet-soft: #ede9fe;
+      --slate: #475467;
+      --slate-soft: #eef2f7;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 40px; }
-    h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
-    .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
-    .brand img { height: 58px; width: auto; object-fit: contain; }
-    .brand-text { min-width: 0; }
-    .subtitle { font-size: 12px; color: #555; margin-bottom: 2px; }
-    .meta { display: flex; gap: 40px; margin-bottom: 24px; }
-    .meta div { display: flex; flex-direction: column; gap: 2px; }
-    .meta strong { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
-    .meta span { font-size: 13px; font-weight: 600; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    thead tr { background: #f3f4f6; }
-    th { padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase;
-         letter-spacing: 0.05em; color: #555; border-bottom: 2px solid #e5e7eb; }
-    th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: right; }
-    td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-    .total-row { font-weight: 700; font-size: 14px; }
-    .total-row td { border-top: 2px solid #111; border-bottom: none; padding-top: 10px; }
-    .obs { margin-top: 20px; padding: 12px 16px; background: #f9fafb;
-           border: 1px solid #e5e7eb; border-radius: 6px; }
-    .obs strong { display: block; font-size: 10px; text-transform: uppercase;
-                  letter-spacing: 0.05em; color: #888; margin-bottom: 4px; }
-    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
-              font-size: 11px; color: #888; text-align: center; }
+    html, body { background: #fff; color: var(--ink); }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      line-height: 1.45;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .oc-page {
+      width: 100%;
+      padding: 28px 30px 24px;
+      page-break-after: always;
+    }
+    .oc-page:last-child { page-break-after: auto; }
+    .top-rule {
+      height: 6px;
+      background: var(--accent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 22px;
+      margin-bottom: 18px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+      flex: 1;
+    }
+    .brand img {
+      height: 52px;
+      width: auto;
+      object-fit: contain;
+      flex: 0 0 auto;
+    }
+    .brand-copy { min-width: 0; }
+    .eyebrow {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    h1 {
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .summary-card {
+      width: 230px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      border-radius: 14px;
+      padding: 14px 16px;
+      flex: 0 0 auto;
+    }
+    .summary-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .summary-value {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .summary-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+    .document-intro {
+      margin-bottom: 18px;
+      padding: 2px 2px 0;
+    }
+    .document-partner {
+      font-size: 21px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .document-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .badge.status {
+      background: var(--accent-soft);
+      color: #92400e;
+      border-color: #f6d98f;
+    }
+    .badge.payment {
+      background: var(--violet-soft);
+      color: var(--violet);
+      border-color: #ddd6fe;
+    }
+    .badge.paid {
+      background: var(--success-soft);
+      color: var(--success);
+      border-color: #bbf7d0;
+    }
+    .badge.production {
+      background: var(--slate-soft);
+      color: var(--slate);
+      border-color: #d7dee8;
+    }
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--surface);
+      margin-bottom: 16px;
+      break-inside: avoid;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--surface-soft);
+      border-bottom: 1px solid var(--line);
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .section-hint {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .table-wrap { padding: 4px 0 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 10px 14px;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      background: #f8fafc;
+      text-align: left;
+    }
+    th.numeric, td.numeric { text-align: right; }
+    tbody tr:nth-child(even) td { background: #fcfcfd; }
+    .col-code { width: 100px; }
+    .col-item { width: auto; }
+    .col-qty { width: 72px; }
+    .col-unit { width: 118px; }
+    .col-subtotal { width: 132px; }
+    .item-name {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 2px;
+      word-break: break-word;
+    }
+    .item-meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .item-empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.9fr);
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+    .notes-box,
+    .signatures-box,
+    .totals-box {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      padding: 14px 16px;
+      break-inside: avoid;
+    }
+    .notes-box { min-height: 128px; }
+    .box-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .notes-content {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--ink);
+    }
+    .notes-empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .totals-box {
+      background: var(--surface-soft);
+    }
+    .totals-row,
+    .totals-total {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .totals-row {
+      padding: 7px 0;
+      color: var(--ink);
+    }
+    .totals-row + .totals-row {
+      border-top: 1px solid rgba(196, 202, 212, 0.75);
+    }
+    .totals-row.discount {
+      color: #b45309;
+    }
+    .totals-total {
+      margin-top: 10px;
+      padding-top: 12px;
+      border-top: 2px solid var(--line-strong);
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .totals-total .amount {
+      color: var(--success);
+      font-size: 18px;
+    }
+    .signatures-box {
+      padding-bottom: 10px;
+    }
+    .signature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+    .signature-line {
+      border-top: 1px solid var(--line-strong);
+      padding-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 38px;
+    }
+    .document-footer {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    @page { margin: 12mm; }
     @media print {
-      body { padding: 20px; }
-      @page { margin: 1.5cm; }
+      body { padding: 0; }
+      .oc-page { padding: 0; }
     }
   </style>
 </head>
 <body>
-  <div class="brand">
-    ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Alma Campeira" />` : ""}
-    <div class="brand-text">
-      <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
-      <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
-    </div>
-  </div>
-
-  <div class="meta">
-    <div>
-      <strong>Fornecedor</strong>
-      <span>${oc.fornecedor?.nome ?? "Sem fornecedor"}</span>
-    </div>
-    <div>
-      <strong>Data de Geração</strong>
-      <span>${fmtData(oc.data_geracao)}</span>
-    </div>
-    <div>
-      <strong>Status</strong>
-      <span>${STATUS_OC[oc.status].label}${oc.pago ? " · Pago" : ""}</span>
-    </div>
-    ${
-      oc.pedido_codigo
-        ? `
-    <div>
-      <strong>Pedido de Origem</strong>
-      <span>${oc.pedido_codigo}</span>
-    </div>
-    <div>
-      <strong>Cliente</strong>
-      <span>${oc.cliente_nome ?? "—"}</span>
-    </div>`
-        : ""
-    }
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Código</th>
-        <th>Item</th>
-        <th>Qtd</th>
-        <th>Preço Unit.</th>
-        <th>Subtotal</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${linhasItens}
-      ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${fmt(subtotal)}</td></tr>` : ""}
-      ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Desconto</td><td style="text-align:right">-${fmt(desconto)}</td></tr>` : ""}
-      <tr class="total-row">
-        <td colspan="4" style="text-align:right">TOTAL</td>
-        <td style="text-align:right">${fmt(total)}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ""}
-
-  <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
-
+  ${conteudo}
   <script>window.onload = () => { window.print() }</script>
 </body>
 </html>`;
-
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
 }
 
-/** HTML de uma OC sem <head>/<style> — para concatenar várias num único PDF. */
-function ocBodyHtml(oc: OrdemCompra, logoDataUrl?: string | null) {
+function labelModoExportacaoOc(modo: ModoExportacaoOc) {
+  return modo === "producao" ? "Produção" : "Fornecedor";
+}
+
+function descricaoModoExportacaoOc(modo: ModoExportacaoOc) {
+  return modo === "producao"
+    ? "Documento operacional sem preços"
+    : "Documento comercial com preços";
+}
+
+function ocBodyHtml(
+  oc: OrdemCompra,
+  logoDataUrl: string | null | undefined,
+  modo: ModoExportacaoOc,
+) {
   const itens = oc.itens ?? [];
   const subtotal = subtotalOC(itens);
   const desconto = oc.desconto_total ?? 0;
   const total = calcularTotalFinalOC(subtotal, desconto);
-  const linhasItens = itens
-    .map((item) => {
-      const sub = (item.preco_unitario ?? 0) * item.quantidade;
-      return `
+  const descontoPercentual = percentualPorDesconto(subtotal, desconto);
+  const exibirValores = modo === "fornecedor";
+  const geradoEm = new Date().toLocaleString("pt-BR");
+  const identificacao = `${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}`;
+  const fornecedorNome = oc.fornecedor?.nome?.trim() ?? "";
+  const formaPagamento = labelFormaPagamentoOc(oc.forma_pagamento);
+  const observacao = oc.observacao?.trim() ?? "";
+  const linhasItens =
+    itens.length > 0
+      ? itens
+          .map((item) => {
+            const sub = (item.preco_unitario ?? 0) * item.quantidade;
+            const categoria = item.materia_prima?.categoria?.trim();
+            return `
         <tr>
-          <td>${item.materia_prima?.codigo ?? "—"}</td>
-          <td>${item.materia_prima?.nome ?? "—"}</td>
-          <td style="text-align:right">${fmtQtd(item.quantidade)}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(item.preco_unitario) : "—"}</td>
-          <td style="text-align:right">${item.preco_unitario != null ? fmt(sub) : "—"}</td>
+          <td>${escapeHtml(item.materia_prima?.codigo ?? "—")}</td>
+          <td>
+            <div class="item-name">${escapeHtml(item.materia_prima?.nome ?? "Item sem nome")}</div>
+            <div class="item-meta">${escapeHtml(categoria ? `Categoria: ${categoria}` : "Matéria-prima cadastrada sem categoria")}</div>
+          </td>
+          <td class="numeric">${escapeHtml(fmtQtd(item.quantidade))}</td>
+          ${
+            exibirValores
+              ? `<td class="numeric">${item.preco_unitario != null ? escapeHtml(fmt(item.preco_unitario)) : "—"}</td>
+          <td class="numeric">${item.preco_unitario != null ? escapeHtml(fmt(sub)) : "—"}</td>`
+              : ""
+          }
         </tr>`;
-    })
+          })
+          .join("")
+      : `
+        <tr>
+          <td colspan="${exibirValores ? 5 : 3}" class="item-empty">Nenhum item registrado nesta ordem de compra.</td>
+        </tr>`;
+
+  const metaCabecalho = [
+    fmtData(oc.data_geracao),
+    oc.forma_pagamento ? formaPagamento : null,
+    oc.pedido_codigo
+      ? `${oc.pedido_sequencial != null ? `#${oc.pedido_sequencial} · ` : ""}${oc.pedido_codigo}`
+      : null,
+    oc.cliente_nome?.trim() ? oc.cliente_nome.trim() : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => `<span class="meta-chip">${escapeHtml(value)}</span>`)
     .join("");
+
+  const summaryMeta = [fmtData(oc.data_geracao), oc.pago ? "Pago" : null]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => `<span>${escapeHtml(value)}</span>`)
+    .join('<span aria-hidden="true">·</span>');
+
+  const badges = `
+    <div class="badge-row">
+      <span class="badge production">${escapeHtml(labelModoExportacaoOc(modo))}</span>
+      ${oc.pago ? `<span class="badge paid">Pago</span>` : ""}
+    </div>`;
+
+  const resumoFinanceiro = exibirValores
+    ? `
+    <div class="totals-box">
+      <div class="box-title">Resumo financeiro</div>
+      <div class="totals-row">
+        <span>Subtotal</span>
+        <strong>${escapeHtml(fmt(subtotal))}</strong>
+      </div>
+      ${
+        desconto > 0
+          ? `<div class="totals-row discount">
+        <span>Desconto${descontoPercentual > 0 ? ` (${escapeHtml(fmtPercentual(descontoPercentual))}%)` : ""}</span>
+        <strong>- ${escapeHtml(fmt(desconto))}</strong>
+      </div>`
+          : ""
+      }
+      <div class="totals-total">
+        <span>Total final</span>
+        <span class="amount">${escapeHtml(fmt(total))}</span>
+      </div>
+    </div>`
+    : "";
+
+  const observacoesHtml = observacao
+    ? `<div class="notes-content">${escapeHtml(observacao)}</div>`
+    : `<div class="notes-empty">Sem observações registradas para esta ordem de compra.</div>`;
 
   return `
   <section class="oc-page">
-    <div class="brand">
-      ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Alma Campeira" />` : ""}
-      <div class="brand-text">
-        <h1>ORDEM DE COMPRA — ${oc.sequencial_fornecedor != null ? `#${oc.sequencial_fornecedor} · ` : ""}${oc.codigo}</h1>
-        <p class="subtitle">Alma Campeira — Cutelaria Artesanal</p>
+    <div class="top-rule"></div>
+    <header class="header">
+      <div class="brand">
+        ${logoDataUrl ? `<img src="${logoDataUrl}" alt="Alma Campeira" />` : ""}
+        <div class="brand-copy">
+          <div class="eyebrow">${escapeHtml(descricaoModoExportacaoOc(modo))}</div>
+          <h1>Ordem de Compra</h1>
+          <div class="subtitle">Alma Campeira · Cutelaria Artesanal</div>
+        </div>
       </div>
-    </div>
-    <div class="meta">
-      <div><strong>Fornecedor</strong><span>${oc.fornecedor?.nome ?? "Sem fornecedor"}</span></div>
-      <div><strong>Data de Geração</strong><span>${fmtData(oc.data_geracao)}</span></div>
-      <div><strong>Status</strong><span>${STATUS_OC[oc.status].label}${oc.pago ? " · Pago" : ""}</span></div>
-      ${
-        oc.pedido_codigo
-          ? `
-      <div><strong>Pedido de Origem</strong><span>${oc.pedido_codigo}</span></div>
-      <div><strong>Cliente</strong><span>${oc.cliente_nome ?? "—"}</span></div>`
-          : ""
-      }
-    </div>
-    <table>
-      <thead>
-        <tr><th>Código</th><th>Item</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr>
-      </thead>
-      <tbody>
-        ${linhasItens}
-        ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${fmt(subtotal)}</td></tr>` : ""}
-        ${desconto > 0 ? `<tr><td colspan="4" style="text-align:right">Desconto</td><td style="text-align:right">-${fmt(desconto)}</td></tr>` : ""}
-        <tr class="total-row">
-          <td colspan="4" style="text-align:right">TOTAL</td>
-          <td style="text-align:right">${fmt(total)}</td>
-        </tr>
-      </tbody>
-    </table>
-    ${oc.observacao ? `<div class="obs"><strong>Observações</strong>${oc.observacao}</div>` : ""}
-    <div class="footer">Gerado pelo sistema ERP Alma Campeira</div>
+      <aside class="summary-card">
+        <div class="summary-value">${escapeHtml(identificacao)}</div>
+        ${summaryMeta ? `<div class="summary-meta">${summaryMeta}</div>` : ""}
+      </aside>
+    </header>
+
+    <section class="document-intro">
+      ${fornecedorNome ? `<div class="document-partner">${escapeHtml(fornecedorNome)}</div>` : ""}
+      ${metaCabecalho ? `<div class="document-meta">${metaCabecalho}</div>` : ""}
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Itens da compra</div>
+          <div class="section-hint">Conferência comercial e operacional da ordem</div>
+        </div>
+        ${badges}
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-code">Código</th>
+              <th class="col-item">Item</th>
+              <th class="col-qty numeric">Qtd</th>
+              ${
+                exibirValores
+                  ? `<th class="col-unit numeric">Preço unit.</th>
+              <th class="col-subtotal numeric">Subtotal</th>`
+                  : ""
+              }
+            </tr>
+          </thead>
+          <tbody>
+            ${linhasItens}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="footer-grid">
+      <div class="notes-box">
+        <div class="box-title">Observações</div>
+        ${observacoesHtml}
+      </div>
+      ${exibirValores ? resumoFinanceiro : ""}
+    </section>
+
+    <section class="signatures-box">
+      <div class="box-title">Conferência e validação</div>
+      <div class="signature-grid">
+        <div class="signature-line">Solicitante</div>
+        <div class="signature-line">Fornecedor</div>
+        <div class="signature-line">Recebimento / Conferência</div>
+      </div>
+    </section>
+
+    <footer class="document-footer">
+      <span>ERP Alma Campeira · Ordem de Compra ${escapeHtml(oc.codigo)} · ${escapeHtml(labelModoExportacaoOc(modo))}</span>
+      <span>Emitido em ${escapeHtml(geradoEm)}</span>
+    </footer>
   </section>`;
 }
 
-async function exportarPDFMultiplas(ocs: OrdemCompra[]) {
-  if (ocs.length === 0) return;
+async function exportarPDF(oc: OrdemCompra, modo: ModoExportacaoOc) {
   const logoDataUrl = await carregarLogoLetreiroDataUrl();
-  const paginas = ocs.map((oc) => ocBodyHtml(oc, logoDataUrl)).join("");
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Ordens de Compra (${ocs.length})</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; }
-    .oc-page { padding: 40px; page-break-after: always; }
-    .oc-page:last-child { page-break-after: auto; }
-    .brand { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
-    .brand img { height: 58px; width: auto; object-fit: contain; }
-    .brand-text { min-width: 0; }
-    h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
-    .subtitle { font-size: 12px; color: #555; margin-bottom: 2px; }
-    .meta { display: flex; gap: 40px; margin-bottom: 24px; flex-wrap: wrap; }
-    .meta div { display: flex; flex-direction: column; gap: 2px; }
-    .meta strong { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
-    .meta span { font-size: 13px; font-weight: 600; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    thead tr { background: #f3f4f6; }
-    th { padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase;
-         letter-spacing: 0.05em; color: #555; border-bottom: 2px solid #e5e7eb; }
-    th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: right; }
-    td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-    .total-row { font-weight: 700; font-size: 14px; }
-    .total-row td { border-top: 2px solid #111; border-bottom: none; padding-top: 10px; }
-    .obs { margin-top: 20px; padding: 12px 16px; background: #f9fafb;
-           border: 1px solid #e5e7eb; border-radius: 6px; }
-    .obs strong { display: block; font-size: 10px; text-transform: uppercase;
-                  letter-spacing: 0.05em; color: #888; margin-bottom: 4px; }
-    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
-              font-size: 11px; color: #888; text-align: center; }
-    @media print {
-      .oc-page { padding: 20px; }
-      @page { margin: 1.5cm; }
-    }
-  </style>
-</head>
-<body>
-  ${paginas}
-  <script>window.onload = () => { window.print() }</script>
-</body>
-</html>`;
+  const html = htmlDocumentoOc(
+    `${oc.codigo} - ${labelModoExportacaoOc(modo)}`,
+    ocBodyHtml(oc, logoDataUrl, modo),
+  );
 
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(html);
   win.document.close();
+}
+
+async function exportarPDFMultiplas(ocs: OrdemCompra[], modo: ModoExportacaoOc) {
+  if (ocs.length === 0) return;
+  const logoDataUrl = await carregarLogoLetreiroDataUrl();
+  const paginas = ocs.map((oc) => ocBodyHtml(oc, logoDataUrl, modo)).join("");
+  const html = htmlDocumentoOc(
+    `Ordens de Compra (${ocs.length}) - ${labelModoExportacaoOc(modo)}`,
+    paginas,
+  );
+
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+}
+
+function ModalEscolhaExportacaoOc({
+  open,
+  quantidade,
+  onClose,
+  onSelect,
+}: {
+  open: boolean;
+  quantidade: number;
+  onClose: () => void;
+  onSelect: (modo: ModoExportacaoOc) => void;
+}) {
+  const plural = quantidade === 1 ? "ordem de compra" : "ordens de compra";
+  const opcoes: Array<{
+    modo: ModoExportacaoOc;
+    titulo: string;
+    descricao: string;
+    detalhe: string;
+    destaque: string;
+  }> = [
+    {
+      modo: "producao",
+      titulo: "Produção",
+      descricao: "Sem preços, ideal para chão de fábrica e conferência.",
+      detalhe: "Remove preço unitário, subtotais, descontos e total final.",
+      destaque: "#475467",
+    },
+    {
+      modo: "fornecedor",
+      titulo: "Fornecedor",
+      descricao: "Com preços, ideal para envio comercial ao fornecedor.",
+      detalhe: "Mantém a versão completa com tabela financeira e resumo de totais.",
+      destaque: "var(--ac-accent)",
+    },
+  ];
+
+  return (
+    <Modal open={open} onClose={onClose} title="Escolher tipo de PDF" width="760px">
+      <div className="space-y-5">
+        <div className="space-y-1">
+          <p className="text-sm font-medium" style={{ color: "var(--ac-text)" }}>
+            Selecione o tipo de documento para exportar {quantidade}{" "}
+            {quantidade === 1 ? "OC" : "OCs"}.
+          </p>
+          <p className="text-sm" style={{ color: "var(--ac-muted)" }}>
+            A escolha altera apenas o conteúdo exibido no PDF. O layout permanece profissional e
+            adequado para impressão.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {opcoes.map((opcao) => (
+            <button
+              key={opcao.modo}
+              type="button"
+              onClick={() => onSelect(opcao.modo)}
+              className="rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5"
+              style={{
+                borderColor: "var(--ac-border)",
+                background: "var(--ac-card)",
+                boxShadow: "0 10px 28px rgba(15, 23, 42, 0.06)",
+              }}
+            >
+              <div
+                className="mb-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]"
+                style={{
+                  color: opcao.destaque,
+                  background:
+                    opcao.modo === "producao" ? "rgba(71,84,103,0.10)" : "rgba(202,138,4,0.12)",
+                }}
+              >
+                {opcao.titulo}
+              </div>
+              <div className="mb-2 text-base font-semibold" style={{ color: "var(--ac-text)" }}>
+                PDF para {opcao.titulo.toLowerCase()}
+              </div>
+              <p className="mb-2 text-sm" style={{ color: "var(--ac-text)" }}>
+                {opcao.descricao}
+              </p>
+              <p className="mb-4 text-xs leading-5" style={{ color: "var(--ac-muted)" }}>
+                {opcao.detalhe}
+              </p>
+              <div className="text-xs font-medium" style={{ color: "var(--ac-muted)" }}>
+                Aplicar em {quantidade} {plural}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 // ─── Badge de Status OC ──────────────────────────────────────────────────────
@@ -428,6 +865,7 @@ function OcDetalheModal({
   onClose,
   onRefresh,
   onRequestExcluir,
+  onRequestExportarPdf,
 }: {
   oc: OrdemCompra;
   perm: Perm;
@@ -436,6 +874,7 @@ function OcDetalheModal({
   onClose: () => void;
   onRefresh: () => void | Promise<void>;
   onRequestExcluir?: () => void;
+  onRequestExportarPdf: (ocs: OrdemCompra[]) => void;
 }) {
   /** Drafts editáveis — só são persistidos no Salvar. */
   const [editandoQtdTotal, setEditandoQtdTotal] = useState<Record<string, string>>({});
@@ -1440,7 +1879,7 @@ function OcDetalheModal({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" onClick={() => exportarPDF(oc)}>
+            <Button variant="secondary" onClick={() => onRequestExportarPdf([oc])}>
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -2093,6 +2532,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
   const [filaPeriodoIni, setFilaPeriodoIni] = useState("");
   const [filaPeriodoFim, setFilaPeriodoFim] = useState("");
   const [selecionadasIds, setSelecionadasIds] = useState<Set<string>>(new Set());
+  const [exportacaoPendente, setExportacaoPendente] = useState<OrdemCompra[] | null>(null);
 
   const filaFiltrada = useMemo(() => {
     if (!filaPeriodoIni && !filaPeriodoFim) return filaLista;
@@ -2153,12 +2593,28 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
     });
   }
 
+  function solicitarExportacao(ocs: OrdemCompra[]) {
+    if (ocs.length === 0) return;
+    setExportacaoPendente(ocs);
+  }
+
+  async function confirmarExportacao(modo: ModoExportacaoOc) {
+    if (!exportacaoPendente || exportacaoPendente.length === 0) return;
+    const ocs = exportacaoPendente;
+    setExportacaoPendente(null);
+    if (ocs.length === 1) {
+      await exportarPDF(ocs[0], modo);
+      return;
+    }
+    await exportarPDFMultiplas(ocs, modo);
+  }
+
   function imprimirSelecionadas() {
     const mapa = new Map(ordensFiltradas.map((o) => [o.id, o]));
     const ocs = Array.from(selecionadasIds)
       .map((id) => mapa.get(id))
       .filter((o): o is OrdemCompra => !!o);
-    exportarPDFMultiplas(ocs);
+    solicitarExportacao(ocs);
   }
 
   // Agrupa OCs pelo pedido de origem. OCs manuais (sem pedido_id) ficam num
@@ -2772,7 +3228,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
                             <div className="flex items-center gap-1">
                               <button
                                 title="Exportar PDF"
-                                onClick={() => exportarPDF(oc)}
+                                onClick={() => solicitarExportacao([oc])}
                                 className="p-1.5 rounded-lg transition-colors"
                                 style={{ color: "var(--ac-muted)" }}
                                 onMouseEnter={(e) =>
@@ -2960,6 +3416,7 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           usuariosRegistroInicial={usuariosRegistroInicial}
           onClose={() => setOcAberta(null)}
           onRefresh={refresh}
+          onRequestExportarPdf={solicitarExportacao}
           onRequestExcluir={() => {
             setDeletando(ocAberta);
             setOcAberta(null);
@@ -2967,6 +3424,13 @@ export function OcClient({ fila, ordens, perm, usuarioLogadoId, usuariosRegistro
           }}
         />
       )}
+
+      <ModalEscolhaExportacaoOc
+        open={!!exportacaoPendente}
+        quantidade={exportacaoPendente?.length ?? 0}
+        onClose={() => setExportacaoPendente(null)}
+        onSelect={confirmarExportacao}
+      />
 
       <OcCriarModal
         open={ocCriarOpen}
