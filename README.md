@@ -4,6 +4,13 @@ ERP sob medida para uma **cutelaria artesanal**: controla estoque de matérias-p
 
 Feito para o dia a dia da oficina — não é um ERP genérico com módulos desligados. O fluxo vai do aço e do cabo até o pedido entregue e a compra que repõe o estoque.
 
+Este repositório é o **código de um sistema em uso por clientes reais** (oficinas/cutelarias), não só um demo de portfólio.
+
+### Open source ≠ acesso à instalação do cliente
+
+Publicar o código aqui **não abre a porta** das instâncias em produção. O que está no GitHub é o *software*; o que o cliente usa é uma cópia **privada**, rodando no servidor/rede dele, com banco, `JWT_SECRET`, senhas e dados **fora** deste repositório. Quem lê o código não ganha URL, credencial nem VPN da oficina — e a autenticação (JWT + cookie httpOnly + permissões) continua no servidor. Em resumo: código aberto mostra *como* o ERP funciona; invadir exigiria acesso à máquina ou às chaves do cliente, que este repo não entrega.
+
+
 <p align="center">
   <img src="docs/screenshots/06-metricas.png" alt="Relatórios e métricas comerciais" width="900" />
 </p>
