@@ -55,11 +55,13 @@ Thumbs.db
 .cursor/
 .claude/
 .aider*
+.openclaude-profile.json
 
 # local automation/artifacts
 tmp/
 temp/
 *.pid
+*.tsbuildinfo
 
 
 # project docs (local-only)
