@@ -62,7 +62,9 @@ temp/
 *.pid
 
 
-# project docs (local-only)
+# project docs (local-only), except README screenshots
 docs/
+!docs/screenshots/
+!docs/screenshots/**
 architecture.md
 CLAUDE.md
