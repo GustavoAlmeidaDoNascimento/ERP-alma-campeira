@@ -4,11 +4,14 @@ ERP sob medida para uma **cutelaria artesanal**: controla estoque de matérias-p
 
 Feito para o dia a dia da oficina — não é um ERP genérico com módulos desligados. O fluxo vai do aço e do cabo até o pedido entregue e a compra que repõe o estoque.
 
-Este repositório é o **código de um sistema em uso por clientes reais** (oficinas/cutelarias), não só um demo de portfólio.
+Deploy em produção para clientes reais (cutelarias). Este repositório é o artifact de código; não é a superfície de ataque das instâncias.
 
-### Open source ≠ acesso à instalação do cliente
+### Threat model (código público vs. runtime)
 
-Publicar o código aqui **não abre a porta** das instâncias em produção. O que está no GitHub é o *software*; o que o cliente usa é uma cópia **privada**, rodando no servidor/rede dele, com banco, `JWT_SECRET`, senhas e dados **fora** deste repositório. Quem lê o código não ganha URL, credencial nem VPN da oficina — e a autenticação (JWT + cookie httpOnly + permissões) continua no servidor. Em resumo: código aberto mostra *como* o ERP funciona; invadir exigiria acesso à máquina ou às chaves do cliente, que este repo não entrega.
+- **Trust boundary:** cada tenant roda em host/rede isolados. Source no GitHub ≠ reachability TCP, DNS, VPN ou ingress da oficina.
+- **Secrets out-of-band:** `DATABASE_URL`, `JWT_SECRET`, hashes `bcrypt`, cookies `erp-session` e dumps Postgres **não** versionados. Sem secret material, o binário/fonte não autentica sessão nem abre o DB.
+- **Authn/z no server:** JWT HS256 (`jose`) + cookie httpOnly; autorização por matriz de módulo (`ver|criar|editar|deletar`) nas Server Actions. Leitura do repo não bypassa `jwtVerify` nem injeta cookie na origem do cliente.
+- **Implication:** disclosure do código permite *white-box review*; RCE/exfiltração exige compromise do host, credenciais de deploy ou misconfig de edge — fora do conteúdo deste tree.
 
 
 <p align="center">
