@@ -15,7 +15,8 @@
     "preview": "next build && next start",
     "start": "next start",
     "lint": "eslint .",
-    "test:e2e:perf": "playwright test tests/e2e/perf-navegacao.spec.ts"
+    "test:e2e:perf": "playwright test tests/e2e/perf-navegacao.spec.ts",
+    "seed:demo": "node scripts/seed-demo-data.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.12.0",
