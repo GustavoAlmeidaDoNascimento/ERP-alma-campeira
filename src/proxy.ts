@@ -1,56 +1,62 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
-import { SESSION_COOKIE_NAME, COOKIE_SECURE } from '@/lib/session'
+import { SESSION_COOKIE_NAME } from '@/lib/session'
 
 const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout', '/uploads']
 
-const PROXY_FRESH_COOKIE = 'mw-fresh'
-const PROXY_FRESH_TTL = 300 // 5 minutos
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some(
+    (publicPath) => pathname === publicPath || pathname.startsWith(`${publicPath}/`)
+  )
+}
 
-function getJwtSecret(): Uint8Array {
-  const secret = process.env.JWT_SECRET ?? ''
+/**
+ * Fail closed: sem JWT_SECRET nenhuma sessão é aceita.
+ * (Nunca cair para string vazia, que permitiria assinar tokens com segredo vazio.)
+ */
+function getJwtSecret(): Uint8Array | null {
+  const secret = process.env.JWT_SECRET
+  if (!secret) return null
   return new TextEncoder().encode(secret)
+}
+
+function redirectToLogin(request: NextRequest, clearSession: boolean) {
+  const loginUrl = request.nextUrl.clone()
+  loginUrl.pathname = '/login'
+  const response = NextResponse.redirect(loginUrl)
+  if (clearSession) {
+    response.cookies.set(SESSION_COOKIE_NAME, '', { maxAge: 0, path: '/' })
+  }
+  return response
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (PUBLIC_PATHS.some((publicPath) => pathname.startsWith(publicPath))) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next()
   }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value
   if (!token) {
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/login'
-    return NextResponse.redirect(loginUrl)
+    return redirectToLogin(request, false)
   }
 
-  const freshCookie = request.cookies.get(PROXY_FRESH_COOKIE)?.value
-  if (freshCookie === '1') {
-    return NextResponse.next()
+  const secret = getJwtSecret()
+  if (!secret) {
+    console.error('[proxy] JWT_SECRET não configurado: bloqueando acesso')
+    return new NextResponse('Servidor sem configuração de autenticação', { status: 500 })
   }
 
+  // O JWT é verificado em TODA requisição (HS256 é barato). Não existe atalho por
+  // cookie: qualquer cookie enviado pelo cliente pode ser forjado.
   try {
-    await jwtVerify(token, getJwtSecret())
+    await jwtVerify(token, secret, { algorithms: ['HS256'] })
   } catch {
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/login'
-    const response = NextResponse.redirect(loginUrl)
-    response.cookies.set(SESSION_COOKIE_NAME, '', { maxAge: 0, path: '/' })
-    return response
+    return redirectToLogin(request, true)
   }
 
-  const response = NextResponse.next()
-  response.cookies.set(PROXY_FRESH_COOKIE, '1', {
-    httpOnly: true,
-    secure: COOKIE_SECURE,
-    sameSite: 'lax',
-    maxAge: PROXY_FRESH_TTL,
-    path: '/',
-  })
-
-  return response
+  return NextResponse.next()
 }
 
 export const config = {

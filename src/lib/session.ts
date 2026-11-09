@@ -42,7 +42,7 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
 
 export async function verifySessionToken(token: string): Promise<SessionUser | null> {
   try {
-    const { payload } = await jwtVerify(token, getJwtSecret())
+    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ['HS256'] })
     if (!payload.sub || !payload.email) return null
     return { id: payload.sub, email: payload.email as string }
   } catch {
