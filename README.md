@@ -4,15 +4,7 @@ ERP sob medida para uma **cutelaria artesanal**: controla estoque de matérias-p
 
 Feito para o dia a dia da oficina — não é um ERP genérico com módulos desligados. O fluxo vai do aço e do cabo até o pedido entregue e a compra que repõe o estoque.
 
-Deploy em produção para clientes reais (cutelarias). Este repositório é o artifact de código; não é a superfície de ataque das instâncias.
-
-### Threat model (código público vs. runtime)
-
-- **Trust boundary:** cada tenant roda em host/rede isolados. Source no GitHub ≠ reachability TCP, DNS, VPN ou ingress da oficina.
-- **Secrets out-of-band:** `DATABASE_URL`, `JWT_SECRET`, hashes `bcrypt`, cookies `erp-session` e dumps Postgres **não** versionados. Sem secret material, o binário/fonte não autentica sessão nem abre o DB.
-- **Authn/z no server:** JWT HS256 (`jose`) + cookie httpOnly; autorização por matriz de módulo (`ver|criar|editar|deletar`) nas Server Actions. Leitura do repo não bypassa `jwtVerify` nem injeta cookie na origem do cliente.
-- **Implication:** disclosure do código permite *white-box review*; RCE/exfiltração exige compromise do host, credenciais de deploy ou misconfig de edge — fora do conteúdo deste tree.
-
+Desenvolvido durante meu trabalho na **Global Cards** (2026) para a **Alma Campeira**, uma cutelaria artesanal, e usado no dia a dia da oficina. Os dados mostrados nos prints são **fictícios** (seed de demonstração).
 
 <p align="center">
   <img src="docs/screenshots/06-metricas.png" alt="Relatórios e métricas comerciais" width="900" />
@@ -63,17 +55,17 @@ A autenticação e as permissões atravessam as actions: cada operação sensív
 
 ## Stack
 
-| Camada | Tecnologia | Papel no projeto |
+| Camada | Tecnologia | Por que foi escolhida |
 |--------|------------|------------------|
-| Frontend | Next.js 16, React 19, Tailwind 4 | App Router, UI do ERP |
-| Dados no client | TanStack Query | Cache e invalidação das listagens |
-| Backend | Server Actions + Route Handlers | Mutations e `/api/auth/*` |
-| ORM / DB | Prisma 6 + PostgreSQL | Schema tipado e migrations |
-| Auth | `jose` + `bcryptjs` + cookie httpOnly | Sessão local sem Auth-as-a-Service |
-| PDF | jsPDF + autotable | Pedidos e orçamentos impressos |
-| Qualidade | Playwright, ESLint | Smoke/e2e de navegação |
+| Frontend | Next.js 16 (App Router), React 19, Tailwind 4 | Um único projeto com UI e backend; Server Components deixam as telas de listagem rápidas sem API separada |
+| Dados no client | TanStack Query | Cache e invalidação das listagens sem reescrever lógica de loading/erro em cada tela |
+| Backend | Server Actions + Route Handlers | A regra de negócio roda no servidor, perto do banco, e cada action valida sessão e permissão |
+| ORM / DB | Prisma 6 + PostgreSQL | Dados relacionais (faca ↔ matérias-primas ↔ fornecedores ↔ pedidos) pedem um banco relacional; Prisma dá schema tipado e migrations versionadas |
+| Auth | `jose` (JWT HS256) + `bcryptjs` + cookie httpOnly | Poucos usuários internos e deploy em servidor próprio: auth própria evita dependência e custo de Auth-as-a-Service |
+| PDF | jsPDF + autotable | Orçamentos e pedidos impressos gerados no navegador, sem serviço extra |
+| Qualidade | Playwright, ESLint | Smoke/e2e dos fluxos principais de navegação |
 
-> Migração concluída para **Prisma-only**: sem Supabase, sem PostgREST e sem client SQL solto.
+> A primeira versão usava Supabase; o projeto foi migrado para **Prisma + PostgreSQL** com auth própria, o que deu controle total do schema e permitiu rodar em servidor próprio.
 
 ## Destaques de implementação
 
@@ -83,6 +75,13 @@ A autenticação e as permissões atravessam as actions: cada operação sensív
 - **Sessão consciente de HTTP** — `COOKIE_SECURE` configurável para não perder cookie em ambiente local sem TLS (evita loop de redirect no login)
 - **Métricas de negócio** — KPIs de vendas, financeiro e estoque com filtros de período (`src/lib/actions/metricas.ts`)
 - **PDFs de documento** — orçamento e pedido gerados no browser para o fluxo comercial
+
+## Segurança
+
+- Sessão em JWT assinado (HS256) em cookie httpOnly, verificado **em toda requisição** pelo middleware (`src/proxy.ts`); sem `JWT_SECRET` configurado o app não aceita nenhuma sessão (fail closed).
+- Toda Server Action sensível chama `assertPermissao` (matriz `ver / criar / editar / deletar` por cargo, com override por usuário).
+- Senhas com `bcrypt`; nenhum segredo, dump de banco ou dado real de cliente é versionado (`.env*` no `.gitignore`).
+- O repositório é público como portfólio: a segurança não depende de o código ser secreto.
 
 ## Estrutura do repositório
 
@@ -124,4 +123,4 @@ UPLOADS_DIR=./.uploads-local
 
 ---
 
-Projeto de portfólio — ERP real para cutelaria artesanal, com domínio de estoque, vendas e compras modelado de ponta a ponta.
+ERP real para uma cutelaria artesanal, com estoque, vendas e compras modelados de ponta a ponta. Feito por [Gustavo Almeida](https://gustavoalmeida.tech).
